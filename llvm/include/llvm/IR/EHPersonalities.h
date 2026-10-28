@@ -107,6 +107,12 @@ inline bool isNoOpWithoutInvoke(EHPersonality Pers) {
 
 LLVM_ABI bool canSimplifyInvokeNoUnwind(const Function *F);
 
+/// Return true if \p F must track the EH state of every instruction (not just
+/// invokes) so hardware exceptions are caught: either the module is compiled
+/// with -EHa ("eh-asynch" module flag) or \p F has the "seh-async-try"
+/// attribute (SEH __try under clang -fms-seh-async-try).
+LLVM_ABI bool isAsynchEHFunction(const Function &F);
+
 typedef TinyPtrVector<BasicBlock *> ColorVector;
 
 /// If an EH funclet personality is in use (see isFuncletEHPersonality),

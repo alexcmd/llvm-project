@@ -1666,7 +1666,11 @@ void CodeGenFunction::EmitSEHTryStmt(const SEHTryStmt &S) {
 
     llvm::BasicBlock *TryBB = nullptr;
     // IsEHa: emit an invoke to _seh_try_begin() runtime for -EHa
-    if (getLangOpts().EHAsynch) {
+    if (isSEHTryAsync()) {
+      // Without the "eh-asynch" module flag the backend enables IP-to-state
+      // tracking per function via this attribute.
+      if (getLangOpts().MSSEHAsyncTry && !getLangOpts().EHAsynch)
+        CurFn->addFnAttr("seh-async-try");
       EmitRuntimeCallOrInvoke(getSehTryBeginFn(CGM));
       if (SEHTryEpilogueStack.size() == 1) // outermost only
         TryBB = Builder.GetInsertBlock();
@@ -2232,8 +2236,9 @@ void CodeGenFunction::ExitSEHTryStmt(const SEHTryStmt &S) {
     return;
   }
 
-  // IsEHa: emit an invoke _seh_try_end() to mark end of FT flow
-  if (getLangOpts().EHAsynch && Builder.GetInsertBlock()) {
+  // IsEHa: emit an invoke _seh_try_end() to mark end of FT flow. Being an
+  // invoke it also keeps the __except block below even if the body has none.
+  if (isSEHTryAsync() && Builder.GetInsertBlock()) {
     llvm::FunctionCallee SehTryEnd = getSehTryEndFn(CGM);
     EmitRuntimeCallOrInvoke(SehTryEnd);
   }

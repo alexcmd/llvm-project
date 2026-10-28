@@ -112,6 +112,13 @@ bool llvm::canSimplifyInvokeNoUnwind(const Function *F) {
   return !EHa && !isAsynchronousEHPersonality(Personality);
 }
 
+bool llvm::isAsynchEHFunction(const Function &F) {
+  if (F.hasFnAttribute("seh-async-try"))
+    return true;
+  const Module *M = F.getParent();
+  return M && M->getModuleFlag("eh-asynch");
+}
+
 DenseMap<BasicBlock *, ColorVector> llvm::colorEHFunclets(Function &F) {
   SmallVector<std::pair<BasicBlock *, BasicBlock *>, 16> Worklist;
   BasicBlock *EntryBlock = &F.getEntryBlock();

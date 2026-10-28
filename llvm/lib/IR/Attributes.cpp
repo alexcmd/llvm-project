@@ -2677,6 +2677,14 @@ static void adjustCallerStackProbes(Function &Caller, const Function &Callee) {
   }
 }
 
+/// A caller that inlines an SEH __try body compiled with -fms-seh-async-try
+/// needs the per-function asynchronous EH state tracking too.
+static void adjustCallerSEHAsyncTry(Function &Caller, const Function &Callee) {
+  if (!Caller.hasFnAttribute("seh-async-try") &&
+      Callee.hasFnAttribute("seh-async-try"))
+    Caller.addFnAttr("seh-async-try");
+}
+
 /// If the inlined function defines the size of guard region
 /// on the stack, then ensure that the calling function defines a guard region
 /// that is no larger.

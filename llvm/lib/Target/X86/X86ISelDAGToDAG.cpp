@@ -138,6 +138,11 @@ static bool removeFH4DirectCleanupFunclets(MachineFunction &MF) {
     }
     while (!Cleanup->succ_empty())
       Cleanup->removeSuccessor(Cleanup->succ_begin());
+    // Calls in the dropped funclet (the destructor call) carry call site info
+    // with -g -O2; deleting them without erasing it trips an assertion.
+    for (MachineInstr &MI : *Cleanup)
+      if (MI.shouldUpdateAdditionalCallInfo())
+        MF.eraseAdditionalCallInfo(&MI);
     MF.erase(Cleanup);
     Changed = true;
   }

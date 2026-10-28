@@ -1049,6 +1049,16 @@ bool Sema::CheckCXXThrowOperand(SourceLocation ThrowLoc,
       // cannot be a simple walk of the class's decls.  Instead, we must perform
       // lookup and overload resolution.
       CXXConstructorDecl *CD = LookupCopyingConstructor(Subobject, 0);
+      // Lookup for a non-const lvalue may pick a forwarding constructor
+      // template (e.g. std::_With_nested_v2's T&&) over the copy constructor.
+      // MSVC always records the copy constructor proper; prefer it if a
+      // const-qualified lookup finds one.
+      if (CD && !CD->isCopyConstructor()) {
+        CXXConstructorDecl *ConstCD =
+            LookupCopyingConstructor(Subobject, Qualifiers::Const);
+        if (ConstCD && !ConstCD->isDeleted() && ConstCD->isCopyConstructor())
+          CD = ConstCD;
+      }
       if (!CD || CD->isDeleted())
         continue;
 

@@ -247,6 +247,9 @@ private:
   // Parses a string in the form of "level=<string>|uiAccess=<string>"
   void parseManifestUAC(StringRef arg);
 
+  // Parses /delay:(unload|nobind). Defined in DelayLoadOptions.cpp.
+  void parseDelay(StringRef arg);
+
   // Parses a string in the form of "cd|net[,(cd|net)]*"
   void parseSwaprun(StringRef arg);
 

@@ -164,6 +164,8 @@ struct Configuration {
   StringRef implib;
   bool noimplib = false;
   llvm::StringSet<> delayLoads;
+  bool delayUnload = false; // /delay:unload: emit UnloadDelayImportTable.
+  bool delayNoBind = false; // /delay:nobind: no-op, lld never emits a BIAT.
   std::map<std::string, int> dllOrder;
   Symbol *arm64ECIcallHelper = nullptr;
 

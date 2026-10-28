@@ -580,8 +580,13 @@ CodeGenModule::EmitCXXGlobalVarDeclInitFunc(const VarDecl *D,
     else if (ISA->getSection() == ".CRT$XCL")
       Priority = 400;
 
+    // Key the entry only if the variable itself is in a comdat: an associative
+    // .CRT$XCC section for a plain external variable would be ordered after
+    // the unkeyed one by the linker, breaking declaration order (MSVC STL
+    // cout.cpp relies on it).
     if (Priority != -1)
-      AddGlobalCtor(Fn, Priority, ~0U, COMDATKey);
+      AddGlobalCtor(Fn, Priority, ~0U,
+                    COMDATKey && COMDATKey->hasComdat() ? COMDATKey : nullptr);
     else
       EmitPointerToInitFunc(D, Addr, Fn, ISA);
   } else if (auto *IPA = D->getAttr<InitPriorityAttr>()) {

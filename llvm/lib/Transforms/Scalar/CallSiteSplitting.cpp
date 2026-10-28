@@ -197,6 +197,13 @@ static bool canSplitCallSite(CallBase &CB, TargetTransformInfo &TTI) {
       isa<IndirectBrInst>(Preds[1]->getTerminator()))
     return false;
 
+  // Cannot split an edge from a catchret: the cloned call would land in the
+  // catch funclet without a funclet operand bundle, and WinEHPrepare would turn
+  // it into unreachable, leaving an empty catch funclet.
+  if (isa<CatchReturnInst>(Preds[0]->getTerminator()) ||
+      isa<CatchReturnInst>(Preds[1]->getTerminator()))
+    return false;
+
   // BasicBlock::canSplitPredecessors is more aggressive, so checking for
   // BasicBlock::isEHPad as well.
   if (!CallSiteBB->canSplitPredecessors() || CallSiteBB->isEHPad())

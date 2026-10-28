@@ -2,6 +2,10 @@
 // RUN:    -fno-threadsafe-statics -fms-extensions -O1 -mconstructor-aliases \
 // RUN:    -disable-llvm-passes -o - %s -w -fms-compatibility-version=19.00 | \
 // RUN:    FileCheck %s
+// RUN: %clang_cc1 -triple i686-windows-msvc -emit-llvm -std=c++20 \
+// RUN:    -fno-threadsafe-statics -fms-extensions -O1 -mconstructor-aliases \
+// RUN:    -disable-llvm-passes -o - %s -w -fms-compatibility-version=19.00 \
+// RUN:    -fclang-abi-compat=23 | FileCheck %s --check-prefix=CLANG23
 
 struct CtorWithClosure {
   __declspec(dllexport) CtorWithClosure(...) {}
@@ -102,3 +106,19 @@ struct ConstEvalDefaultArg {
 };
 // CHECK-LABEL: define weak_odr dso_local dllexport x86_thiscallcc void @"??_FConstEvalDefaultArg@@QAEXXZ"
 // CHECK: call {{.*}} @"??0ConstEvalDefaultArg@@QAE@H@Z"({{.*}}, i32 noundef 42)
+
+// Like MSVC, closures are mangled public whatever the ctor's access; Clang <= 23
+// used the ctor's access.
+struct ProtectedClosure {
+protected:
+  __declspec(dllexport) ProtectedClosure(int = 0) {}
+};
+// CHECK-LABEL: define weak_odr dso_local dllexport x86_thiscallcc void @"??_FProtectedClosure@@QAEXXZ"
+// CLANG23: define weak_odr dso_local dllexport x86_thiscallcc void @"??_FProtectedClosure@@IAEXXZ"
+
+class PrivateClosure {
+  __declspec(dllexport) PrivateClosure(int = 0);
+};
+PrivateClosure::PrivateClosure(int) {}
+// CHECK-LABEL: define weak_odr dso_local dllexport x86_thiscallcc void @"??_FPrivateClosure@@QAEXXZ"
+// CLANG23: define weak_odr dso_local dllexport x86_thiscallcc void @"??_FPrivateClosure@@AAEXXZ"

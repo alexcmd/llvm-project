@@ -635,7 +635,7 @@ static ControlFlowKind CheckFallThrough(AnalysisDeclContext &AC) {
     // No more CFGElements in the block?
     if (ri == re) {
       const Stmt *Term = B.getTerminatorStmt();
-      if (Term && (isa<CXXTryStmt>(Term) || isa<ObjCAtTryStmt>(Term))) {
+      if (isa_and_nonnull<CXXTryStmt, ObjCAtTryStmt, SEHTryStmt>(Term)) {
         HasAbnormalEdge = true;
         continue;
       }

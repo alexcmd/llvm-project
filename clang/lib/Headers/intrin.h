@@ -239,6 +239,33 @@ __int64 _mul128(__int64, __int64, __int64 *);
 #endif /* __x86_64__ */
 
 /*----------------------------------------------------------------------------*\
+|* 64-bit shifts
+\*----------------------------------------------------------------------------*/
+
+#if defined(__i386__) || (defined(__x86_64__) && !defined(__arm64ec__))
+/* MSVC masks the count like the shift instruction does: by 63 on x64, by 31 on
+   x86 (shld/shrd + shl/shr/sar, no fix-up for counts >= 32). */
+#if defined(__x86_64__)
+#define __LL_SHIFT_MASK 63
+#else
+#define __LL_SHIFT_MASK 31
+#endif
+static __inline__ unsigned __int64 __DEFAULT_FN_ATTRS
+__ll_lshift(unsigned __int64 __v, int __s) {
+  return __v << (__s & __LL_SHIFT_MASK);
+}
+static __inline__ __int64 __DEFAULT_FN_ATTRS __ll_rshift(__int64 __v,
+                                                        int __s) {
+  return __v >> (__s & __LL_SHIFT_MASK);
+}
+static __inline__ unsigned __int64 __DEFAULT_FN_ATTRS
+__ull_rshift(unsigned __int64 __v, int __s) {
+  return __v >> (__s & __LL_SHIFT_MASK);
+}
+#undef __LL_SHIFT_MASK
+#endif
+
+/*----------------------------------------------------------------------------*\
 |* movs, stos
 \*----------------------------------------------------------------------------*/
 

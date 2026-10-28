@@ -791,7 +791,20 @@ MCSectionCOFF *MCContext::getCOFFSection(StringRef Section,
     return Iter->second;
 
   StringRef CachedName = Iter->first.SectionName;
-  MCSymbol *Begin = getOrCreateSectionSymbol<MCSymbolCOFF>(Section);
+  MCSymbol *Begin;
+  if (COMDATSymbol && COMDATSymName == Section) {
+    // COFF allows a COMDAT section to be named after its key symbol (e.g.
+    // `.section "X","dr",discard,"X"`, as in msvcrt's cfg_fo.obj). The name
+    // stays bound to the COMDAT symbol so that `X:` defines it; the section
+    // symbol is created outside the symbol table (the writer names it from
+    // the section).
+    MCSymbolTableEntry &SymEntry = getSymbolTableEntry(Section);
+    Begin = new (&SymEntry, *this)
+        MCSymbolCOFF(&SymEntry, /*isTemporary=*/false);
+    Begin->setIndex(-1u);
+  } else {
+    Begin = getOrCreateSectionSymbol<MCSymbolCOFF>(Section);
+  }
   MCSectionCOFF *Result = new (COFFAllocator.Allocate()) MCSectionCOFF(
       CachedName, Characteristics, COMDATSymbol, Selection, UniqueID, Begin);
   Iter->second = Result;

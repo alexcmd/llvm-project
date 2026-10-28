@@ -160,6 +160,12 @@ void x86::getX86TargetFeatures(const Driver &D, const llvm::Triple &Triple,
       Features.push_back("+ssse3");
   }
 
+  // 64-bit Windows requires CMPXCHG16B; MSVC inlines it for
+  // _InterlockedCompareExchange128 and 16-byte atomics, and the MSVC
+  // environment has no __atomic_compare_exchange_16 libcall.
+  if (Triple.isWindowsMSVCEnvironment() && ArchType == llvm::Triple::x86_64)
+    Features.push_back("+cx16");
+
   // Translate the high level `-mretpoline` flag to the specific target feature
   // flags. We also detect if the user asked for retpoline external thunks but
   // failed to ask for retpolines themselves (through any of the different

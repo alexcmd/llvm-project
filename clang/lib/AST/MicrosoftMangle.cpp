@@ -3134,12 +3134,17 @@ void MicrosoftCXXNameMangler::mangleFunctionType(const FunctionType *T,
         Out << 'X';
       } else if (StructorType == Ctor_CopyingClosure) {
         // Copy constructor closure always takes an unqualified reference.
-        mangleFunctionArgumentType(getASTContext().getLValueReferenceType(
-                                       Proto->getParamType(0)
-                                           ->castAs<LValueReferenceType>()
-                                           ->getPointeeType(),
-                                       /*SpelledAsLValue=*/true),
-                                   Range);
+        // Clang <= 23 kept the pointee's cv-qualifiers (AEBU0@, MSVC AEAU0@).
+        QualType Pointee = Proto->getParamType(0)
+                               ->castAs<LValueReferenceType>()
+                               ->getPointeeType();
+        if (!getASTContext().getLangOpts().isCompatibleWith(
+                LangOptions::ClangABI::Ver23))
+          Pointee = Pointee.getUnqualifiedType();
+        mangleFunctionArgumentType(
+            getASTContext().getLValueReferenceType(Pointee,
+                                                   /*SpelledAsLValue=*/true),
+            Range);
         Out << '@';
       } else {
         llvm_unreachable("unexpected constructor closure!");
@@ -3297,6 +3302,16 @@ void MicrosoftCXXNameMangler::mangleFunctionClass(const FunctionDecl *FD) {
     if (isa<CXXDestructorDecl>(MD) && isStructorDecl(MD) &&
         StructorType == Dtor_Complete) {
       IsVirtual = false;
+    }
+    // MSVC mangles ctor closures as public whatever the ctor's access; Clang
+    // <= 23 used the ctor's access.
+    if (isa<CXXConstructorDecl>(MD) && isStructorDecl(MD) &&
+        (StructorType == Ctor_DefaultClosure ||
+         StructorType == Ctor_CopyingClosure) &&
+        !getASTContext().getLangOpts().isCompatibleWith(
+            LangOptions::ClangABI::Ver23)) {
+      Out << 'Q';
+      return;
     }
     switch (MD->getAccess()) {
       case AS_none:

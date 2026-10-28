@@ -1,4 +1,5 @@
 // RUN: %clang_cc1 -emit-llvm -o - -triple=i386-pc-win32 -std=c++20 %s -fcxx-exceptions -fms-extensions | FileCheck %s
+// RUN: %clang_cc1 -emit-llvm -o - -triple=i386-pc-win32 -std=c++20 %s -fcxx-exceptions -fms-extensions -fclang-abi-compat=23 | FileCheck %s --check-prefix=CLANG23
 
 // CHECK-DAG: @"??_R0?AUY@@@8" = linkonce_odr global %rtti.TypeDescriptor7 { ptr @"??_7type_info@@6B@", ptr null, [8 x i8] c".?AUY@@\00" }, comdat
 // CHECK-DAG: @"_CT??_R0?AUY@@@8??0Y@@QAE@ABU0@@Z8" = linkonce_odr unnamed_addr constant %eh.CatchableType { i32 4, ptr @"??_R0?AUY@@@8", i32 0, i32 -1, i32 0, i32 8, ptr @"??0Y@@QAE@ABU0@@Z" }, section ".xdata", comdat
@@ -15,6 +16,12 @@
 // CHECK-DAG: @"_CT??_R0?AUDefault@@@8??_ODefault@@QAEXAAU0@@Z1" = linkonce_odr unnamed_addr constant %eh.CatchableType { i32 0, ptr @"??_R0?AUDefault@@@8", i32 0, i32 -1, i32 0, i32 1, ptr @"??_ODefault@@QAEXAAU0@@Z" }, section ".xdata", comdat
 // CHECK-DAG: @"_CT??_R0?AUDeletedCopy@@@81" = linkonce_odr unnamed_addr constant %eh.CatchableType { i32 0, ptr @"??_R0?AUDeletedCopy@@@8", i32 0, i32 -1, i32 0, i32 1, ptr null }, section ".xdata", comdat
 // CHECK-DAG: @"_CT??_R0?AUMoveOnly@@@84" = linkonce_odr unnamed_addr constant %eh.CatchableType { i32 0, ptr @"??_R0?AUMoveOnly@@@8", i32 0, i32 -1, i32 0, i32 4, ptr null }, section ".xdata", comdat
+// Copying closures are public with an unqualified reference parameter, like
+// MSVC; Clang <= 23 used the ctor's access and kept the parameter's const.
+// CHECK-DAG: @"_CT??_R0?AUPrivateCopy@@@8??_OPrivateCopy@@QAEXAAU0@@Z1" = linkonce_odr unnamed_addr constant %eh.CatchableType { i32 0, ptr @"??_R0?AUPrivateCopy@@@8", i32 0, i32 -1, i32 0, i32 1, ptr @"??_OPrivateCopy@@QAEXAAU0@@Z" }, section ".xdata", comdat
+// CLANG23-DAG: @"_CT??_R0?AUPrivateCopy@@@8??_OPrivateCopy@@AAEXAAU0@@Z1" = linkonce_odr unnamed_addr constant %eh.CatchableType { i32 0, ptr @"??_R0?AUPrivateCopy@@@8", i32 0, i32 -1, i32 0, i32 1, ptr @"??_OPrivateCopy@@AAEXAAU0@@Z" }, section ".xdata", comdat
+// CLANG23-DAG: @"_CT??_R0?AUDefaultCtorIsCopyCtor@@@8??_ODefaultCtorIsCopyCtor@@QAEXABU0@@Z1" =
+// CHECK-DAG: @"_CT??_R0?AUDefaultCtorIsCopyCtor@@@8??_ODefaultCtorIsCopyCtor@@QAEXAAU0@@Z1" =
 // CHECK-DAG: @"_CT??_R0?AUVariadic@@@8??_OVariadic@@QAEXAAU0@@Z1" = linkonce_odr unnamed_addr constant %eh.CatchableType { i32 0, ptr @"??_R0?AUVariadic@@@8", i32 0, i32 -1, i32 0, i32 1, ptr @"??_OVariadic@@QAEXAAU0@@Z" }, section ".xdata", comdat
 // The implicit (trivial) copy constructor, not the constructor template, as with MSVC.
 // CHECK-DAG: @"_CT??_R0?AUTemplateWithDefault@@@81" = linkonce_odr unnamed_addr constant %eh.CatchableType { i32 0, ptr @"??_R0?AUTemplateWithDefault@@@8", i32 0, i32 -1, i32 0, i32 1, ptr null }, section ".xdata", comdat
@@ -95,7 +102,8 @@ void h3(DefaultCtorIsCopyCtor &d) {
 // CHECK-LABEL: @"??_FDefaultCtorIsCopyCtor@@QAEXXZ"
 // CHECK: %[[foo:.*]] = call {{.*}} @"?foo@@YAABUDefaultCtorIsCopyCtor@@XZ"
 // CHECK: call {{.*}} @"??0DefaultCtorIsCopyCtor@@QAE@ABU0@H@Z"({{.*}} %[[foo]], i32 noundef 456)
-// CHECK-LABEL: @"??_ODefaultCtorIsCopyCtor@@QAEXABU0@@Z"
+// CHECK-LABEL: @"??_ODefaultCtorIsCopyCtor@@QAEXAAU0@@Z"
+// CLANG23: define {{.*}} @"??_ODefaultCtorIsCopyCtor@@QAEXABU0@@Z"
 // CHECK: call {{.*}} @"??0DefaultCtorIsCopyCtor@@QAE@ABU0@H@Z"({{.*}} i32 noundef 456)
 
 struct DeletedCopy {
@@ -185,3 +193,12 @@ void *GetExceptionInfo_test2() {
 // CHECK:  ret ptr @"_TI1?AUFoo@?A0x{{[^@]*}}@@"
   return __GetExceptionInfo(foo_exc);
 }
+
+struct PrivateCopy {
+  PrivateCopy();
+  friend void throwPrivateCopy(PrivateCopy &);
+
+private:
+  PrivateCopy(PrivateCopy &, int = 0);
+};
+void throwPrivateCopy(PrivateCopy &p) { throw p; }

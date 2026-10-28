@@ -88,6 +88,9 @@ def assembly_file : MLJoinedOrSeparate<"Ta">,
                     HelpText<"Assemble source file with the given name. Used "
                              "if the filename begins with a forward slash.">;
 def error_on_warning : MLFlag<"WX">, Alias<fatal_warnings>;
+def warning_level : MLJoined<"W">, MetaVarName<"<n>">,
+                    HelpText<"Set warning level (0-3); /W0 disables warnings">;
+def no_warnings : MLFlag<"w">, HelpText<"Disable warnings (same as /W0)">;
 def parse_only : MLFlag<"Zs">, HelpText<"Run a syntax-check only">,
                  Alias<filetype>, AliasArgs<["null"]>;
 def ignore_include_envvar : MLFlag<"X">,
@@ -121,8 +124,6 @@ def listing_page_length : UnsupportedSeparate<"Sp">, HelpText<"">;
 def listing_subtitle : UnsupportedSeparate<"Ss">, HelpText<"">;
 def listing_title : UnsupportedSeparate<"St">, HelpText<"">;
 def listing_false_conditionals : UnsupportedFlag<"Sx">, HelpText<"">;
-def extra_warnings : UnsupportedFlag<"w">, HelpText<"">;
-def warning_level : UnsupportedJoined<"W">, HelpText<"">;
 def line_number_info : UnsupportedFlag<"Zd">, HelpText<"">;
 def export_all_symbols : UnsupportedFlag<"Zf">, HelpText<"">;
 def codeview_info : UnsupportedFlag<"Zi">, HelpText<"">;

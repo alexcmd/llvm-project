@@ -1030,6 +1030,16 @@ void Clang::AddPreprocessingOptions(Compilation &C, const JobAction &JA,
     }
   }
 
+  // cl.exe pre-injects the C++ EH data types (_ThrowInfo, _CatchableType, ...)
+  // into every C++ translation unit; MSVC's <ehdata.h> relies on them. Include
+  // the resource header that declares them before any user -include.
+  if (Args.hasFlag(options::OPT_fms_predeclare_eh_types,
+                   options::OPT_fno_ms_predeclare_eh_types, false) &&
+      types::isCXX(Inputs[0].getType())) {
+    CmdArgs.push_back("-include");
+    CmdArgs.push_back("__msvc_eh_predef.h");
+  }
+
   bool RenderedImplicitInclude = false;
   for (const Arg *A : Args.filtered(options::OPT_clang_i_Group)) {
     if (A->getOption().matches(options::OPT_include) &&

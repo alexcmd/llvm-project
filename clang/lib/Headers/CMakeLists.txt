@@ -313,6 +313,7 @@ set(gpu_files
   )
 
 set(windows_only_files
+  __msvc_eh_predef.h
   intrin0.h
   intrin.h
   vadefs.h

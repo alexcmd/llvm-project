@@ -142,6 +142,7 @@ copy("Headers") {
     "__float_float.h",
     "__float_header_macro.h",
     "__float_infinity_nan.h",
+    "__msvc_eh_predef.h",
     "__stdarg___gnuc_va_list.h",
     "__stdarg___va_copy.h",
     "__stdarg_header_macro.h",

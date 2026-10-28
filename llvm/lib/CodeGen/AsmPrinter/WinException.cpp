@@ -1306,11 +1306,27 @@ void WinException::computeIP2StateTableForFunclet(
     IPToStateTable.emplace_back(ChangeLabel, StateChange.NewState);
   }
 
-  // The iterator always reports a final reset at the end of the funclet.
-  // There is no subsequent instruction that can throw there, so FH4 does not
-  // need that entry (and MSVC omits it as well).
-  if (!IPToStateTable.empty() && IPToStateTable.back().second == NullState)
-    IPToStateTable.pop_back();
+  // The iterator reports a final reset at the end of the funclet. When nothing
+  // after it can throw, FH4 does not need that entry (and MSVC omits it). But
+  // the iterator reports a reset in the same form before a call that unwinds
+  // to the caller (no EH label, e.g. a noreturn _Xran placed after the last
+  // invoke); dropping that one leaves the call in the previous invoke's state,
+  // and unwinding through it then destroys objects that were never built.
+  if (IPToStateTable.empty() || IPToStateTable.back().second != NullState)
+    return;
+  const MCSymbol *ResetLabel = IPToStateTable.back().first;
+  bool PastReset = false;
+  for (auto MBB = FuncletStart; MBB != FuncletEnd; ++MBB)
+    for (const MachineInstr &MI : *MBB) {
+      if (!PastReset) {
+        PastReset = MI.isEHLabel() &&
+                    MI.getOperand(0).getMCSymbol() == ResetLabel;
+        continue;
+      }
+      if (MI.isCall() && !EHStreamer::callToNoUnwindFunction(&MI))
+        return;
+    }
+  IPToStateTable.pop_back();
 }
 
 void WinException::computeIP2StateTable(

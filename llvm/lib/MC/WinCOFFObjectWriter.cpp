@@ -337,8 +337,11 @@ void WinCOFFWriter::defineSection(const MCSectionCOFF &MCSec) {
     if (const MCSymbol *S = MCSec.getCOMDATSymbol()) {
       COFFSymbol *COMDATSymbol = getOrCreateCOFFSymbol(*S);
       if (COMDATSymbol->Section)
-        report_fatal_error("two sections have the same comdat");
-      COMDATSymbol->Section = Section;
+        getContext().reportError(SMLoc(),
+                                 "two sections have the same comdat '" +
+                                     S->getName() + "'");
+      else
+        COMDATSymbol->Section = Section;
     }
   }
 

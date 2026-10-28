@@ -23,12 +23,12 @@ void test__stosb(unsigned char *Dest, unsigned char Data, size_t Count) {
 }
 
 // CHECK-I386: define{{.*}}void @test__stosb
-// CHECK-I386:   tail call void @llvm.memset.p0.i32(ptr align 1 %Dest, i8 %Data, i32 %Count, i1 true)
+// CHECK-I386:   call { ptr, i32 } asm sideeffect "rep stosb", "={di},={cx},{ax},0,1,~{memory},~{dirflag},~{fpsr},~{flags}"(i8 %Data, ptr %Dest, i32 %Count)
 // CHECK-I386:   ret void
 // CHECK-I386: }
 
 // CHECK-X64: define{{.*}}void @test__stosb
-// CHECK-X64:   tail call void @llvm.memset.p0.i64(ptr align 1 %Dest, i8 %Data, i64 %Count, i1 true)
+// CHECK-X64:   call { ptr, i64 } asm sideeffect "rep stosb", "={di},={cx},{ax},0,1,~{memory},~{dirflag},~{fpsr},~{flags}"(i8 %Data, ptr %Dest, i64 %Count)
 // CHECK-X64:   ret void
 // CHECK-X64: }
 

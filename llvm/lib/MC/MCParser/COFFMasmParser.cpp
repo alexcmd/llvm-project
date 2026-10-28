@@ -11,12 +11,14 @@
 #include "llvm/BinaryFormat/COFF.h"
 #include "llvm/MC/MCAsmMacro.h"
 #include "llvm/MC/MCContext.h"
+#include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCParser/AsmLexer.h"
 #include "llvm/MC/MCParser/MCAsmParserExtension.h"
 #include "llvm/MC/MCParser/MCTargetAsmParser.h"
 #include "llvm/MC/MCSectionCOFF.h"
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSymbolCOFF.h"
+#include "llvm/MC/MCWinEH.h"
 #include "llvm/MC/SectionKind.h"
 #include "llvm/Support/SMLoc.h"
 #include <cstdint>
@@ -122,6 +124,7 @@ class COFFMasmParser : public MCAsmParserExtension {
     addDirectiveHandler<&COFFMasmParser::IgnoreDirective>(".nolistmacro");
     addDirectiveHandler<&COFFMasmParser::IgnoreDirective>("page");
     addDirectiveHandler<&COFFMasmParser::IgnoreDirective>("subtitle");
+    addDirectiveHandler<&COFFMasmParser::IgnoreDirective>("subttl");
     addDirectiveHandler<&COFFMasmParser::IgnoreDirective>(".tfcond");
     addDirectiveHandler<&COFFMasmParser::IgnoreDirective>("title");
 
@@ -173,7 +176,8 @@ class COFFMasmParser : public MCAsmParserExtension {
 
     // Simplified segment directives
     addDirectiveHandler<&COFFMasmParser::parseSectionDirectiveCode>(".code");
-    // .const
+    addDirectiveHandler<&COFFMasmParser::parseSectionDirectiveConstData>(
+        ".const");
     addDirectiveHandler<&COFFMasmParser::parseSectionDirectiveInitializedData>(
         ".data");
     addDirectiveHandler<
@@ -196,10 +200,17 @@ class COFFMasmParser : public MCAsmParserExtension {
     // typedef
   }
 
+  // ML64.EXE section names: .code = _TEXT -> .text$mn, .data = _DATA ->
+  // .data, .const = CONST -> .rdata, .data? = _BSS -> .bss.
   bool parseSectionDirectiveCode(StringRef, SMLoc) {
-    return parseSectionSwitch(".text", COFF::IMAGE_SCN_CNT_CODE |
-                                           COFF::IMAGE_SCN_MEM_EXECUTE |
-                                           COFF::IMAGE_SCN_MEM_READ);
+    return parseSectionSwitch(".text$mn", COFF::IMAGE_SCN_CNT_CODE |
+                                              COFF::IMAGE_SCN_MEM_EXECUTE |
+                                              COFF::IMAGE_SCN_MEM_READ);
+  }
+
+  bool parseSectionDirectiveConstData(StringRef, SMLoc) {
+    return parseSectionSwitch(".rdata", COFF::IMAGE_SCN_CNT_INITIALIZED_DATA |
+                                            COFF::IMAGE_SCN_MEM_READ);
   }
 
   bool parseSectionDirectiveInitializedData(StringRef, SMLoc) {
@@ -257,15 +268,34 @@ bool COFFMasmParser::parseDirectiveSegment(StringRef Directive, SMLoc Loc) {
   StringRef SectionName = SegmentName;
   SmallVector<char, 247> SectionNameVector;
 
+  // ML64.EXE maps the predefined segments, and their grouped forms with a
+  // '$' suffix, onto the conventional COFF sections (case-insensitively):
+  //   _TEXT[$x] -> .text$mn[$x]   _DATA[$x] -> .data[$x]
+  //   CONST[$x] -> .rdata[$x]     _BSS[$x]  -> .bss[$x]
+  // Any other segment name is used as the section name.
   StringRef Class;
-  if (SegmentName == "_TEXT" || SegmentName.starts_with("_TEXT$")) {
-    if (SegmentName.size() == 5) {
-      SectionName = ".text";
-    } else {
-      SectionName =
-          (".text$" + SegmentName.substr(6)).toStringRef(SectionNameVector);
+  bool Uninitialized = false;
+  // "obsolete" according to the documentation, but still supported.
+  bool Readonly = false;
+  {
+    size_t Dollar = SegmentName.find('$');
+    StringRef Base = SegmentName.take_front(Dollar);
+    StringRef Suffix = SegmentName.drop_front(Base.size());
+    StringRef Mapped;
+    if (Base.equals_insensitive("_TEXT")) {
+      Mapped = ".text$mn";
+      Class = "CODE";
+    } else if (Base.equals_insensitive("_DATA")) {
+      Mapped = ".data";
+    } else if (Base.equals_insensitive("CONST")) {
+      Mapped = ".rdata";
+      Readonly = true;
+    } else if (Base.equals_insensitive("_BSS")) {
+      Mapped = ".bss";
+      Uninitialized = true;
     }
-    Class = "CODE";
+    if (!Mapped.empty())
+      SectionName = (Mapped + Suffix).toStringRef(SectionNameVector);
   }
 
   // Parse all options to end of statement.
@@ -274,8 +304,6 @@ bool COFFMasmParser::parseDirectiveSegment(StringRef Directive, SMLoc Loc) {
   // Default flags are used only if no characteristics are set.
   bool DefaultCharacteristics = true;
   unsigned Flags = 0;
-  // "obsolete" according to the documentation, but still supported.
-  bool Readonly = false;
   while (getLexer().isNot(AsmToken::EndOfStatement)) {
     switch (getTok().getKind()) {
     default:
@@ -366,7 +394,8 @@ bool COFFMasmParser::parseDirectiveSegment(StringRef Directive, SMLoc Loc) {
     if (DefaultCharacteristics) {
       Flags |= COFF::IMAGE_SCN_MEM_READ | COFF::IMAGE_SCN_MEM_WRITE;
     }
-    Flags |= COFF::IMAGE_SCN_CNT_INITIALIZED_DATA;
+    Flags |= Uninitialized ? COFF::IMAGE_SCN_CNT_UNINITIALIZED_DATA
+                           : COFF::IMAGE_SCN_CNT_INITIALIZED_DATA;
   }
   if (Readonly) {
     Flags &= ~COFF::IMAGE_SCN_MEM_WRITE;
@@ -507,7 +536,26 @@ bool COFFMasmParser::parseDirectiveEndProc(StringRef Directive, SMLoc Loc) {
                                CurrentProcedures.back() + "'");
 
   if (CurrentProceduresFramed.back()) {
-    getStreamer().emitWinCFIEndProc(Loc);
+    MCStreamer &S = getStreamer();
+    // ML64.EXE without /unwindv3: a .beginepilog still open at ENDP starts an
+    // epilog that runs to the end of the procedure, whose last instruction is
+    // the (1-byte) terminator. It is encoded as an UNWIND_INFO version 2 epilog
+    // code, so mark the procedure as v2 and end the epilog at that terminator.
+    if (S.isInEpilogCFI() && S.getDefaultWinCFIUnwindVersion() < 3) {
+      MCContext &Ctx = getContext();
+      WinEH::FrameInfo::Epilog *Epilog = S.getCurrentWinEpilog();
+      S.emitWinCFIUnwindVersion(2, Loc);
+      Epilog->UnwindV2Start = Epilog->Start;
+      MCSymbol *ProcEnd = Ctx.createTempSymbol();
+      S.emitLabel(ProcEnd);
+      S.emitWinCFIEndEpilogue(Loc);
+      MCSymbol *LastInst = Ctx.createTempSymbol();
+      S.emitAssignment(LastInst, MCBinaryExpr::createSub(
+                                     MCSymbolRefExpr::create(ProcEnd, Ctx),
+                                     MCConstantExpr::create(1, Ctx), Ctx));
+      Epilog->End = LastInst;
+    }
+    S.emitWinCFIEndProc(Loc);
   }
   CurrentProcedures.pop_back();
   CurrentProceduresFramed.pop_back();

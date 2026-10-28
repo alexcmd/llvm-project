@@ -267,6 +267,19 @@ int llvm_ml_main(int Argc, char **Argv, const llvm::ToolContext &) {
   MCTargetOptions MCOptions;
   MCOptions.AssemblyLanguage = "masm";
   MCOptions.MCFatalWarnings = InputArgs.hasArg(OPT_fatal_warnings);
+  // ML.EXE: /W0 and /w disable warnings (also under /WX); /W1-/W3 are the
+  // default behavior; any other level is ignored with a warning.
+  if (const Arg *A =
+          InputArgs.getLastArg(OPT_warning_level, OPT_no_warnings)) {
+    StringRef Level =
+        A->getOption().matches(OPT_no_warnings) ? "0" : A->getValue();
+    if (Level == "0")
+      MCOptions.MCNoWarn = true;
+    else if (Level != "1" && Level != "2" && Level != "3")
+      WithColor::warning(errs(), ProgName)
+          << "invalid command-line option value, default is used: '"
+          << A->getAsString(InputArgs) << "'\n";
+  }
   MCOptions.MCSaveTempLabels = InputArgs.hasArg(OPT_save_temp_labels);
   MCOptions.ShowMCInst = InputArgs.hasArg(OPT_show_inst);
   MCOptions.AsmVerbose = true;

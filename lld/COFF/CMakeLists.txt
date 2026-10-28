@@ -7,6 +7,7 @@ add_lld_library(lldCOFF
   Chunks.cpp
   COFFLinkerContext.cpp
   DebugTypes.cpp
+  DelayLoadOptions.cpp
   DLL.cpp
   Driver.cpp
   DriverUtils.cpp

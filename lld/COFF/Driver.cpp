@@ -2554,6 +2554,8 @@ void LinkerDriver::linkerMain(ArrayRef<const char *> argsArr) {
   // Handle /delayload
   {
     llvm::TimeTraceScope timeScope("Delay load");
+    for (auto *arg : args.filtered(OPT_delay))
+      parseDelay(arg->getValue());
     for (auto *arg : args.filtered(OPT_delayload)) {
       config->delayLoads.insert(StringRef(arg->getValue()).lower());
       ctx.forEachActiveSymtab([&](SymbolTable &symtab) {

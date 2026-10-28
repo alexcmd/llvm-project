@@ -1,0 +1,105 @@
+# REQUIRES: x86
+# /delay:unload emits an UnloadDelayImportTable: a read-only copy of the
+# initial delay IAT (with base relocs), as __FUnloadDelayLoadedDLL2 expects.
+
+# RUN: lld-link /out:%t.exe /entry:main /subsystem:console \
+# RUN:   %p/Inputs/hello64.obj %p/Inputs/std64.lib /delayload:STD64.DLL \
+# RUN:   /alternatename:__delayLoadHelper2=main /delay:UNLOAD /delay:nobind
+# RUN: llvm-readobj --coff-imports %t.exe | FileCheck -check-prefix=IMPORT %s
+# RUN: llvm-readobj --coff-basereloc %t.exe | FileCheck -check-prefix=BASEREL %s
+# RUN: llvm-objdump -s -j .data -j .rdata %t.exe | FileCheck -check-prefix=DATA %s
+
+IMPORT:      DelayImport {
+IMPORT-NEXT:   Name: std64.dll
+IMPORT-NEXT:   Attributes: 0x1
+IMPORT-NEXT:   ModuleHandle: 0x3018
+IMPORT-NEXT:   ImportAddressTable: 0x3020
+IMPORT-NEXT:   ImportNameTable: 0x2048
+IMPORT-NEXT:   BoundDelayImportTable: 0x0
+IMPORT-NEXT:   UnloadDelayImportTable: 0x2090
+IMPORT-NEXT:   Import {
+IMPORT-NEXT:     Symbol: ExitProcess (0)
+IMPORT-NEXT:     Address: 0x140001066
+IMPORT-NEXT:   }
+IMPORT-NEXT:   Import {
+IMPORT-NEXT:     Symbol:  (50)
+IMPORT-NEXT:     Address: 0x140001072
+IMPORT-NEXT:   }
+IMPORT-NEXT:   Import {
+IMPORT-NEXT:     Symbol: MessageBoxA (0)
+IMPORT-NEXT:     Address: 0x14000107E
+IMPORT-NEXT:   }
+IMPORT-NEXT: }
+
+BASEREL:      BaseReloc [
+BASEREL-NEXT:   Entry {
+BASEREL-NEXT:     Type: DIR64
+BASEREL-NEXT:     Address: 0x2090
+BASEREL-NEXT:   }
+BASEREL-NEXT:   Entry {
+BASEREL-NEXT:     Type: DIR64
+BASEREL-NEXT:     Address: 0x2098
+BASEREL-NEXT:   }
+BASEREL-NEXT:   Entry {
+BASEREL-NEXT:     Type: DIR64
+BASEREL-NEXT:     Address: 0x20A0
+BASEREL-NEXT:   }
+BASEREL-NEXT:   Entry {
+BASEREL-NEXT:     Type: ABSOLUTE
+BASEREL-NEXT:     Address: 0x2000
+BASEREL-NEXT:   }
+BASEREL-NEXT:   Entry {
+BASEREL-NEXT:     Type: DIR64
+BASEREL-NEXT:     Address: 0x3020
+BASEREL-NEXT:   }
+
+## The unload table (.rdata) holds the same values as the initial IAT (.data).
+DATA:      Contents of section .rdata:
+DATA:      140002090 66100040 01000000 72100040 01000000
+DATA-NEXT: 1400020a0 7e100040 01000000 00000000 00000000
+DATA:      Contents of section .data:
+DATA:      140003020 66100040 01000000 72100040 01000000
+DATA-NEXT: 140003030 7e100040 01000000 00000000 00000000
+
+## Without /delay:unload the field stays 0.
+# RUN: lld-link /out:%t.nounload.exe /entry:main /subsystem:console \
+# RUN:   %p/Inputs/hello64.obj %p/Inputs/std64.lib /delayload:STD64.DLL \
+# RUN:   /alternatename:__delayLoadHelper2=main /delay:nobind 2>&1 \
+# RUN:   | FileCheck -allow-empty -check-prefix=NOWARN %s
+# RUN: llvm-readobj --coff-imports %t.nounload.exe \
+# RUN:   | FileCheck -check-prefix=NOUNLOAD %s
+
+NOWARN-NOT: warning
+NOUNLOAD:   UnloadDelayImportTable: 0x0
+
+## i386: entries are 4 bytes with HIGHLOW relocs.
+# RUN: yaml2obj %p/Inputs/hello32.yaml -o %t32.obj
+# RUN: lld-link -safeseh:no %t32.obj %p/Inputs/std32.lib /subsystem:console \
+# RUN:   /entry:main@0 /alternatename:___delayLoadHelper2@8=_main@0 \
+# RUN:   /delayload:std32.dll /delay:unload /out:%t32.exe
+# RUN: llvm-readobj --coff-imports %t32.exe > %t32.txt
+# RUN: llvm-readobj --coff-basereloc %t32.exe >> %t32.txt
+# RUN: FileCheck -check-prefix=X86 %s < %t32.txt
+
+X86:      ImportAddressTable: 0x3020
+X86:      UnloadDelayImportTable: 0x[[#%X,UIAT:]]
+X86-NEXT: Import {
+X86-NEXT:   Symbol: ExitProcess (0)
+X86-NEXT:   Address: 0x401029
+X86:        Symbol: MessageBoxA (0)
+X86-NEXT:   Address: 0x401033
+X86:      BaseReloc [
+X86:        Address: 0x[[#%X,UIAT]]
+X86-NEXT: }
+X86-NEXT: Entry {
+X86-NEXT:   Type: HIGHLOW
+X86-NEXT:   Address: 0x[[#%X,UIAT+4]]
+X86:        Address: 0x3020
+
+## Unknown values warn and are ignored.
+# RUN: lld-link /out:%t.bogus.exe /entry:main /subsystem:console \
+# RUN:   %p/Inputs/hello64.obj %p/Inputs/std64.lib /delayload:STD64.DLL \
+# RUN:   /alternatename:__delayLoadHelper2=main /delay:bogus 2>&1 \
+# RUN:   | FileCheck -check-prefix=BOGUS %s
+
+BOGUS: warning: ignoring unknown argument for /delay: bogus

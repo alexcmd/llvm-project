@@ -54,6 +54,7 @@
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Dominators.h"
+#include "llvm/IR/EHPersonalities.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/InstrTypes.h"
@@ -786,6 +787,26 @@ static bool findArgParts(Argument *Arg, const DataLayout &DL, AAResults &AAR,
   return true;
 }
 
+/// Promotion moves the callee's loads into the caller in front of \p CB. A
+/// hardware exception raised by such a load is caught at \p CB if CB is an
+/// invoke (or runs in a funclet) under an asynchronous personality (SEH
+/// __try), or its caller tracks the EH state of every instruction (-EHa
+/// "eh-asynch" module flag, clang -fms-seh-async-try "seh-async-try"). Moved
+/// in front of an invoke, the load would be outside the invoke's EH range.
+static bool callSiteMayCatchAsynchExceptions(const CallBase &CB) {
+  const Function *Caller = CB.getFunction();
+  if (!Caller->hasPersonalityFn())
+    return false;
+  bool InEHScope = isa<InvokeInst>(CB) ||
+                   CB.getOperandBundle(LLVMContext::OB_funclet).has_value();
+  if (!InEHScope)
+    return false;
+  return isAsynchronousEHPersonality(
+             classifyEHPersonality(Caller->getPersonalityFn())) ||
+         Caller->hasFnAttribute("seh-async-try") ||
+         Caller->getParent()->getModuleFlag("eh-asynch");
+}
+
 /// Check if callers and callee agree on how promoted arguments would be
 /// passed.
 static bool areTypesABICompatible(ArrayRef<Type *> Types, const Function &F,
@@ -854,6 +875,10 @@ static Function *promoteArguments(Function *F, FunctionAnalysisManager &FAM,
 
     // Can't change signature of musttail callee
     if (CB->isMustTailCall())
+      return nullptr;
+
+    // Don't move loads out of an SEH / -EHa protected range.
+    if (callSiteMayCatchAsynchExceptions(*CB))
       return nullptr;
 
     if (CB->getFunction() == F)

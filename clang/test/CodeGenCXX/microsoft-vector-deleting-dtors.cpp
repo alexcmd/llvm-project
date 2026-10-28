@@ -7,12 +7,12 @@ struct Bird {
 };
 
 struct Parrot : public Bird {
-// X64: @[[ParrotVtable:[0-9]+]] = private constant { [2 x ptr] } { [2 x ptr] [ptr @"??_R4Parrot@@6B@", ptr @"??_EParrot@@UEAAPEAXI@Z"] }, comdat($"??_7Parrot@@6B@")
-// X86: @[[ParrotVtable:[0-9]+]] = private constant { [2 x ptr] } { [2 x ptr] [ptr @"??_R4Parrot@@6B@", ptr @"??_EParrot@@UAEPAXI@Z"] }, comdat($"??_7Parrot@@6B@")
-// CLANG21: @[[ParrotVtable:[0-9]+]] = private constant { [2 x ptr] } { [2 x ptr] [ptr @"??_R4Parrot@@6B@", ptr @"??_GParrot@@UEAAPEAXI@Z"] }, comdat($"??_7Parrot@@6B@")
 // X64: @[[Bird:[0-9]+]] = private constant { [2 x ptr] } { [2 x ptr] [ptr @"??_R4Bird@@6B@", ptr @"??_EBird@@UEAAPEAXI@Z"] }, comdat($"??_7Bird@@6B@")
 // X86: @[[Bird:[0-9]+]] = private constant { [2 x ptr] } { [2 x ptr] [ptr @"??_R4Bird@@6B@", ptr @"??_EBird@@UAEPAXI@Z"] }, comdat($"??_7Bird@@6B@")
 // CLANG21: @[[Bird:[0-9]+]] = private constant { [2 x ptr] } { [2 x ptr] [ptr @"??_R4Bird@@6B@", ptr @"??_GBird@@UEAAPEAXI@Z"] }, comdat($"??_7Bird@@6B@")
+// X64: @[[ParrotVtable:[0-9]+]] = private constant { [2 x ptr] } { [2 x ptr] [ptr @"??_R4Parrot@@6B@", ptr @"??_EParrot@@UEAAPEAXI@Z"] }, comdat($"??_7Parrot@@6B@")
+// X86: @[[ParrotVtable:[0-9]+]] = private constant { [2 x ptr] } { [2 x ptr] [ptr @"??_R4Parrot@@6B@", ptr @"??_EParrot@@UAEPAXI@Z"] }, comdat($"??_7Parrot@@6B@")
+// CLANG21: @[[ParrotVtable:[0-9]+]] = private constant { [2 x ptr] } { [2 x ptr] [ptr @"??_R4Parrot@@6B@", ptr @"??_GParrot@@UEAAPEAXI@Z"] }, comdat($"??_7Parrot@@6B@")
   virtual ~Parrot() {}
 };
 
@@ -204,6 +204,25 @@ void kernelTest() {
 // X64-NEXT: call void @llvm.trap()
 // X64-NEXT: unreachable
 
+// Test that when a class provides its own operator delete, the deleting
+// destructor calls __global_delete instead of directly
+// referencing ::operator delete. This is critical for environments like
+// kernel mode where no global ::operator delete exists.
+
+// X64-LABEL: define weak dso_local noundef ptr @"??_EKernelDerived@@UEAAPEAXI@Z"
+// Verify the array delete path in the VDD uses __global_array_delete.
+// X64: dtor.call_glob_delete_after_array_destroy:
+// X64: call void @"?__global_array_delete@@YAXPEAX_K@Z"(ptr noundef %{{.*}}, i64 noundef %{{.*}})
+// Verify the scalar deleting dtor uses __global_delete, not ::operator delete.
+// X64: dtor.call_delete:
+// X64-NEXT:  %[[FLAGCHECK:.*]] = and i32 %should_call_delete2, 4
+// X64-NEXT:  %[[ISGLOB:.*]] = icmp eq i32 %[[FLAGCHECK]], 0
+// X64-NEXT:  br i1 %[[ISGLOB]], label %dtor.call_class_delete, label %dtor.call_glob_delete
+// X64: dtor.call_glob_delete:
+// X64-NEXT:  call void @"?__global_delete@@YAXPEAX_K@Z"(ptr noundef %{{.*}}, i64 noundef 8)
+// X64: dtor.call_class_delete:
+// X64-NEXT:  call void @"??3KernelBase@@SAXPEAX@Z"(ptr noundef %{{.*}})
+
 // Vector dtor definition for Parrot.
 // X64-LABEL: define weak dso_local noundef ptr @"??_EParrot@@UEAAPEAXI@Z"(
 // X64-SAME: ptr {{.*}} %[[THIS:.*]], i32 {{.*}} %[[IMPLICIT_PARAM:.*]]) unnamed_addr
@@ -290,25 +309,6 @@ void kernelTest() {
 // X64-NEXT: call void @"?__global_array_delete@@YAXPEAX_K@Z"(ptr noundef %2, i64 noundef %[[TOTALSZ]])
 // X86-NEXT: call void @"?__global_array_delete@@YAXPAXI@Z"(ptr noundef %2, i32 noundef %[[TOTALSZ]])
 // CHECK-NEXT:   br label %dtor.continue
-
-// Test that when a class provides its own operator delete, the deleting
-// destructor calls __global_delete instead of directly
-// referencing ::operator delete. This is critical for environments like
-// kernel mode where no global ::operator delete exists.
-
-// X64-LABEL: define weak dso_local noundef ptr @"??_EKernelDerived@@UEAAPEAXI@Z"
-// Verify the array delete path in the VDD uses __global_array_delete.
-// X64: dtor.call_glob_delete_after_array_destroy:
-// X64: call void @"?__global_array_delete@@YAXPEAX_K@Z"(ptr noundef %{{.*}}, i64 noundef %{{.*}})
-// Verify the scalar deleting dtor uses __global_delete, not ::operator delete.
-// X64: dtor.call_delete:
-// X64-NEXT:  %[[FLAGCHECK:.*]] = and i32 %should_call_delete2, 4
-// X64-NEXT:  %[[ISGLOB:.*]] = icmp eq i32 %[[FLAGCHECK]], 0
-// X64-NEXT:  br i1 %[[ISGLOB]], label %dtor.call_class_delete, label %dtor.call_glob_delete
-// X64: dtor.call_glob_delete:
-// X64-NEXT:  call void @"?__global_delete@@YAXPEAX_K@Z"(ptr noundef %{{.*}}, i64 noundef 8)
-// X64: dtor.call_class_delete:
-// X64-NEXT:  call void @"??3KernelBase@@SAXPEAX@Z"(ptr noundef %{{.*}})
 
 
 struct BaseDelete1 {

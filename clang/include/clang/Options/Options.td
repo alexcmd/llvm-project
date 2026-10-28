@@ -9358,6 +9358,12 @@ def _SLASH_Zc_sizedDealloc : CLFlag<"Zc:sizedDealloc">,
 def _SLASH_Zc_sizedDealloc_ : CLFlag<"Zc:sizedDealloc-">,
   HelpText<"Disable C++14 sized global deallocation functions">,
   Alias<fno_sized_deallocation>;
+def _SLASH_Zc_throwingNew : CLFlag<"Zc:throwingNew">,
+  HelpText<"Assume operator new throws on failure (default)">,
+  Alias<fno_check_new>;
+def _SLASH_Zc_throwingNew_ : CLFlag<"Zc:throwingNew-">,
+  HelpText<"Check the result of operator new for null (cl default)">,
+  Alias<fcheck_new>;
 def _SLASH_Zc_alignedNew : CLFlag<"Zc:alignedNew">,
   HelpText<"Enable C++17 aligned allocation functions">,
   Alias<faligned_allocation>;

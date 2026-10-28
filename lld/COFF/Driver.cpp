@@ -799,13 +799,21 @@ void LinkerDriver::detectWinSysRoot(const opt::InputArgList &Args) {
     VCToolsVersion = A->getValue();
   if (auto *A = Args.getLastArg(OPT_winsysroot))
     WinSysRoot = A->getValue();
+  // /novcautodetect: use only what the command line names (/vctoolsdir,
+  // /vctoolsversion, /winsysroot, /winsdkdir); never consult the environment
+  // (%VCToolsInstallDir%, cl.exe on %PATH%), the VS setup configuration COM API
+  // or the registry. Lets a self-contained toolchain link hermetically on a
+  // machine that also has Visual Studio installed.
+  bool autodetect = !Args.hasArg(OPT_novcautodetect);
   if (!findVCToolChainViaCommandLine(*VFS, VCToolsDir, VCToolsVersion,
                                      WinSysRoot, vcToolChainPath, vsLayout) &&
-      (Args.hasArg(OPT_lldignoreenv) ||
-       !findVCToolChainViaEnvironment(*VFS, vcToolChainPath, vsLayout)) &&
-      !findVCToolChainViaSetupConfig(*VFS, {}, vcToolChainPath, vsLayout) &&
-      !findVCToolChainViaRegistry(vcToolChainPath, vsLayout))
+      (!autodetect ||
+       ((Args.hasArg(OPT_lldignoreenv) ||
+         !findVCToolChainViaEnvironment(*VFS, vcToolChainPath, vsLayout)) &&
+        !findVCToolChainViaSetupConfig(*VFS, {}, vcToolChainPath, vsLayout) &&
+        !findVCToolChainViaRegistry(vcToolChainPath, vsLayout))))
     return;
+  Log(ctx) << "VC toolchain: " << vcToolChainPath;
 
   // If the VC environment hasn't been configured (perhaps because the user did
   // not run vcvarsall), try to build a consistent link environment.  If the
@@ -828,6 +836,10 @@ void LinkerDriver::detectWinSysRoot(const opt::InputArgList &Args) {
       WinSdkDir = A->getValue();
     if (auto *A = Args.getLastArg(OPT_winsdkversion))
       WinSdkVersion = A->getValue();
+    // Without /winsdkdir or /winsysroot the SDK lookups below fall back to the
+    // registry, which /novcautodetect forbids.
+    if (!autodetect && !WinSdkDir && !WinSysRoot)
+      return;
 
     if (useUniversalCRT(vsLayout, vcToolChainPath, getArch(), *VFS)) {
       std::string UniversalCRTSdkPath;
@@ -836,6 +848,7 @@ void LinkerDriver::detectWinSysRoot(const opt::InputArgList &Args) {
                                 UniversalCRTSdkPath, UCRTVersion)) {
         universalCRTLibPath = UniversalCRTSdkPath;
         path::append(universalCRTLibPath, "Lib", UCRTVersion, "ucrt");
+        Log(ctx) << "UCRT lib path: " << universalCRTLibPath;
       }
     }
 
@@ -849,6 +862,7 @@ void LinkerDriver::detectWinSysRoot(const opt::InputArgList &Args) {
       path::append(windowsSdkLibPath, "Lib");
       if (sdkMajor >= 8)
         path::append(windowsSdkLibPath, windowsSDKLibVersion, "um");
+      Log(ctx) << "Windows SDK lib path: " << windowsSdkLibPath;
     }
   }
 }
@@ -1727,6 +1741,12 @@ void LinkerDriver::linkerMain(ArrayRef<const char *> argsArr) {
       Fatal(ctx) << "no input files";
   }
 
+  // Handle /verbose. Done before the search path setup so that the detected
+  // VC toolchain and SDK paths are logged.
+  if (args.hasArg(OPT_verbose))
+    config->verbose = true;
+  ctx.e.verbose = config->verbose;
+
   // Construct search path list.
   {
     llvm::TimeTraceScope timeScope2("Search paths");
@@ -1773,11 +1793,6 @@ void LinkerDriver::linkerMain(ArrayRef<const char *> argsArr) {
   // Handle /out
   if (auto *arg = args.getLastArg(OPT_out))
     config->outputFile = arg->getValue();
-
-  // Handle /verbose
-  if (args.hasArg(OPT_verbose))
-    config->verbose = true;
-  ctx.e.verbose = config->verbose;
 
   // Handle /force or /force:unresolved
   if (args.hasArg(OPT_force, OPT_force_unresolved))

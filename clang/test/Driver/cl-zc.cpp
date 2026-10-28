@@ -18,6 +18,13 @@
 // RUN: %clang_cl /c -### /Zc:sizedDealloc- -- %s 2>&1 | FileCheck -check-prefix=SIZED-DEALLOC-OFF %s
 // SIZED-DEALLOC-OFF-NOT: "-fsized-deallocation"
 
+// RUN: %clang_cl /c -### /Zc:throwingNew- -- %s 2>&1 | FileCheck -check-prefix=THROWING-NEW-OFF %s
+// THROWING-NEW-OFF: "-fcheck-new"
+
+// RUN: %clang_cl /c -### /Zc:throwingNew -- %s 2>&1 | FileCheck -check-prefix=THROWING-NEW-ON %s
+// RUN: %clang_cl /c -### /Zc:throwingNew- /Zc:throwingNew -- %s 2>&1 | FileCheck -check-prefix=THROWING-NEW-ON %s
+// THROWING-NEW-ON-NOT: "-fcheck-new"
+
 // RUN: %clang_cl /c /std:c++17 -### /Zc:alignedNew -- %s 2>&1 | FileCheck -check-prefix=ALIGNED-NEW-ON %s
 // ALIGNED-NEW-ON: "-faligned-allocation"
 

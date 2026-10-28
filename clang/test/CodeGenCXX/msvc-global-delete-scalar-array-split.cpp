@@ -50,10 +50,10 @@ void test() {
 // CHECK-NEXT: call void @llvm.trap()
 
 // The scalar deleting destructor's global path calls __global_delete.
-// CHECK: call void @"?__global_delete@@YAXPEAX_K@Z"(
+// CHECK-DAG: call void @"?__global_delete@@YAXPEAX_K@Z"(
 
 // The vector deleting destructor's global array path calls __global_array_delete.
-// CHECK: call void @"?__global_array_delete@@YAXPEAX_K@Z"(
+// CHECK-DAG: call void @"?__global_array_delete@@YAXPEAX_K@Z"(
 
 // The forwarding bodies are emitted at end-of-module. Each wrapper forwards to
 // its OWN global operator delete: __global_delete to the scalar ??3@,

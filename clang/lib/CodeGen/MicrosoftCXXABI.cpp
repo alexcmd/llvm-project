@@ -1916,8 +1916,12 @@ llvm::GlobalVariable *MicrosoftCXXABI::getAddrOfVTable(const CXXRecordDecl *RD,
   bool VTableAliasIsRequred =
       !VFTableComesFromAnotherTU && getContext().getLangOpts().RTTIData;
 
-  if (llvm::GlobalValue *VFTable =
-          CGM.getModule().getNamedGlobal(VFTableName)) {
+  // A bare declaration of the same name (e.g. ??_7type_info@@6B@ referenced by
+  // an RTTI type descriptor before this point) is replaced below.
+  llvm::GlobalValue *OldDecl = CGM.getModule().getNamedValue(VFTableName);
+  if (OldDecl && (VTableAliasIsRequred ? isa<llvm::GlobalAlias>(OldDecl)
+                                       : isa<llvm::GlobalVariable>(OldDecl))) {
+    llvm::GlobalValue *VFTable = OldDecl;
     VFTablesMap[ID] = VFTable;
     VTable = VTableAliasIsRequred
                  ? cast<llvm::GlobalVariable>(
@@ -1983,6 +1987,13 @@ llvm::GlobalVariable *MicrosoftCXXABI::getAddrOfVTable(const CXXRecordDecl *RD,
 
   if (RD->hasAttr<DLLExportAttr>())
     VFTable->setDLLStorageClass(llvm::GlobalValue::DLLExportStorageClass);
+
+  if (OldDecl) {
+    assert(OldDecl->isDeclaration() && "vftable name already defined");
+    OldDecl->replaceAllUsesWith(VFTable);
+    VFTable->takeName(OldDecl);
+    OldDecl->eraseFromParent();
+  }
 
   VFTablesMap[ID] = VFTable;
   return VTable;
@@ -3639,9 +3650,11 @@ CGCXXABI *clang::CodeGen::CreateMicrosoftCXXABI(CodeGenModule &CGM) {
 //   vbtable.  The names of the BaseClassDescriptors have all of their fields
 //   mangled into them so they can be aggressively deduplicated by the linker.
 
-static llvm::GlobalVariable *getTypeInfoVTable(CodeGenModule &CGM) {
+static llvm::Constant *getTypeInfoVTable(CodeGenModule &CGM) {
   StringRef MangledName("??_7type_info@@6B@");
-  if (auto VTable = CGM.getModule().getNamedGlobal(MangledName))
+  // Not getNamedGlobal: with RTTI data a vftable defined in this TU is a
+  // GlobalAlias, and a second declaration would become an unresolved "...@.1".
+  if (auto *VTable = CGM.getModule().getNamedValue(MangledName))
     return VTable;
   return new llvm::GlobalVariable(CGM.getModule(), CGM.Int8PtrTy,
                                   /*isConstant=*/true,
@@ -4101,6 +4114,16 @@ void MicrosoftCXXABI::emitCXXStructor(GlobalDecl GD) {
   if (GD.getDtorType() == Dtor_Complete &&
       dtor->getParent()->getNumVBases() == 0)
     GD = GD.getWithDtorType(Dtor_Base);
+
+  // MSVC emits the vftables (and thus the deleting dtor and RTTI) in every TU
+  // that defines a virtual dtor out of line, even if the dtor never stores the
+  // vfptr. Request them here; inline and template dtors are left on demand.
+  if (GD.getDtorType() == Dtor_Base && dtor->isVirtual() &&
+      getContext().GetGVALinkageForFunction(dtor) == GVA_StrongExternal) {
+    const CXXRecordDecl *RD = dtor->getParent();
+    for (const auto &VP : CGM.getMicrosoftVTableContext().getVFPtrOffsets(RD))
+      getAddrOfVTable(RD, VP->FullOffsetInMDC);
+  }
 
   // The base destructor is equivalent to the base destructor of its
   // base class if there is exactly one non-virtual base class with a

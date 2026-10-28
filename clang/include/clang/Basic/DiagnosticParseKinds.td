@@ -1126,7 +1126,7 @@ def ext_lambda : ExtWarn<"lambdas are a %select{C++11|clang HLSL}0 extension">,
   InGroup<CXX11>;
 def ext_hlsl_lambda : ExtWarn<ext_lambda.Summary>,
   InGroup<HLSLExtension>;
-def ext_ms_forceinline_lambda_position : ExtWarn<
+def ext_ms_forceinline_lambda_position : Extension<
   "'msvc::forceinline' after the lambda declarator is a Microsoft extension; "
   "it applies to the call operator">, InGroup<MicrosoftLambdaAttribute>;
 def err_lambda_decl_specifier_repeated : Error<

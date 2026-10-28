@@ -82,6 +82,10 @@ def linkreprofullpathrsp : Joined<["/", "-", "/?", "-?"], "linkreprofullpathrsp:
     HelpText<"Write .rsp file containing inputs used to link with full paths">;
 def lldignoreenv : F<"lldignoreenv">,
     HelpText<"Ignore environment variables like %LIB%">;
+def novcautodetect : F<"novcautodetect">,
+    HelpText<"Do not search for Visual Studio or the Windows SDK (environment, "
+             "setup configuration, registry); use only /vctoolsdir, "
+             "/winsysroot, /winsdkdir and /libpath">;
 def lldltocache : P<"lldltocache",
     "Path to ThinLTO cached object file directory">;
 def lldltocachepolicy : P<"lldltocachepolicy",

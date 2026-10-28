@@ -1,0 +1,40 @@
+Check that /novcautodetect disables implicit Visual Studio / Windows SDK
+discovery (environment, VS setup configuration, registry) while explicit
+/winsysroot and /vctoolsdir keep working.
+
+# RUN: rm -rf %t.dir && mkdir -p %t.dir/sysroot/VC/Tools/MSVC/1.1.1.1/lib/x64
+# RUN: cp %p/Inputs/std64.lib %t.dir/sysroot/VC/Tools/MSVC/1.1.1.1/lib/x64
+
+Explicit /winsysroot is still honored.
+# RUN: lld-link %p/Inputs/hello64.obj /novcautodetect /winsysroot:%t.dir/sysroot \
+# RUN:   /defaultlib:std64 /entry:main /out:%t.exe /verbose 2>&1 \
+# RUN:   | FileCheck --check-prefix=FOUND %s
+
+Explicit /vctoolsdir is still honored.
+# RUN: lld-link %p/Inputs/hello64.obj /novcautodetect \
+# RUN:   /vctoolsdir:%t.dir/sysroot/VC/Tools/MSVC/1.1.1.1 \
+# RUN:   /defaultlib:std64 /entry:main /out:%t.exe /verbose 2>&1 \
+# RUN:   | FileCheck --check-prefix=FOUND %s
+
+FOUND: VC toolchain: {{.*}}sysroot{{[/\\]}}VC{{[/\\]}}Tools{{[/\\]}}MSVC{{[/\\]}}1.1.1.1
+
+Without /novcautodetect the toolchain is picked up from %VCToolsInstallDir%.
+# RUN: env -u LIB VCToolsInstallDir=%t.dir/sysroot/VC/Tools/MSVC/1.1.1.1 \
+# RUN:   lld-link %p/Inputs/hello64.obj /defaultlib:std64 /entry:main \
+# RUN:   /out:%t.exe /verbose 2>&1 | FileCheck --check-prefix=FOUND %s
+
+With /novcautodetect the environment is not consulted, and no VC toolchain or
+SDK path is detected at all.
+# RUN: env -u LIB VCToolsInstallDir=%t.dir/sysroot/VC/Tools/MSVC/1.1.1.1 \
+# RUN:   not lld-link %p/Inputs/hello64.obj /novcautodetect /defaultlib:std64 \
+# RUN:   /entry:main /out:%t.exe /verbose 2>&1 \
+# RUN:   | FileCheck --check-prefix=NONE --implicit-check-not="VC toolchain:" \
+# RUN:     --implicit-check-not="SDK lib path:" \
+# RUN:     --implicit-check-not="UCRT lib path:" %s
+
+NONE: could not open 'std64.lib'
+
+/libpath still works with /novcautodetect.
+# RUN: lld-link %p/Inputs/hello64.obj /novcautodetect \
+# RUN:   /libpath:%t.dir/sysroot/VC/Tools/MSVC/1.1.1.1/lib/x64 \
+# RUN:   /defaultlib:std64 /entry:main /out:%t.exe

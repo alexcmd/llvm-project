@@ -1681,6 +1681,7 @@ def MicrosoftStringLiteralFromPredefined : DiagGroup<
     "microsoft-string-literal-from-predefined">;
 def MicrosoftInlineOnNonFunction : DiagGroup<
     "microsoft-inline-on-non-function">;
+def MicrosoftLambdaAttribute : DiagGroup<"microsoft-lambda-attribute">;
 
 // Aliases.
 def : DiagGroup<"msvc-include", [MicrosoftInclude]>;
@@ -1700,7 +1701,7 @@ def Microsoft : DiagGroup<"microsoft",
      MicrosoftCommentPaste, MicrosoftEndOfFile,
      MicrosoftInitFromPredefined, MicrosoftStringLiteralFromPredefined,
      MicrosoftInconsistentDllImport, MicrosoftInlineOnNonFunction,
-     MicrosoftEmptyEnum]>;
+     MicrosoftEmptyEnum, MicrosoftLambdaAttribute]>;
 
 def ClangClPch : DiagGroup<"clang-cl-pch">;
 

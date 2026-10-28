@@ -1401,6 +1401,22 @@ ExprResult Parser::ParseLambdaExpressionAfterIntroducer(
     if (MaybeParseCXX11Attributes(Attributes))
       DeclEndLoc = Attributes.Range.getEnd();
 
+    // MS: cl accepts `(...) noexcept [[msvc::forceinline]] {` (used by the
+    // STL) and applies it to operator(). Move it off the function type.
+    if (getLangOpts().MicrosoftExt) {
+      SmallVector<ParsedAttr *, 1> ForceInline;
+      for (ParsedAttr &A : Attributes)
+        if (A.getKind() == ParsedAttr::AT_AlwaysInline &&
+            A.isCXX11Attribute() && A.getScopeName() &&
+            A.getScopeName()->isStr("msvc") &&
+            A.getAttrName()->isStr("forceinline"))
+          ForceInline.push_back(&A);
+      for (ParsedAttr *A : ForceInline) {
+        Diag(A->getLoc(), diag::ext_ms_forceinline_lambda_position);
+        D.getAttributes().takeOneFrom(Attributes, A);
+      }
+    }
+
     // Parse OpenCL addr space attribute.
     if (Tok.isOneOf(tok::kw___private, tok::kw___global, tok::kw___local,
                     tok::kw___constant, tok::kw___generic)) {

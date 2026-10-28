@@ -153,6 +153,8 @@ static bool addExceptionArgs(const ArgList &Args, types::ID InputType,
     Args.ClaimAllArgs(options::OPT_fno_cxx_exceptions);
     Args.ClaimAllArgs(options::OPT_fasync_exceptions);
     Args.ClaimAllArgs(options::OPT_fno_async_exceptions);
+    Args.ClaimAllArgs(options::OPT_fms_seh_async_try);
+    Args.ClaimAllArgs(options::OPT_fno_ms_seh_async_try);
     return false;
   }
 
@@ -168,6 +170,10 @@ static bool addExceptionArgs(const ArgList &Args, types::ID InputType,
       CmdArgs.push_back("-fasync-exceptions");
       EH = true;
     }
+    // Opt-in outside clang-cl (see AddClangCLArgs); implied by EHa.
+    if (!EHa && Args.hasFlag(options::OPT_fms_seh_async_try,
+                             options::OPT_fno_ms_seh_async_try, false))
+      CmdArgs.push_back("-fms-seh-async-try");
   }
 
   // Obj-C exceptions are enabled by default, regardless of -fexceptions. This
@@ -8863,6 +8869,16 @@ void Clang::AddClangCLArgs(const ArgList &Args, types::ID InputType,
     if (EH.Asynch)
       CmdArgs.push_back("-fasync-exceptions");
   }
+  // cl lets a __try/__except catch a fault raised by any instruction of the
+  // __try body under every /EH mode, not only /EHa. Model that per __try
+  // statement; it only affects functions that contain __try. /EHa already
+  // implies it. On by default for x86-64 only, where the -EHa machinery it
+  // reuses is exercised.
+  bool SEHAsyncTry = Args.hasFlag(
+      options::OPT_fms_seh_async_try, options::OPT_fno_ms_seh_async_try,
+      /*Default=*/getToolChain().getArch() == llvm::Triple::x86_64);
+  if (!isNVPTX && !EH.Asynch && IsWindowsMSVC && SEHAsyncTry)
+    CmdArgs.push_back("-fms-seh-async-try");
   if (types::isCXX(InputType) && EH.Synch && EH.NoUnwindC)
     CmdArgs.push_back("-fexternc-nounwind");
 

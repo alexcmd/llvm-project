@@ -737,7 +737,7 @@ void llvm::calculateSEHStateNumbers(const Function *Fn,
 
   calculateStateNumbersForInvokes(Fn, FuncInfo);
 
-  bool IsEHa = Fn->getParent()->getModuleFlag("eh-asynch");
+  bool IsEHa = isAsynchEHFunction(*Fn);
   if (IsEHa) {
     const BasicBlock *EntryBB = &(Fn->getEntryBlock());
     calculateSEHStateForAsynchEH(EntryBB, -1, FuncInfo);
@@ -762,7 +762,7 @@ void llvm::calculateWinCXXEHStateNumbers(const Function *Fn,
 
   calculateStateNumbersForInvokes(Fn, FuncInfo);
 
-  bool IsEHa = Fn->getParent()->getModuleFlag("eh-asynch");
+  bool IsEHa = isAsynchEHFunction(*Fn);
   if (IsEHa) {
     const BasicBlock *EntryBB = &(Fn->getEntryBlock());
     calculateCXXStateForAsynchEH(EntryBB, -1, FuncInfo);

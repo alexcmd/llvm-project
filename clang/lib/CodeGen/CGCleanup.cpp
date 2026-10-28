@@ -789,6 +789,9 @@ void CodeGenFunction::PopCleanupBlock(bool FallthroughIsBranchThrough,
   // Under -EHa, invoke seh.scope.end() to mark scope end before dtor
   bool IsEHa = getLangOpts().EHAsynch && !Scope.isLifetimeMarker();
   bool IsSEHFinallyCleanup = Scope.isSEHFinallyCleanup();
+  // -fms-seh-async-try: close the __try of a __finally (seh.try.end) but leave
+  // C++ cleanups without seh.scope.* markers.
+  bool IsAsyncSEHFinally = isSEHTryAsync() && IsSEHFinallyCleanup;
   if (!RequiresNormalCleanup) {
     // Mark CPP scope end for passed-by-value Arg temp
     //   per Windows ABI which is "normally" Cleanup in callee
@@ -813,7 +816,7 @@ void CodeGenFunction::PopCleanupBlock(bool FallthroughIsBranchThrough,
         !HasExistingBranches) {
 
       // mark SEH scope end for fall-through flow
-      if (IsEHa && getInvokeDest()) {
+      if ((IsEHa || IsAsyncSEHFinally) && getInvokeDest()) {
         if (Scope.isSEHFinallyCleanup())
           EmitSehTryScopeEnd();
         else
@@ -855,7 +858,7 @@ void CodeGenFunction::PopCleanupBlock(bool FallthroughIsBranchThrough,
       EmitBlock(NormalEntry);
 
       // intercept normal cleanup to mark SEH scope end
-      if (IsEHa && getInvokeDest()) {
+      if ((IsEHa || IsAsyncSEHFinally) && getInvokeDest()) {
         if (Scope.isSEHFinallyCleanup())
           EmitSehTryScopeEnd();
         else
@@ -1378,7 +1381,7 @@ void CodeGenFunction::EmitSehTryScopeBegin() {
 
 // Invoke a llvm.seh.try.end at the end of a SEH scope for -EHa
 void CodeGenFunction::EmitSehTryScopeEnd() {
-  assert(getLangOpts().EHAsynch);
+  assert(isSEHTryAsync());
   llvm::FunctionType *FTy =
       llvm::FunctionType::get(CGM.VoidTy, /*isVarArg=*/false);
   llvm::FunctionCallee SehCppScope =

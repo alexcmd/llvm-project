@@ -2240,6 +2240,13 @@ public:
 
   bool currentFunctionUsesSEHTry() const { return !!CurSEHParent; }
 
+  /// True if SEH __try bodies get llvm.seh.try.begin/end so their handlers see
+  /// faults from any instruction: whole-TU -EHa, or SEH-only
+  /// -fms-seh-async-try (C++ cleanups and catch(...) stay synchronous).
+  bool isSEHTryAsync() const {
+    return getLangOpts().EHAsynch || getLangOpts().MSSEHAsyncTry;
+  }
+
   const TargetInfo &getTarget() const { return Target; }
   llvm::LLVMContext &getLLVMContext() { return CGM.getLLVMContext(); }
   const TargetCodeGenInfo &getTargetHooks() const {

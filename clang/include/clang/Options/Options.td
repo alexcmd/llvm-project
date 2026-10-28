@@ -2241,6 +2241,13 @@ defm ms_cxx_eh4: BoolFOption<"ms-cxx-eh4",
           "Use compact __CxxFrameHandler4 metadata for Microsoft C++ exceptions">,
   NegFlag<SetFalse, [], [ClangOption, CLOption, CC1Option],
           "Use __CxxFrameHandler3 metadata for Microsoft C++ exceptions">>;
+defm ms_seh_async_try: BoolFOption<"ms-seh-async-try",
+  LangOpts<"MSSEHAsyncTry">, DefaultFalse,
+  PosFlag<SetTrue, [], [ClangOption, CC1Option, CLOption],
+          "Let SEH __try handlers catch hardware exceptions raised by any "
+          "instruction in the __try body without enabling "
+          "-fasync-exceptions (default for clang-cl targeting x86-64)">,
+  NegFlag<SetFalse, [], [ClangOption, CLOption]>>;
 defm cxx_modules : BoolFOption<"cxx-modules",
   LangOpts<"CPlusPlusModules">, Default<cpp20.KeyPath>,
   NegFlag<SetFalse, [], [ClangOption, CC1Option], "Disable">,

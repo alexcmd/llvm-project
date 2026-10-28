@@ -1958,7 +1958,7 @@ void SelectionDAGISel::SelectAllBasicBlocks(const Function &Fn) {
   }
 
   // AsynchEH: Report Block State under -AsynchEH
-  if (Fn.getParent()->getModuleFlag("eh-asynch"))
+  if (isAsynchEHFunction(Fn))
     reportIPToStateForBlocks(MF);
 
   SP->copyToMachineFrameInfo(MF->getFrameInfo());

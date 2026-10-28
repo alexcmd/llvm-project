@@ -1898,10 +1898,29 @@ bool X86AsmParser::ParseIntelNamedOperator(StringRef Name,
         SM.onOffset(Val, OffsetLoc, ID, Info, isParsingMSInlineAsm(), ErrMsg);
     if (ParseError)
       return Error(SMLoc::getFromPointer(Name.data()), ErrMsg);
+  } else if (getParser().isParsingMasm() &&
+             Name.equals_insensitive("imagerel")) {
+    // MASM IMAGEREL <symbol> (parsed by MasmParser::parsePrimaryExpr): a
+    // displacement inside brackets, an immediate (like OFFSET) otherwise.
+    SMLoc Loc = getTok().getLoc();
+    const MCExpr *Val = nullptr;
+    if (getParser().parsePrimaryExpr(Val, End, nullptr))
+      return ParseError = true;
+    InlineAsmIdentifierInfo Info;
+    StringRef ErrMsg;
+    ParseError =
+        SM.isBracketUsed()
+            ? SM.onIdentifierExpr(Val, Name, Info, AsmTypeInfo(),
+                                  /*ParsingMSInlineAsm=*/false, ErrMsg)
+            : SM.onOffset(Val, Loc, Name, Info, /*ParsingMSInlineAsm=*/false,
+                          ErrMsg);
+    if (ParseError)
+      return Error(Loc, ErrMsg);
   } else {
     return false;
   }
-  if (!Name.equals_insensitive("offset"))
+  if (!Name.equals_insensitive("offset") &&
+      !(getParser().isParsingMasm() && Name.equals_insensitive("imagerel")))
     End = consumeToken();
   return true;
 }
@@ -2728,9 +2747,14 @@ bool X86AsmParser::parseIntelOperand(OperandVector &Operands, StringRef Name) {
   if (!Disp)
     Disp = ImmDisp;
 
+  // MASM: LEA of an OFFSET expression addresses the symbol itself (ML64.EXE
+  // encodes 'lea r10, OFFSET sym' RIP-relative, like 'lea r10, sym').
+  bool MasmLeaOffset = Parser.isParsingMasm() && SM.isOffsetOperator() &&
+                       Name.equals_insensitive("lea");
+
   // RegNo != 0 specifies a valid segment register,
   // and we are parsing a segment override
-  if (!SM.isMemExpr() && !RegNo) {
+  if (!SM.isMemExpr() && !RegNo && !MasmLeaOffset) {
     if (isParsingMSInlineAsm() && SM.isOffsetOperator()) {
       const InlineAsmIdentifierInfo &Info = SM.getIdentifierInfo();
       if (Info.isKind(InlineAsmIdentifierInfo::IK_Var)) {
@@ -2805,7 +2829,8 @@ bool X86AsmParser::parseIntelOperand(OperandVector &Operands, StringRef Name) {
 
   if (Parser.isParsingMasm()) {
     if (is64BitMode() &&
-        ((PtrInOperand && !IndexReg) || SM.getElementSize() > 0)) {
+        ((PtrInOperand && !IndexReg) || SM.getElementSize() > 0 ||
+         (MasmLeaOffset && !BaseReg && !IndexReg))) {
       DefaultBaseReg = X86::RIP;
     }
     if (IsUnconditionalBranch) {

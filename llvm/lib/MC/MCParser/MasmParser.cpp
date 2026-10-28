@@ -41,6 +41,7 @@
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/MC/MCSymbolCOFF.h"
 #include "llvm/MC/MCTargetOptions.h"
+#include "llvm/MC/MCValue.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -1423,6 +1424,20 @@ bool MasmParser::parsePrimaryExpr(const MCExpr *&Res, SMLoc &EndLoc,
       Res = MCUnaryExpr::createNot(Res, getContext(), FirstTokenLoc);
       return false;
     }
+    // IMAGEREL <symbol>: image-relative address (RVA) of the symbol;
+    // IMAGE_REL_AMD64_ADDR32NB / IMAGE_REL_I386_DIR32NB.
+    if (Identifier.equals_insensitive("imagerel")) {
+      SMLoc OperandLoc = getTok().getLoc();
+      if (parsePrimaryExpr(Res, EndLoc, nullptr))
+        return true;
+      const auto *SymRef = dyn_cast<MCSymbolRefExpr>(Res);
+      if (!SymRef || SymRef->getSpecifier())
+        return Error(OperandLoc, "expected symbol after IMAGEREL");
+      Res = MCSymbolRefExpr::create(&SymRef->getSymbol(),
+                                    MCSymbolRefExpr::VK_COFF_IMGREL32,
+                                    getContext(), FirstTokenLoc);
+      return false;
+    }
     // Parse directional local label references.
     if (Identifier.equals_insensitive("@b") ||
         Identifier.equals_insensitive("@f")) {
@@ -1939,6 +1954,10 @@ bool MasmParser::parseStatement(ParseStatementInfo &Info,
 
     // identifier ':'   -> Label.
     Lex();
+    // identifier '::' -> label with global (not procedure-local) scope;
+    // labels are never procedure-local here, so treat it as a plain label.
+    if (getTok().is(AsmToken::Colon))
+      Lex();
 
     // Diagnose attempt to use '.' as a label.
     if (IDVal == ".")
@@ -2902,6 +2921,10 @@ bool MasmParser::parseIdentifier(StringRef &Res,
       StringSwitch<bool>(Res)
           .CaseLower("echo", true)
           .CasesLower({"ifdef", "ifndef", "elseifdef", "elseifndef"}, true)
+          // Text items: parseTextItem expands a text macro name itself.
+          .CasesLower({"ifidn", "ifidni", "ifdif", "ifdifi"}, true)
+          .CasesLower({"elseifidn", "elseifidni", "elseifdif", "elseifdifi"},
+                      true)
           .Default(false)) {
     ExpandNextToken = DoNotExpandMacros;
   }
@@ -2978,11 +3001,24 @@ bool MasmParser::parseDirectiveEquate(StringRef IDVal, StringRef Name,
 
   int64_t Value;
   if (!Expr->evaluateAsAbsolute(Value, getStreamer().getAssemblerPtr())) {
-    if (DirKind == DK_ASSIGN)
-      return Error(
-          StartLoc,
-          "expected absolute expression; not all symbols have known values",
-          {StartLoc, EndLoc});
+    if (DirKind == DK_ASSIGN) {
+      // ML.EXE also accepts a relocatable expression ('alias = label'): the
+      // name becomes a symbol at that address (an alias, public if declared
+      // so).
+      MCValue Reloc;
+      MCSymbol *Sym = getContext().parseSymbol(Var.Name);
+      if (!Expr->evaluateAsRelocatable(Reloc, nullptr) || !Reloc.getAddSym() ||
+          Reloc.getSubSym() || Reloc.getSpecifier() || Var.IsText ||
+          (Sym->isDefined() && !Sym->isVariable()))
+        return Error(
+            StartLoc,
+            "expected absolute expression; not all symbols have known values",
+            {StartLoc, EndLoc});
+      Var.TextValue.clear();
+      Var.Redefinable = Variable::REDEFINABLE;
+      Out.emitAssignment(Sym, Expr);
+      return false;
+    }
 
     // Not an absolute expression; define as a text replacement.
     if (!Var.IsText || Var.TextValue != ExprAsString) {
@@ -4722,6 +4758,15 @@ bool MasmParser::parseDirectiveIfb(SMLoc DirectiveLoc, bool ExpectBlank) {
 ///   ::= ifidn textitem, textitem
 bool MasmParser::parseDirectiveIfidn(SMLoc DirectiveLoc, bool ExpectEqual,
                                      bool CaseInsensitive) {
+  // Inside a skipped conditional block the operands are not evaluated (and
+  // need not be valid), as for the other if* directives.
+  if (TheCondState.Ignore) {
+    TheCondStack.push_back(TheCondState);
+    TheCondState.TheCond = AsmCond::IfCond;
+    eatToEndOfStatement();
+    return false;
+  }
+
   std::string String1, String2;
 
   if (parseTextItem(String1)) {
@@ -4736,7 +4781,7 @@ bool MasmParser::parseDirectiveIfidn(SMLoc DirectiveLoc, bool ExpectEqual,
           "expected comma after first string for 'ifidn' directive");
     return TokError("expected comma after first string for 'ifdif' directive");
   }
-  Lex();
+  Lex(DoNotExpandMacros);
 
   if (parseTextItem(String2)) {
     if (ExpectEqual)
@@ -4948,7 +4993,7 @@ bool MasmParser::parseDirectiveElseIfidn(SMLoc DirectiveLoc, bool ExpectEqual,
       return TokError(
           "expected comma after first string for 'elseifdif' directive");
     }
-    Lex();
+    Lex(DoNotExpandMacros);
 
     if (parseTextItem(String2)) {
       if (ExpectEqual)

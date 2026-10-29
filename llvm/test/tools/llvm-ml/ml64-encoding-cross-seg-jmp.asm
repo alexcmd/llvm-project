@@ -1,6 +1,9 @@
-; ML64-BUG(cross-seg-jmp): ML64.EXE 14.51 encodes a jmp/jcc/'jmp short' to a
-; PROC of another code segment as a short jump with displacement 0 and no
-; relocation (it continues at the next instruction; 'call' is right).
+; ML64-BUG(cross-seg-jmp): ML64.EXE 14.51 sizes a jmp/jcc to a PROC of another
+; code segment as if both were in one segment (B, T: offsets in their own
+; segments): for T-(B+2) in [-128, 136] (jmp) / [-128, 134] (jcc), and always
+; for 'jmp short'/loop/jrcxz, it writes the short form with displacement 0 and
+; no relocation (it continues at the next instruction); else the correct near
+; form ('call' is right). All branches here are in that range.
 ; /ml64-encoding warns at each such branch and keeps the correct e9/0f 8x +
 ; REL32; /ml64-bugcompat (implies /ml64-encoding) writes ML64.EXE's bytes
 ; (BUGCOMPAT lines = ML64.EXE output for this file). Without /ml64-encoding
@@ -57,18 +60,18 @@ k ENDP
 X3 ENDS
 END
 
-; WARN:      :33:7: warning: branch to PROC 'g' of another segment: ML64.EXE encodes it as a short jump with displacement 0 and no relocation (it continues at the next instruction); emitting the branch to the PROC (/ml64-bugcompat: ML64.EXE's bytes)
-; WARN:      :34:7: warning: branch to PROC 'f' of another segment
-; WARN:      :36:7: warning: branch to PROC 'g'
-; WARN:      :37:6: warning: branch to PROC 'g'
-; WARN:      :38:7: warning: branch to PROC 'f'
-; WARN:      :39:13: warning: branch to PROC 'g'
-; WARN:      :40:7: warning: branch to PROC 'b0'
-; WARN-NOT:  :41:{{.*}}warning
-; WARN:      :52:7: warning: branch to PROC 'g'
-; WARN:      :53:7: warning: branch to PROC 'b0'
-; WARN:      :54:7: warning: branch to PROC 'h'
-; WARNBC:    :33:7: warning: {{.*}}; emitting ML64.EXE's bytes (/ml64-bugcompat)
+; WARN:      :36:7: warning: branch to PROC 'g' of another segment: ML64.EXE encodes it as a short jump with displacement 0 and no relocation (it continues at the next instruction) when the distance taken within one segment fits (jmp -128..136, jcc -128..134; loop/jrcxz/jmp short always); emitting the branch to the PROC (/ml64-bugcompat: ML64.EXE's bytes)
+; WARN:      :37:7: warning: branch to PROC 'f' of another segment
+; WARN:      :39:7: warning: branch to PROC 'g'
+; WARN:      :40:6: warning: branch to PROC 'g'
+; WARN:      :41:7: warning: branch to PROC 'f'
+; WARN:      :42:13: warning: branch to PROC 'g'
+; WARN:      :43:7: warning: branch to PROC 'b0'
+; WARN-NOT:  :44:{{.*}}warning
+; WARN:      :55:7: warning: branch to PROC 'g'
+; WARN:      :56:7: warning: branch to PROC 'b0'
+; WARN:      :57:7: warning: branch to PROC 'h'
+; WARNBC:    :36:7: warning: {{.*}}; emitting ML64.EXE's bytes (/ml64-bugcompat)
 
 ; ML64-LABEL: <h>:
 ; ML64-NEXT:  e9 00 00 00 00 jmp

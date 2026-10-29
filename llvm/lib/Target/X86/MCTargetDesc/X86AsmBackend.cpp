@@ -134,9 +134,17 @@ protected:
   bool MasmEncoding = false;
   // MCTargetOptions::X86MasmBugCompat: also ML64.EXE's miscompiles.
   bool MasmBugCompat = false;
-  bool isMasmCrossSegProcBranch(const MCFragment &F, const MCFixup &Fixup,
-                                const MCValue &Target,
-                                const uint8_t *Data = nullptr) const;
+  enum {
+    MasmBranchNone,
+    MasmBranchRel8,  // jmp/jcc short, loop, jrcxz
+    MasmBranchJmp32, // jmp (relaxable or e9)
+    MasmBranchJcc32, // jcc (relaxable or 0f 8x)
+  };
+  unsigned getMasmCrossSegProcBranch(const MCFragment &F, const MCFixup &Fixup,
+                                     const MCValue &Target,
+                                     const uint8_t *Data = nullptr) const;
+  bool isMasmBugShortRange(const MCFragment &F, const MCFixup &Fixup,
+                           const MCSymbol &S, unsigned OpLen, bool Jcc) const;
 
 private:
   MCBoundaryAlignFragment *PendingBA = nullptr;
@@ -702,60 +710,88 @@ std::optional<bool> X86AsmBackend::evaluateFixup(const MCFragment &,
   return {};
 }
 
-// ML64-BUG(cross-seg-jmp): ML64.EXE 14.51 encodes a jmp, jcc, 'jmp short',
-// loop or jrcxz to a PROC of another code segment (without NEAR PTR) as the
-// short form with displacement 0 and no relocation - it continues at the next
-// instruction, whatever the target offset or distance (jmp near ptr and call
-// are encoded right). Measured on ML64.EXE output; no ML64-assembled member of
-// the VC/UCRT x64 libs contains such a branch.
-// \p Data (applyFixup): the fixup's bytes - the branch is told by the opcode
-// before them (a fragment's relaxable tail may be another instruction);
-// without it (fixupNeedsRelaxationAdvanced) by the relaxable instruction.
-bool X86AsmBackend::isMasmCrossSegProcBranch(const MCFragment &F,
-                                             const MCFixup &Fixup,
-                                             const MCValue &Target,
-                                             const uint8_t *Data) const {
+// ML64-BUG(cross-seg-jmp): ML64.EXE 14.51 sizes a branch to a PROC of another
+// code segment (without NEAR PTR) as if both were in one segment: with B the
+// branch's and T the PROC's offset in its own segment, it writes the short
+// form with displacement 0 and NO relocation - continuing at the next
+// instruction - when T-(B+2) is in [-128, 136] for jmp, [-128, 134] for jcc,
+// and always for 'jmp short', loop and jrcxz; out of that range the correct
+// e9 / 0f 8x + REL32. Forward and backward references alike; jmp near ptr and
+// call are right. Measured on ML64.EXE output; no ML64-assembled member of the
+// VC/UCRT x64 libs contains such a branch.
+// Returns the branch kind (MasmBranch*) for a PC-relative fixup to a COFF
+// function of another section. \p Data (applyFixup): the fixup's bytes - the
+// branch is told by the opcode before them (a fragment's relaxable tail may be
+// another instruction); without it (fixupNeedsRelaxationAdvanced) by the
+// relaxable instruction.
+unsigned X86AsmBackend::getMasmCrossSegProcBranch(const MCFragment &F,
+                                                  const MCFixup &Fixup,
+                                                  const MCValue &Target,
+                                                  const uint8_t *Data) const {
   if (!MasmEncoding || !Fixup.isPCRel())
-    return false;
+    return MasmBranchNone;
   const MCSymbol *S = Target.getAddSym();
   if (!S || Target.getSubSym() || Target.getSpecifier() || !S->isInSection() ||
       &S->getSection() == F.getParent() ||
       (static_cast<const MCSymbolCOFF *>(S)->getType() >>
        COFF::SCT_COMPLEX_TYPE_SHIFT) != COFF::IMAGE_SYM_DTYPE_FUNCTION)
-    return false;
+    return MasmBranchNone;
   if (Data) {
     uint8_t Op = Data[-1];
-    if (Fixup.getKind() == FK_Data_1) // jmp short, jcc short, loop*, jrcxz
+    if (Fixup.getKind() == FK_Data_1) // jmp/jcc short, loop*, jrcxz
       return Op == 0xEB || (Op >= 0x70 && Op <= 0x7F) ||
-             (Op >= 0xE0 && Op <= 0xE3);
-    return Fixup.getOffset() >= 1 &&
-           (Op == 0xE9 || // jmp rel32; call (e8) is right
-            (Fixup.getOffset() >= 2 && Data[-2] == 0x0F && (Op & 0xF0) == 0x80));
+                     (Op >= 0xE0 && Op <= 0xE3)
+                 ? MasmBranchRel8
+                 : MasmBranchNone;
+    if (Op == 0xE9) // jmp rel32; call (e8) is right
+      return MasmBranchJmp32;
+    if (Fixup.getOffset() >= 2 && Data[-2] == 0x0F && (Op & 0xF0) == 0x80)
+      return MasmBranchJcc32;
+    return MasmBranchNone;
   }
   if (F.getKind() != MCFragment::FT_Relaxable)
-    return false;
-  unsigned Op = F.getOpcode();
-  return Op == X86::JMP_1 || Op == X86::JCC_1;
+    return MasmBranchNone;
+  return F.getOpcode() == X86::JMP_1   ? MasmBranchJmp32
+         : F.getOpcode() == X86::JCC_1 ? MasmBranchJcc32
+                                       : MasmBranchNone;
+}
+
+// ML64.EXE's same-segment range test for the branch of \p Fixup (opcode of
+// \p OpLen bytes before it) to \p S: true = its miscompiled short form.
+bool X86AsmBackend::isMasmBugShortRange(const MCFragment &F,
+                                        const MCFixup &Fixup,
+                                        const MCSymbol &S, unsigned OpLen,
+                                        bool Jcc) const {
+  int64_t B = int64_t(Asm->getFragmentOffset(F)) + Fixup.getOffset() - OpLen;
+  int64_t D = int64_t(Asm->getSymbolOffset(S)) - (B + 2);
+  return D >= -128 && D <= (Jcc ? 134 : 136);
 }
 
 void X86AsmBackend::applyFixup(const MCFragment &F, const MCFixup &Fixup,
                                const MCValue &Target, uint8_t *Data,
                                uint64_t Value, bool IsResolved) {
-  // ML64-BUG(cross-seg-jmp): always warn; /ml64-bugcompat writes ML64's bytes.
-  if (isMasmCrossSegProcBranch(F, Fixup, Target, Data)) {
+  // ML64-BUG(cross-seg-jmp): warn where ML64.EXE miscompiles; /ml64-bugcompat
+  // writes its bytes (the short form was kept by fixupNeedsRelaxationAdvanced).
+  unsigned MasmBr = getMasmCrossSegProcBranch(F, Fixup, Target, Data);
+  if (MasmBr == MasmBranchRel8 ||
+      (MasmBr == MasmBranchJmp32 &&
+       isMasmBugShortRange(F, Fixup, *Target.getAddSym(), 1, false)) ||
+      (MasmBr == MasmBranchJcc32 &&
+       isMasmBugShortRange(F, Fixup, *Target.getAddSym(), 2, true))) {
     getContext().reportWarning(
         Fixup.getLoc(),
         "branch to PROC '" + Target.getAddSym()->getName() +
             "' of another segment: ML64.EXE encodes it as a short jump with "
             "displacement 0 and no relocation (it continues at the next "
-            "instruction); " +
+            "instruction) when the distance taken within one segment fits "
+            "(jmp -128..136, jcc -128..134; loop/jrcxz/jmp short always); " +
             (MasmBugCompat ? "emitting ML64.EXE's bytes (/ml64-bugcompat)"
              : Fixup.getKind() == FK_Data_1
                  ? "a rel8 branch cannot reach another section "
                    "(/ml64-bugcompat: ML64.EXE's bytes)"
                  : "emitting the branch to the PROC "
                    "(/ml64-bugcompat: ML64.EXE's bytes)"));
-    if (MasmBugCompat) {
+    if (MasmBugCompat && MasmBr == MasmBranchRel8) {
       IsResolved = true;
       Value = 0;
     }
@@ -857,9 +893,14 @@ bool X86AsmBackend::fixupNeedsRelaxationAdvanced(const MCFragment &F,
                                                  bool Resolved) const {
   // The forward-referenced 'mov r, name' (isMasmForwardLabelMov): the
   // address form when name is a 'name:' label, else the load stays.
-  // ML64-BUG(cross-seg-jmp) under /ml64-bugcompat: the short form stays.
-  if (MasmBugCompat && isMasmCrossSegProcBranch(F, Fixup, Target))
-    return false;
+  // ML64-BUG(cross-seg-jmp) under /ml64-bugcompat: the short form stays when
+  // ML64.EXE's same-segment distance fits, else the correct near branch.
+  if (MasmBugCompat) {
+    unsigned Br = getMasmCrossSegProcBranch(F, Fixup, Target);
+    if (Br != MasmBranchNone)
+      return !isMasmBugShortRange(F, Fixup, *Target.getAddSym(), 1,
+                                  Br == MasmBranchJcc32);
+  }
   if (MasmEncoding && F.getKind() == MCFragment::FT_Relaxable &&
       (F.getOpcode() == X86::MOV64rm || F.getOpcode() == X86::MOV32rm))
     return (F.getInst().getFlags() & X86::IP_MASM_FWD_LABEL) &&

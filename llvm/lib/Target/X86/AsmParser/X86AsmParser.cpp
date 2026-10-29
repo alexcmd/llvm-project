@@ -97,6 +97,9 @@ class X86AsmParser : public MCTargetAsmParser {
   ParseInstructionInfo *InstInfo;
   bool Code16GCC;
   unsigned ForcedDataPrefix = 0;
+  // MASM: the operand has an integer literal of 2^63 or more (written
+  // positive; X86MasmEncoding: mov r64, 0FFFFFFFFFFFFFFFFh is movabs).
+  bool MasmWideLiteral = false;
 
   enum OpcodePrefix {
     OpcodePrefix_Default,
@@ -2170,6 +2173,8 @@ bool X86AsmParser::ParseIntelExpression(IntelExprStateMachine &SM, SMLoc &End) {
       // Look for 'b' or 'f' following an Integer as a directional label
       SMLoc Loc = getTok().getLoc();
       int64_t IntVal = getTok().getIntVal();
+      if (Parser.isParsingMasm() && getTok().getAPIntVal().getActiveBits() > 63)
+        MasmWideLiteral = true;
       End = consumeToken();
       UpdateLocLex = false;
       if (getLexer().getKind() == AsmToken::Identifier) {
@@ -2715,6 +2720,7 @@ bool X86AsmParser::parseIntelOperand(OperandVector &Operands, StringRef Name) {
 
   // Immediates and Memory
   IntelExprStateMachine SM;
+  MasmWideLiteral = false;
   if (ParseIntelExpression(SM, End))
     return true;
 
@@ -2723,7 +2729,12 @@ bool X86AsmParser::parseIntelOperand(OperandVector &Operands, StringRef Name) {
 
   int64_t Imm = SM.getImm();
   const MCExpr *Disp = SM.getSym();
-  const MCExpr *ImmDisp = MCConstantExpr::create(Imm, getContext());
+  // ML64.EXE: a constant written as a positive literal >= 2^63 (negative as
+  // int64) keeps its 8-byte size - see emitInstruction.
+  const MCExpr *ImmDisp = MCConstantExpr::create(
+      Imm, getContext(), /*PrintInHex=*/false,
+      MasmWideLiteral && Imm < 0 && getTargetOptions().X86MasmEncoding ? 8
+                                                                        : 0);
   if (Disp && Imm)
     Disp = MCBinaryExpr::createAdd(Disp, ImmDisp, getContext());
   if (!Disp)
@@ -4225,6 +4236,16 @@ void X86AsmParser::emitInstruction(MCInst &Inst, OperandVector &Operands,
     applyLVICFIMitigation(Inst, Out);
 
   if (getTargetOptions().X86MasmEncoding) {
+    // mov r64, 0FFFFFFFFFFFFFFFFh: ML64.EXE treats the value as the positive
+    // 2^64-1, so it does not fit a sign-extended imm32: 48 b8 + imm64
+    // (mov rax, -1 stays 48 c7 c0 ff ff ff ff).
+    if (Inst.getOpcode() == X86::MOV64ri32 && Operands.size() == 3) {
+      X86Operand &Src = static_cast<X86Operand &>(*Operands[2]);
+      if (Src.isImm())
+        if (const auto *CE = dyn_cast<MCConstantExpr>(Src.getImm()))
+          if (CE->getSizeInBytes() == 8)
+            Inst.setOpcode(X86::MOV64ri);
+    }
     X86Operand &Op0 = static_cast<X86Operand &>(*Operands[0]);
     X86::rewriteForMasmEncoding(Inst, MII, is64BitMode(),
                                 Op0.isToken() ? Op0.getToken() : "");

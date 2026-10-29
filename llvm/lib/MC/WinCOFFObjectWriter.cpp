@@ -35,6 +35,7 @@
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/EndianStream.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/Format.h"
 #include "llvm/Support/LEB128.h"
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_ostream.h"
@@ -464,6 +465,15 @@ void WinCOFFWriter::defineSymbol(const MCSymbolCOFF &MCSym) {
 
       Local->Data.StorageClass = IsExternal ? COFF::IMAGE_SYM_CLASS_EXTERNAL
                                             : COFF::IMAGE_SYM_CLASS_STATIC;
+    }
+
+    // ML64.EXE's '$' label (X86MasmEncoding, MasmParser '$$.<n>'): named
+    // '$$' + its section offset as 6 hex digits.
+    if (Local->Data.StorageClass == COFF::IMAGE_SYM_CLASS_LABEL &&
+        MCSym.getName().starts_with("$$.")) {
+      Local->Name.clear();
+      raw_svector_ostream(Local->Name)
+          << format("$$%06X", unsigned(Local->Data.Value));
     }
   }
 

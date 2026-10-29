@@ -445,6 +445,9 @@ private:
   /// Are we parsing ms-style inline assembly?
   bool ParsingMSInlineAsm = false;
 
+  /// '$' location-counter labels created (X86MasmEncoding).
+  unsigned NumLocationLabels = 0;
+
   // Current <...> expression depth.
   unsigned AngleBracketDepth = 0U;
 
@@ -1417,10 +1420,22 @@ bool MasmParser::parsePrimaryExpr(const MCExpr *&Res, SMLoc &EndLoc,
       }
     }
     // ML64.EXE: a lone '$' (lexed as an identifier) is the location counter;
-    // without X86MasmEncoding it stays a symbol named '$'.
+    // without X86MasmEncoding it stays a symbol named '$'. In code it is a
+    // LABEL-class symbol '$$<offset as 6 hex digits>' (lea rax, $ relocates
+    // against it): created as '$$.<n>', renamed by WinCOFFObjectWriter once
+    // the offset is final.
     if (Identifier == "$" && Lexer.getMAI().getDollarIsPC() &&
         getContext().getTargetOptions().X86MasmEncoding) {
-      MCSymbol *Sym = Ctx.createTempSymbol();
+      MCSymbol *Sym;
+      const MCSection *Sec = getStreamer().getCurrentSectionOnly();
+      if (Sec && Sec->isText() &&
+          Ctx.getObjectFileType() == MCContext::IsCOFF) {
+        Sym = Ctx.getOrCreateSymbol("$$." + Twine(NumLocationLabels++));
+        static_cast<MCSymbolCOFF *>(Sym)->setClass(
+            COFF::IMAGE_SYM_CLASS_LABEL);
+      } else {
+        Sym = Ctx.createTempSymbol();
+      }
       Out.emitLabel(Sym);
       Res = MCSymbolRefExpr::create(Sym, getContext());
       EndLoc = FirstTokenLoc;

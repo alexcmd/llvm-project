@@ -2627,6 +2627,8 @@ bool X86AsmParser::ParseIntelMemoryOperandSize(unsigned &Size,
              .Cases({"XWORD", "xword"}, 80)
              .Cases({"TBYTE", "tbyte"}, 80)
              .Cases({"XMMWORD", "xmmword"}, 128)
+             // MASM's OWORD (cmpxchg16b oword ptr [rcx]).
+             .Cases({"OWORD", "oword"}, getParser().isParsingMasm() ? 128 : 0)
              .Cases({"YMMWORD", "ymmword"}, 256)
              .Cases({"ZMMWORD", "zmmword"}, 512)
              .Default(0);

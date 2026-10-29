@@ -41,6 +41,7 @@
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/MC/MCSymbol.h"
+#include "llvm/MC/MCSymbolCOFF.h"
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Compiler.h"
@@ -2902,6 +2903,37 @@ bool X86AsmParser::parseIntelOperand(OperandVector &Operands, StringRef Name) {
 
   if (CheckDispOverflow(BaseReg, IndexReg, Disp, Start))
     return true;
+
+  // ML64.EXE (X86MasmEncoding): an untyped 'name:' label (LABEL class, see
+  // MasmParser) as the source of 'mov r32/r64' is its address, with or
+  // without brackets: mov rax, lab(+c) = 48 b8 + ADDR64, mov eax, lab =
+  // b8 + ADDR32 ('qword ptr lab' stays a load). Only labels defined before
+  // the use are known here; other forms keep the memory operand (ML64
+  // rejects mov ax/push/cmp/add with such a label).
+  if (Parser.isParsingMasm() && getTargetOptions().X86MasmEncoding &&
+      is64BitMode() && !PtrInOperand && !BaseReg && !IndexReg && !RegNo &&
+      Name.equals_insensitive("mov") && Operands.size() == 2 &&
+      static_cast<X86Operand &>(*Operands[1]).isReg() &&
+      (getX86MCRegisterClass(X86::GR64RegClassID)
+           .contains(static_cast<X86Operand &>(*Operands[1]).getReg()) ||
+       getX86MCRegisterClass(X86::GR32RegClassID)
+           .contains(static_cast<X86Operand &>(*Operands[1]).getReg()))) {
+    const MCExpr *E = Disp;
+    if (const auto *BE = dyn_cast<MCBinaryExpr>(E))
+      if ((BE->getOpcode() == MCBinaryExpr::Add ||
+           BE->getOpcode() == MCBinaryExpr::Sub) &&
+          isa<MCConstantExpr>(BE->getRHS()))
+        E = BE->getLHS();
+    if (const auto *SRE = dyn_cast<MCSymbolRefExpr>(E)) {
+      const auto &Sym = static_cast<const MCSymbolCOFF &>(SRE->getSymbol());
+      if (!SRE->getSpecifier() && Sym.isDefined() && !Sym.isTemporary() &&
+          getContext().getObjectFileType() == MCContext::IsCOFF &&
+          Sym.getClass() == COFF::IMAGE_SYM_CLASS_LABEL) {
+        Operands.push_back(X86Operand::CreateImm(Disp, Start, End));
+        return false;
+      }
+    }
+  }
 
   if ((BaseReg || IndexReg || RegNo || DefaultBaseReg))
     Operands.push_back(X86Operand::CreateMem(

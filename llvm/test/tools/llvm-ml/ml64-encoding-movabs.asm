@@ -29,6 +29,13 @@ f PROC
 ; CHECK-NEXT:   48 c7 c0 ff ff ff 7f          mov rax, 0x7fffffff
   mov eax, 0FFFFFFFFh
 ; CHECK-NEXT:   b8 ff ff ff ff                mov eax, 0xffffffff
+  mov rax, NOT 0
+; DEFAULT-NEXT: 48 c7 c0 ff ff ff ff          mov rax, -0x1
+; ML64-NEXT:    48 b8 ff ff ff ff ff ff ff ff movabs rax, -0x1
+  mov rax, 0-1
+; CHECK-NEXT:   48 c7 c0 ff ff ff ff          mov rax, -0x1
+  mov rax, -(80000000h)
+; CHECK-NEXT:   48 c7 c0 00 00 00 80          mov rax, -0x80000000
   ret
 f ENDP
 _TEXT ENDS

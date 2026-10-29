@@ -212,7 +212,7 @@ int llvm_ml_main(int Argc, char **Argv, const llvm::ToolContext &) {
         llvm::sys::fs::is_regular_file(ArgString, IsFile);
     if (ArgString == "-" || IsFile) {
       if (!InputFilename.empty()) {
-        WithColor::warning(errs(), ProgName)
+        WithColor::warning()
             << "does not support multiple assembly files in one command; "
             << "ignoring '" << InputFilename << "'\n";
       }
@@ -432,9 +432,26 @@ int llvm_ml_main(int Argc, char **Argv, const llvm::ToolContext &) {
       // cause the process to terminate immediately.
       Feat00Flags |= 0x1;
     }
+    // /guard:ehcont (last /guard:ehcont[-] wins): 0x4000, as ML64.EXE sets it.
+    bool EHCont = false;
+    for (const opt::Arg *A : InputArgs.filtered(OPT_guard)) {
+      StringRef V = A->getValue();
+      if (V == "ehcont" || V == "ehcont-")
+        EHCont = V == "ehcont";
+      else if (V != "cf" && V != "cf-")
+        WithColor::warning()
+            << "invalid command-line option: /guard:" << V << "\n";
+    }
+    if (EHCont)
+      Feat00Flags |= 0x4000;
+    // ML64.EXE (/ml64-encoding): a static @feat.00 with 0x10 always set.
+    bool Ml64Feat = MCOptions.X86MasmEncoding && TheTriple.isArch64Bit();
+    if (Ml64Feat)
+      Feat00Flags = (Feat00Flags & ~0x2) | 0x10;
     MCSymbol *Feat00Sym = Ctx.getOrCreateSymbol("@feat.00");
     Feat00Sym->setRedefinable(true);
-    Str->emitSymbolAttribute(Feat00Sym, MCSA_Global);
+    if (!Ml64Feat)
+      Str->emitSymbolAttribute(Feat00Sym, MCSA_Global);
     Str->emitAssignment(Feat00Sym, MCConstantExpr::create(Feat00Flags, Ctx));
   }
 

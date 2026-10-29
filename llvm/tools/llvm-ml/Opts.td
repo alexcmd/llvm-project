@@ -93,6 +93,9 @@ def parse_only : MLFlag<"Zs">, HelpText<"Run a syntax-check only">,
 def ml64_encoding : MLFlag<"ml64-encoding">,
                     HelpText<"Encode like ML64.EXE: operand forms, prefix order, "
                              "ALIGN nops and relocations">;
+def guard : MLJoined<"guard:">, Values<"cf,cf-,ehcont,ehcont-">,
+            HelpText<"ehcont: mark the object for EH continuation metadata "
+                     "(@feat.00 0x4000); cf: accepted, no effect (ML64.EXE)">;
 def ignore_include_envvar : MLFlag<"X">,
                             HelpText<"Ignore the INCLUDE environment variable">;
 

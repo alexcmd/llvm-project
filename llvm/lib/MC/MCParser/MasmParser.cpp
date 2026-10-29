@@ -2026,6 +2026,12 @@ bool MasmParser::parseStatement(ParseStatementInfo &Info,
       Lex();
     }
 
+    // ML64.EXE (X86MasmEncoding): 'name:' is a LABEL-class symbol, in the
+    // symbol table only when a relocation references it (WinCOFFObjectWriter).
+    if (getContext().getTargetOptions().X86MasmEncoding &&
+        Ctx.getObjectFileType() == MCContext::IsCOFF && !Sym->isTemporary())
+      static_cast<MCSymbolCOFF *>(Sym)->setClass(COFF::IMAGE_SYM_CLASS_LABEL);
+
     // Emit the label.
     if (!getTargetParser().isParsingMSInlineAsm())
       Out.emitLabel(Sym, IDLoc);

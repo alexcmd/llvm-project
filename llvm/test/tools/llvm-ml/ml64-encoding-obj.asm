@@ -14,36 +14,6 @@ wvar DW 0
 dvar DD 0
 qvar DQ 0
 _DATA ENDS
-
-; ALIGN in code: 15-byte pieces; 10..15 bytes are (n-8) x 66 + 0f 1f 84 00..
-; (LLVM: the cs-prefixed form 66 .. 2e 0f 1f 84 00..).
-ALN SEGMENT ALIGN(64) 'CODE'
-a PROC
-; CHECK-LABEL: <a>:
-  int 3
-  ALIGN 16
-; DEFAULT-NEXT: cc
-; DEFAULT-NEXT: 66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00
-; ML64-NEXT:    cc
-; ML64-NEXT:    66 66 66 66 66 66 66 0f 1f 84 00 00 00 00 00
-  db 6 dup (0CCh)
-  ALIGN 16
-; ML64:         66 66 0f 1f 84 00 00 00 00 00 nop
-  db 7 dup (0CCh)
-  ALIGN 16
-; CHECK:        66 0f 1f 84 00 00 00 00 00 nop
-  db 47 dup (0CCh)
-  ALIGN 64
-; DEFAULT:      66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00 nop
-; DEFAULT-NEXT: 66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00 nop
-; DEFAULT-NEXT: 0f 1f 00 nop
-; ML64:         66 66 66 66 66 66 66 0f 1f 84 00 00 00 00 00 nop
-; ML64-NEXT:    66 66 66 66 66 66 66 0f 1f 84 00 00 00 00 00 nop
-; ML64-NEXT:    0f 1f 00 nop
-  ret
-a ENDP
-ALN ENDS
-
 _TEXT SEGMENT
 tdat DD 1
 f PROC
@@ -116,4 +86,34 @@ g PROC
   ret
 g ENDP
 _TEXT ENDS
+
+
+; ALIGN in code: 15-byte pieces; 10..15 bytes are (n-8) x 66 + 0f 1f 84 00..
+; (LLVM: the cs-prefixed form 66 .. 2e 0f 1f 84 00..).
+ALN SEGMENT ALIGN(64) 'CODE'
+a PROC
+; CHECK-LABEL: <a>:
+  int 3
+  ALIGN 16
+; DEFAULT-NEXT: cc
+; DEFAULT-NEXT: 66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00
+; ML64-NEXT:    cc
+; ML64-NEXT:    66 66 66 66 66 66 66 0f 1f 84 00 00 00 00 00
+  db 6 dup (0CCh)
+  ALIGN 16
+; ML64:         66 66 0f 1f 84 00 00 00 00 00 nop
+  db 7 dup (0CCh)
+  ALIGN 16
+; CHECK:        66 0f 1f 84 00 00 00 00 00 nop
+  db 47 dup (0CCh)
+  ALIGN 64
+; DEFAULT:      66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00 nop
+; DEFAULT-NEXT: 66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00 nop
+; DEFAULT-NEXT: 0f 1f 00 nop
+; ML64:         66 66 66 66 66 66 66 0f 1f 84 00 00 00 00 00 nop
+; ML64-NEXT:    66 66 66 66 66 66 66 0f 1f 84 00 00 00 00 00 nop
+; ML64-NEXT:    0f 1f 00 nop
+  ret
+a ENDP
+ALN ENDS
 END

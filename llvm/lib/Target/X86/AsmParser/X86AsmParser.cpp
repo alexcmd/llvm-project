@@ -1882,6 +1882,8 @@ bool X86AsmParser::ParseIntelNamedOperator(StringRef Name,
       !getParser().isParsingMasm())
     return false;
   if (Name.equals_insensitive("not")) {
+    // ML64.EXE: NOT 0 is the positive 2^64-1 (mov rax, NOT 0 = movabs).
+    MasmWideLiteral = true;
     SM.onNot();
   } else if (Name.equals_insensitive("or")) {
     SM.onOr();

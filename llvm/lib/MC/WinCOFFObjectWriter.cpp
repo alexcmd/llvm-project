@@ -13,6 +13,7 @@
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
@@ -470,6 +471,11 @@ void WinCOFFWriter::defineSymbol(const MCSymbolCOFF &MCSym) {
                                             : COFF::IMAGE_SYM_CLASS_STATIC;
     }
 
+    // ML64.EXE (X86MasmEncoding): a PUBLIC 'name:' label is External.
+    if (Local->Data.StorageClass == COFF::IMAGE_SYM_CLASS_LABEL &&
+        MCSym.isExternal())
+      Local->Data.StorageClass = COFF::IMAGE_SYM_CLASS_EXTERNAL;
+
     // ML64.EXE's '$' label (X86MasmEncoding, MasmParser '$$.<n>'): named
     // '$$' + its section offset as 6 hex digits.
     if (Local->Data.StorageClass == COFF::IMAGE_SYM_CLASS_LABEL &&
@@ -762,6 +768,22 @@ static bool isAssociative(const COFFSection &Section) {
 }
 
 void WinCOFFWriter::assignSectionNumbers() {
+  // ML64.EXE (X86MasmEncoding) numbers _TEXT (.text$mn; .text in older
+  // llvm-ml naming) 1 and _DATA (.data) 2, whatever segment the source opens
+  // first; the other sections keep their order.
+  if (getContext().getTargetOptions().X86MasmEncoding) {
+    auto Rank = [](const std::unique_ptr<COFFSection> &S) {
+      if (S->Header.Characteristics & COFF::IMAGE_SCN_LNK_COMDAT)
+        return 2;
+      return S->Name == ".text$mn" || S->Name == ".text" ? 0
+             : S->Name == ".data"                       ? 1
+                                                        : 2;
+    };
+    llvm::stable_sort(Sections, [&](const auto &A, const auto &B) {
+      return Rank(A) < Rank(B);
+    });
+  }
+
   size_t I = 1;
   auto Assign = [&](COFFSection &Section) {
     Section.Number = I;
@@ -788,13 +810,20 @@ void WinCOFFWriter::assignFileOffsets() {
   Offset += UseBigObj ? COFF::Header32Size : COFF::Header16Size;
   Offset += COFF::SectionSize * Header.NumberOfSections;
 
-  for (const auto &Section : *Asm) {
-    COFFSection *Sec = SectionMap[&Section];
-
+  // Raw data follows the section table order (X86MasmEncoding reorders it:
+  // assignSectionNumbers).
+  SmallVector<COFFSection *, 16> Order;
+  if (getContext().getTargetOptions().X86MasmEncoding)
+    for (const auto &S : Sections)
+      Order.push_back(S.get());
+  else
+    for (const auto &Section : *Asm)
+      Order.push_back(SectionMap.lookup(&Section));
+  for (COFFSection *Sec : Order) {
     if (!Sec || Sec->Number == -1)
       continue;
 
-    Sec->Header.SizeOfRawData = Asm->getSectionAddressSize(Section);
+    Sec->Header.SizeOfRawData = Asm->getSectionAddressSize(*Sec->MCSection);
 
     if (!isUninitializedData(*Sec)) {
       Sec->Header.PointerToRawData = Offset;
@@ -1087,6 +1116,29 @@ uint64_t WinCOFFWriter::writeObject() {
   if (Mode != DwoOnly)
     createFileSymbols();
 
+  // ML64.EXE (X86MasmEncoding): a local symbol that is not a PROC (code
+  // label, data name) is in the symbol table only when a relocation
+  // references it.
+  if (getContext().getTargetOptions().X86MasmEncoding) {
+    SmallPtrSet<const COFFSymbol *, 16> Dropped;
+    for (const auto &S : Symbols)
+      if (S->MC && S->Section && !S->Relocations && S->Aux.empty() &&
+          !S->Other && !WeakDefaults.count(S.get()) &&
+          (S->Data.StorageClass == COFF::IMAGE_SYM_CLASS_LABEL ||
+           S->Data.StorageClass == COFF::IMAGE_SYM_CLASS_STATIC) &&
+          (S->Data.Type >> COFF::SCT_COMPLEX_TYPE_SHIFT) !=
+              COFF::IMAGE_SYM_DTYPE_FUNCTION)
+        Dropped.insert(S.get());
+    if (!Dropped.empty()) {
+      for (auto &KV : SymbolMap)
+        if (Dropped.count(KV.second))
+          KV.second = nullptr;
+      llvm::erase_if(Symbols, [&](const std::unique_ptr<COFFSymbol> &S) {
+        return Dropped.count(S.get());
+      });
+    }
+  }
+
   for (auto &Symbol : Symbols) {
     // Update section number & offset for symbols that have them.
     if (Symbol->Section)
@@ -1214,6 +1266,9 @@ uint64_t WinCOFFWriter::writeObject() {
   sections::iterator IE = Sections.end();
   auto J = Asm->begin();
   auto JE = Asm->end();
+  // (X86MasmEncoding reorders the sections: assignSectionNumbers.)
+  if (getContext().getTargetOptions().X86MasmEncoding)
+    I = IE;
   for (; I != IE && J != JE; ++I, ++J) {
     while (J != JE && ((Mode == NonDwoOnly && isDwoSection(*J)) ||
                        (Mode == DwoOnly && !isDwoSection(*J))))

@@ -4331,6 +4331,18 @@ def : InstAlias<"vmovd\t{$src, $dst|$dst, $src}",
                 (VMOV64toPQIrr VR128:$dst, GR64:$src), 0>;
 def : InstAlias<"vmovd\t{$src, $dst|$dst, $src}",
                 (VMOVPQIto64rr GR64:$dst, VR128:$src), 0>;
+// Intel syntax: (v)movd with a qword memory operand = the REX.W/VEX.W1 66 0f
+// 6e / 7e form, as with a 64-bit GPR above ((v)movq picks f3 0f 7e / 66 0f d6;
+// MASM and the Intel SDM's MOVQ xmm, r/m64 use 6e/7e: needed to reassemble
+// such objects byte for byte). AT&T "movd (mem)" stays 32-bit.
+def : InstAlias<"movd\t{$src, $dst|$dst, $src}",
+                (MOV64toPQIrm VR128:$dst, i64mem:$src), 0, "intel">;
+def : InstAlias<"movd\t{$src, $dst|$dst, $src}",
+                (MOVPQIto64mr i64mem:$dst, VR128:$src), 0, "intel">;
+def : InstAlias<"vmovd\t{$src, $dst|$dst, $src}",
+                (VMOV64toPQIrm VR128:$dst, i64mem:$src), 0, "intel">;
+def : InstAlias<"vmovd\t{$src, $dst|$dst, $src}",
+                (VMOVPQIto64mr i64mem:$dst, VR128:$src), 0, "intel">;
 
 //===---------------------------------------------------------------------===//
 // SSE2 - Move Quadword

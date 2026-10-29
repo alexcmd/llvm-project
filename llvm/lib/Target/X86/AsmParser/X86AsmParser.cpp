@@ -2804,14 +2804,17 @@ bool X86AsmParser::parseIntelOperand(OperandVector &Operands, StringRef Name) {
   bool MaybeDirectBranchDest = true;
 
   if (Parser.isParsingMasm()) {
-    if (is64BitMode() &&
-        ((PtrInOperand && !IndexReg) || SM.getElementSize() > 0)) {
+    // RIP-relative addressing has no index register: [sym+rax*8] stays an
+    // absolute disp32 + SIB (ML64.EXE: jmp qword ptr [tbl+rax*8] = ff 24 c5 +
+    // ADDR32); a RIP default here dropped the index (or asserted).
+    if (is64BitMode() && !IndexReg &&
+        (PtrInOperand || SM.getElementSize() > 0)) {
       DefaultBaseReg = X86::RIP;
     }
     if (IsUnconditionalBranch) {
       if (PtrInOperand) {
         MaybeDirectBranchDest = false;
-        if (is64BitMode())
+        if (is64BitMode() && !IndexReg)
           DefaultBaseReg = X86::RIP;
       } else if (!BaseReg && !IndexReg && Disp &&
                  Disp->getKind() == MCExpr::SymbolRef) {

@@ -75,6 +75,10 @@ public:
   // forms, prefix order, ALIGN nops and COFF relocations.
   bool X86MasmEncoding = false;
 
+  // With X86MasmEncoding: also reproduce ML64.EXE's known miscompiles
+  // (llvm-ml /ml64-bugcompat); each one is tagged ML64-BUG(<id>).
+  bool X86MasmBugCompat = false;
+
   // For ELF relocations, controls section symbol conversion.
   RelocSectionSymType RelocSectionSym = RelocSectionSymType::All;
 

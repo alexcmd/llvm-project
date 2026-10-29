@@ -93,6 +93,10 @@ def parse_only : MLFlag<"Zs">, HelpText<"Run a syntax-check only">,
 def ml64_encoding : MLFlag<"ml64-encoding">,
                     HelpText<"Encode like ML64.EXE: operand forms, prefix order, "
                              "ALIGN nops and relocations">;
+def ml64_bugcompat : MLFlag<"ml64-bugcompat">,
+                     HelpText<"With /ml64-encoding (implied): also reproduce "
+                              "ML64.EXE's known miscompiles, e.g. a jmp/jcc to "
+                              "a PROC of another segment">;
 def guard : MLJoined<"guard:">, Values<"cf,cf-,ehcont,ehcont-">,
             HelpText<"ehcont: mark the object for EH continuation metadata "
                      "(@feat.00 0x4000); cf: accepted, no effect (ML64.EXE)">;

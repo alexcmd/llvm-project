@@ -230,6 +230,9 @@ class COFFMasmParser : public MCAsmParserExtension {
   SmallVector<StringRef, 1> CurrentProcedures;
   SmallVector<bool, 1> CurrentProceduresFramed;
 
+  /// Open SEGMENTs, innermost last.
+  SmallVector<MCSection *, 2> OpenSegments;
+
 public:
   COFFMasmParser() = default;
 };
@@ -255,6 +258,9 @@ bool COFFMasmParser::parseSectionSwitch(StringRef SectionName,
                                                    COMDATSymName, Type);
   Section->setAlignment(Alignment);
   getStreamer().switchSection(Section);
+  // A simplified segment directive (.code, .data, ...) closes the open
+  // segments and opens its own.
+  OpenSegments.assign(1, Section);
 
   return false;
 }
@@ -408,6 +414,7 @@ bool COFFMasmParser::parseDirectiveSegment(StringRef Directive, SMLoc Loc) {
     Section->setAlignment(Align(Alignment));
   }
   getStreamer().switchSection(Section);
+  OpenSegments.push_back(Section);
   return false;
 }
 
@@ -418,9 +425,15 @@ bool COFFMasmParser::parseDirectiveSegmentEnd(StringRef Directive, SMLoc Loc) {
   if (!getLexer().is(AsmToken::Identifier))
     return TokError("expected identifier in directive");
   SegmentName = getTok().getIdentifier();
-
-  // Ignore; no action necessary.
   Lex();
+
+  // Segments nest: ENDS returns to the enclosing open segment (code after
+  // 'CONST SEGMENT ... CONST ENDS' inside a PROC continues in the code
+  // segment, as with ML64.EXE).
+  if (!OpenSegments.empty())
+    OpenSegments.pop_back();
+  if (!OpenSegments.empty())
+    getStreamer().switchSection(OpenSegments.back());
   return false;
 }
 

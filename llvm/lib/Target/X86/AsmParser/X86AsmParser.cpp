@@ -1485,8 +1485,9 @@ bool X86AsmParser::MatchRegisterByName(MCRegister &RegNo, StringRef RegName,
     UseApxExtendedReg = true;
 
   // If this is "db[0-15]", match it as an alias
-  // for dr[0-15].
-  if (!RegNo && RegName.starts_with("db")) {
+  // for dr[0-15]. Not in MASM, which has no such names (db8 DB 0 is a
+  // variable; ML64.EXE: cmp db8, 80h = 80 3d + REL32_1 db8).
+  if (!RegNo && RegName.starts_with("db") && !getParser().isParsingMasm()) {
     if (RegName.size() == 3) {
       switch (RegName[2]) {
       case '0':

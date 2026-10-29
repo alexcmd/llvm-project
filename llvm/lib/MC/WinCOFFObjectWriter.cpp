@@ -13,6 +13,7 @@
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
@@ -466,6 +467,11 @@ void WinCOFFWriter::defineSymbol(const MCSymbolCOFF &MCSym) {
       Local->Data.StorageClass = IsExternal ? COFF::IMAGE_SYM_CLASS_EXTERNAL
                                             : COFF::IMAGE_SYM_CLASS_STATIC;
     }
+
+    // ML64.EXE (X86MasmEncoding): a PUBLIC 'name:' label is External.
+    if (Local->Data.StorageClass == COFF::IMAGE_SYM_CLASS_LABEL &&
+        MCSym.isExternal())
+      Local->Data.StorageClass = COFF::IMAGE_SYM_CLASS_EXTERNAL;
 
     // ML64.EXE's '$' label (X86MasmEncoding, MasmParser '$$.<n>'): named
     // '$$' + its section offset as 6 hex digits.
@@ -1083,6 +1089,29 @@ uint64_t WinCOFFWriter::writeObject() {
   setWeakDefaultNames();
   if (Mode != DwoOnly)
     createFileSymbols();
+
+  // ML64.EXE (X86MasmEncoding): a local symbol that is not a PROC (code
+  // label, data name) is in the symbol table only when a relocation
+  // references it.
+  if (getContext().getTargetOptions().X86MasmEncoding) {
+    SmallPtrSet<const COFFSymbol *, 16> Dropped;
+    for (const auto &S : Symbols)
+      if (S->MC && S->Section && !S->Relocations && S->Aux.empty() &&
+          !S->Other && !WeakDefaults.count(S.get()) &&
+          (S->Data.StorageClass == COFF::IMAGE_SYM_CLASS_LABEL ||
+           S->Data.StorageClass == COFF::IMAGE_SYM_CLASS_STATIC) &&
+          (S->Data.Type >> COFF::SCT_COMPLEX_TYPE_SHIFT) !=
+              COFF::IMAGE_SYM_DTYPE_FUNCTION)
+        Dropped.insert(S.get());
+    if (!Dropped.empty()) {
+      for (auto &KV : SymbolMap)
+        if (Dropped.count(KV.second))
+          KV.second = nullptr;
+      llvm::erase_if(Symbols, [&](const std::unique_ptr<COFFSymbol> &S) {
+        return Dropped.count(S.get());
+      });
+    }
+  }
 
   for (auto &Symbol : Symbols) {
     // Update section number & offset for symbols that have them.

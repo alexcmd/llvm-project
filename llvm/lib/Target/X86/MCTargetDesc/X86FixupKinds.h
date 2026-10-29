@@ -36,6 +36,9 @@ enum Fixups {
                                              // of the instruction. Used only
                                              // for _GLOBAL_OFFSET_TABLE_.
   reloc_branch_4byte_pcrel,                  // 32-bit PC relative branch.
+  reloc_riprel_4byte_masm_imm1,              // 32-bit rip-relative followed by
+  reloc_riprel_4byte_masm_imm2,              // a 1/2/4-byte immediate: COFF
+  reloc_riprel_4byte_masm_imm4,              // REL32_1/2/4 (X86MasmEncoding)
   // Marker
   LastTargetFixupKind,
   NumTargetFixupKinds = LastTargetFixupKind - FirstTargetFixupKind

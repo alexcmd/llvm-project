@@ -93,6 +93,9 @@ def warning_level : MLJoined<"W">, MetaVarName<"<n>">,
 def no_warnings : MLFlag<"w">, HelpText<"Disable warnings (same as /W0)">;
 def parse_only : MLFlag<"Zs">, HelpText<"Run a syntax-check only">,
                  Alias<filetype>, AliasArgs<["null"]>;
+def ml64_encoding : MLFlag<"ml64-encoding">,
+                    HelpText<"Encode like ML64.EXE: operand forms, prefix order, "
+                             "ALIGN nops and relocations">;
 def ignore_include_envvar : MLFlag<"X">,
                             HelpText<"Ignore the INCLUDE environment variable">;
 

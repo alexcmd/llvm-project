@@ -27,6 +27,7 @@
 #include "llvm/MC/MCSectionCOFF.h"
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/MC/MCSymbolCOFF.h"
+#include "llvm/MC/MCTargetOptions.h"
 #include "llvm/MC/MCValue.h"
 #include "llvm/MC/MCWinCOFFObjectWriter.h"
 #include "llvm/MC/StringTableBuilder.h"
@@ -1000,6 +1001,11 @@ void WinCOFFWriter::recordRelocation(const MCFragment &F, const MCFixup &Fixup,
       (COFF::isAnyArm64(Header.Machine) &&
        Reloc.Data.Type == COFF::IMAGE_REL_ARM64_REL32))
     FixedValue += 4;
+  // IMAGE_REL_AMD64_REL32_<n>: relative to the end of the relocation + n.
+  if (Header.Machine == COFF::IMAGE_FILE_MACHINE_AMD64 &&
+      Reloc.Data.Type >= COFF::IMAGE_REL_AMD64_REL32_1 &&
+      Reloc.Data.Type <= COFF::IMAGE_REL_AMD64_REL32_5)
+    FixedValue += 4 + (Reloc.Data.Type - COFF::IMAGE_REL_AMD64_REL32);
 
   if (Header.Machine == COFF::IMAGE_FILE_MACHINE_ARMNT) {
     switch (Reloc.Data.Type) {
@@ -1258,8 +1264,12 @@ bool WinCOFFObjectWriter::isSymbolRefDifferenceFullyResolvedImpl(
   // point to thunks, and the /GUARD:CF flag assumes that it can use relocations
   // to approximate the set of all address taken functions. LLD's implementation
   // of /GUARD:CF also relies on the existance of these relocations.
+  // ML64.EXE (X86MasmEncoding) does resolve branches to functions of the same
+  // section (call f = e8 <disp32>, no relocation).
   uint16_t Type = static_cast<const MCSymbolCOFF &>(SymA).getType();
-  if ((Type >> COFF::SCT_COMPLEX_TYPE_SHIFT) == COFF::IMAGE_SYM_DTYPE_FUNCTION)
+  if ((Type >> COFF::SCT_COMPLEX_TYPE_SHIFT) ==
+          COFF::IMAGE_SYM_DTYPE_FUNCTION &&
+      !getContext().getTargetOptions().X86MasmEncoding)
     return false;
   return &SymA.getSection() == FB.getParent();
 }

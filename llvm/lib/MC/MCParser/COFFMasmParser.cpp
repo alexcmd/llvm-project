@@ -12,6 +12,7 @@
 #include "llvm/MC/MCAsmMacro.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCExpr.h"
+#include "llvm/MC/MCObjectStreamer.h"
 #include "llvm/MC/MCParser/AsmLexer.h"
 #include "llvm/MC/MCParser/MCAsmParserExtension.h"
 #include "llvm/MC/MCParser/MCTargetAsmParser.h"
@@ -549,10 +550,19 @@ bool COFFMasmParser::parseDirectiveEndProc(StringRef Directive, SMLoc Loc) {
       MCSymbol *ProcEnd = Ctx.createTempSymbol();
       S.emitLabel(ProcEnd);
       S.emitWinCFIEndEpilogue(Loc);
+      // Epilog->End labels the terminator, one byte before ENDP. It must be a
+      // real label (Win64EH folds End - Start before layout, which does not
+      // expand a section-relative variable), so place it inside the fragment
+      // that ENDP ends; textual output keeps an assignment.
       MCSymbol *LastInst = Ctx.createTempSymbol();
-      S.emitAssignment(LastInst, MCBinaryExpr::createSub(
-                                     MCSymbolRefExpr::create(ProcEnd, Ctx),
-                                     MCConstantExpr::create(1, Ctx), Ctx));
+      MCFragment *F = ProcEnd->getFragment();
+      if (S.getAssemblerPtr() && F && ProcEnd->getOffset() > 0)
+        static_cast<MCObjectStreamer &>(S).emitLabelAtPos(
+            LastInst, Loc, *F, ProcEnd->getOffset() - 1);
+      else
+        S.emitAssignment(LastInst, MCBinaryExpr::createSub(
+                                       MCSymbolRefExpr::create(ProcEnd, Ctx),
+                                       MCConstantExpr::create(1, Ctx), Ctx));
       Epilog->End = LastInst;
     }
     S.emitWinCFIEndProc(Loc);

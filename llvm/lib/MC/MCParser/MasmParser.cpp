@@ -2174,9 +2174,15 @@ bool MasmParser::parseStatement(ParseStatementInfo &Info,
     return Error(IDLoc, "unknown directive");
   }
 
-  // We also check if this is allocating memory with user-defined type.
+  // We also check if this is allocating memory with user-defined type -
+  // unless it is '<name> STRUCT|UNION|ENDS' (a redefinition of the type).
   auto IDIt = Structs.find(IDVal.lower());
-  if (IDIt != Structs.end())
+  auto NextDirIt = DirectiveKindMap.find(getTok().getString().lower());
+  if (IDIt != Structs.end() &&
+      !(getTok().is(AsmToken::Identifier) &&
+        NextDirIt != DirectiveKindMap.end() &&
+        (NextDirIt->second == DK_STRUCT || NextDirIt->second == DK_UNION ||
+         NextDirIt->second == DK_ENDS)))
     return parseDirectiveStructValue(/*Structure=*/IDIt->getValue(), IDVal,
                                      IDLoc);
 
@@ -4133,6 +4139,35 @@ bool MasmParser::parseDirectiveNestedStruct(StringRef Directive,
   return false;
 }
 
+// ML64.EXE "benign" STRUCT/UNION redefinition: same kind, same field names in
+// the same order (case-insensitive), each field of the same kind, element size
+// and count (a nested field of the same struct type). Initializers and the
+// alignment value are not compared.
+static bool isBenignStructRedefinition(const StructInfo &A,
+                                       const StructInfo &B) {
+  if (A.IsUnion != B.IsUnion || A.Fields.size() != B.Fields.size() ||
+      A.FieldsByName.size() != B.FieldsByName.size())
+    return false;
+  for (const auto &F : A.FieldsByName) {
+    auto It = B.FieldsByName.find(F.getKey());
+    if (It == B.FieldsByName.end() || It->getValue() != F.getValue())
+      return false;
+  }
+  for (size_t I = 0, E = A.Fields.size(); I != E; ++I) {
+    const FieldInfo &X = A.Fields[I], &Y = B.Fields[I];
+    if (X.Contents.FT != Y.Contents.FT || X.Type != Y.Type ||
+        X.LengthOf != Y.LengthOf || X.SizeOf != Y.SizeOf)
+      return false;
+    if (X.Contents.FT == FT_STRUCT &&
+        (!X.Contents.StructInfo.Structure.Name.equals_insensitive(
+             Y.Contents.StructInfo.Structure.Name) ||
+         !isBenignStructRedefinition(X.Contents.StructInfo.Structure,
+                                     Y.Contents.StructInfo.Structure)))
+      return false;
+  }
+  return true;
+}
+
 bool MasmParser::parseDirectiveEnds(StringRef Name, SMLoc NameLoc) {
   if (StructInProgress.empty())
     return Error(NameLoc, "ENDS directive without matching STRUC/STRUCT/UNION");
@@ -4146,7 +4181,13 @@ bool MasmParser::parseDirectiveEnds(StringRef Name, SMLoc NameLoc) {
   // and the size of its largest field.
   Structure.Size = llvm::alignTo(
       Structure.Size, std::min(Structure.Alignment, Structure.AlignmentSize));
-  Structs[Name.lower()] = std::move(Structure);
+  // ML64.EXE accepts a benign redefinition and keeps the first definition
+  // (its initializers and alignment); anything else is A2161/A2163/A2164.
+  auto Prev = Structs.find(Name.lower());
+  if (Prev == Structs.end())
+    Structs[Name.lower()] = std::move(Structure);
+  else if (!isBenignStructRedefinition(Prev->second, Structure))
+    return Error(NameLoc, "non-benign structure redefinition: '" + Name + "'");
 
   if (parseEOL())
     return addErrorSuffix(" in ENDS directive");

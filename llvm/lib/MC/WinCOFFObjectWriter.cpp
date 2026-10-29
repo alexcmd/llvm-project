@@ -765,6 +765,22 @@ static bool isAssociative(const COFFSection &Section) {
 }
 
 void WinCOFFWriter::assignSectionNumbers() {
+  // ML64.EXE (X86MasmEncoding) numbers _TEXT (.text$mn; .text in older
+  // llvm-ml naming) 1 and _DATA (.data) 2, whatever segment the source opens
+  // first; the other sections keep their order.
+  if (getContext().getTargetOptions().X86MasmEncoding) {
+    auto Rank = [](const std::unique_ptr<COFFSection> &S) {
+      if (S->Header.Characteristics & COFF::IMAGE_SCN_LNK_COMDAT)
+        return 2;
+      return S->Name == ".text$mn" || S->Name == ".text" ? 0
+             : S->Name == ".data"                       ? 1
+                                                        : 2;
+    };
+    llvm::stable_sort(Sections, [&](const auto &A, const auto &B) {
+      return Rank(A) < Rank(B);
+    });
+  }
+
   size_t I = 1;
   auto Assign = [&](COFFSection &Section) {
     Section.Number = I;
@@ -791,13 +807,20 @@ void WinCOFFWriter::assignFileOffsets() {
   Offset += UseBigObj ? COFF::Header32Size : COFF::Header16Size;
   Offset += COFF::SectionSize * Header.NumberOfSections;
 
-  for (const auto &Section : *Asm) {
-    COFFSection *Sec = SectionMap[&Section];
-
+  // Raw data follows the section table order (X86MasmEncoding reorders it:
+  // assignSectionNumbers).
+  SmallVector<COFFSection *, 16> Order;
+  if (getContext().getTargetOptions().X86MasmEncoding)
+    for (const auto &S : Sections)
+      Order.push_back(S.get());
+  else
+    for (const auto &Section : *Asm)
+      Order.push_back(SectionMap.lookup(&Section));
+  for (COFFSection *Sec : Order) {
     if (!Sec || Sec->Number == -1)
       continue;
 
-    Sec->Header.SizeOfRawData = Asm->getSectionAddressSize(Section);
+    Sec->Header.SizeOfRawData = Asm->getSectionAddressSize(*Sec->MCSection);
 
     if (!isUninitializedData(*Sec)) {
       Sec->Header.PointerToRawData = Offset;
@@ -1240,6 +1263,9 @@ uint64_t WinCOFFWriter::writeObject() {
   sections::iterator IE = Sections.end();
   auto J = Asm->begin();
   auto JE = Asm->end();
+  // (X86MasmEncoding reorders the sections: assignSectionNumbers.)
+  if (getContext().getTargetOptions().X86MasmEncoding)
+    I = IE;
   for (; I != IE && J != JE; ++I, ++J) {
     while (J != JE && ((Mode == NonDwoOnly && isDwoSection(*J)) ||
                        (Mode == DwoOnly && !isDwoSection(*J))))

@@ -17,7 +17,9 @@
 #include "X86Operand.h"
 #include "X86RegisterInfo.h"
 #include "llvm-c/Visibility.h"
+#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
@@ -116,6 +118,18 @@ class X86AsmParser : public MCTargetAsmParser {
   };
 
   DispEncoding ForcedDispEncoding = DispEncoding_Default;
+
+  // GNU as {load} / {store}: for a reg,reg instruction that has both a
+  // MRMSrcReg ("load", reg <- r/m) and a MRMDestReg ("store", r/m <- reg)
+  // encoding, pick that form (xor eax, eax: {load} 33 c0, default/{store}
+  // 31 c0; movaps xmm0, xmm1: default/{load} 0f 28 c1, {store} 0f 29 c8).
+  enum OpcodeForm {
+    OpcodeForm_Default,
+    OpcodeForm_Load,
+    OpcodeForm_Store,
+  };
+
+  OpcodeForm ForcedOpcodeForm = OpcodeForm_Default;
 
   // Does this instruction use apx extended register?
   bool UseApxExtendedReg = false;
@@ -1245,6 +1259,7 @@ private:
 
   bool validateInstruction(MCInst &Inst, const OperandVector &Ops);
   bool processInstruction(MCInst &Inst, const OperandVector &Ops);
+  bool applyForcedOpcodeForm(MCInst &Inst);
 
   // Load Value Injection (LVI) Mitigations for machine code
   void emitWarningForSpecialLVIInstruction(SMLoc Loc);
@@ -3302,6 +3317,7 @@ bool X86AsmParser::parseInstruction(ParseInstructionInfo &Info, StringRef Name,
   // Reset the forced VEX encoding.
   ForcedOpcodePrefix = OpcodePrefix_Default;
   ForcedDispEncoding = DispEncoding_Default;
+  ForcedOpcodeForm = OpcodeForm_Default;
   UseApxExtendedReg = false;
   ForcedNoFlag = false;
 
@@ -3332,6 +3348,10 @@ bool X86AsmParser::parseInstruction(ParseInstructionInfo &Info, StringRef Name,
         ForcedDispEncoding = DispEncoding_Disp8;
       else if (Prefix == "disp32")
         ForcedDispEncoding = DispEncoding_Disp32;
+      else if (Prefix == "load")
+        ForcedOpcodeForm = OpcodeForm_Load;
+      else if (Prefix == "store")
+        ForcedOpcodeForm = OpcodeForm_Store;
       else if (Prefix == "nf")
         ForcedNoFlag = true;
       else
@@ -3880,9 +3900,56 @@ static bool convertSSEToAVX(MCInst &Inst) {
   return true;
 }
 
+/// The other ModRM-direction encoding of a reg,reg instruction: the
+/// FOO / FOO_REV opcode pairs (ADD32rr = 01 /r, ADD32rr_REV = 03 /r; MOVAPSrr =
+/// 0f 28 /r, MOVAPSrr_REV = 0f 29 /r). Both take the same MCInst operands, only
+/// the reg and r/m fields trade places. 0 = no such pair.
+static unsigned getReversedRegRegOpcode(const MCInstrInfo &MII,
+                                        unsigned Opcode) {
+  static const DenseMap<unsigned, unsigned> Pairs = [&MII] {
+    StringMap<unsigned> ByName;
+    for (unsigned I = 0, E = MII.getNumOpcodes(); I != E; ++I)
+      ByName[MII.getName(I)] = I;
+    DenseMap<unsigned, unsigned> M;
+    for (const auto &KV : ByName) {
+      StringRef Name = KV.getKey();
+      if (!Name.consume_back("_REV"))
+        continue;
+      auto It = ByName.find(Name);
+      if (It == ByName.end())
+        continue;
+      M[It->second] = KV.getValue();
+      M[KV.getValue()] = It->second;
+    }
+    return M;
+  }();
+  return Pairs.lookup(Opcode);
+}
+
+/// {load}/{store}: switch to the requested ModRM direction when the
+/// instruction has it; otherwise the default encoding stays (as in GNU as).
+bool X86AsmParser::applyForcedOpcodeForm(MCInst &Inst) {
+  auto Form = [&](unsigned Opc) {
+    return MII.get(Opc).TSFlags & X86II::FormMask;
+  };
+  uint64_t Want = ForcedOpcodeForm == OpcodeForm_Load ? X86II::MRMSrcReg
+                                                      : X86II::MRMDestReg;
+  if (Form(Inst.getOpcode()) == Want)
+    return false;
+  unsigned Rev = getReversedRegRegOpcode(MII, Inst.getOpcode());
+  if (!Rev || Form(Rev) != Want)
+    return false;
+  Inst.setOpcode(Rev);
+  return true;
+}
+
 bool X86AsmParser::processInstruction(MCInst &Inst, const OperandVector &Ops) {
   if (getTargetOptions().X86Sse2Avx && convertSSEToAVX(Inst))
     return true;
+
+  // {load}/{store} fix the ModRM direction: no VEX2 commutation/_REV swap.
+  if (ForcedOpcodeForm != OpcodeForm_Default)
+    return applyForcedOpcodeForm(Inst);
 
   if (ForcedOpcodePrefix != OpcodePrefix_VEX3 &&
       X86::optimizeInstFromVEX3ToVEX2(Inst, MII.get(Inst.getOpcode())))

@@ -29,6 +29,7 @@
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSection.h"
 #include "llvm/MC/MCSubtargetInfo.h"
+#include "llvm/MC/MCSymbolCOFF.h"
 #include "llvm/MC/MCTargetOptions.h"
 #include "llvm/MC/MCValue.h"
 #include "llvm/MC/TargetRegistry.h"
@@ -744,20 +745,62 @@ void X86AsmBackend::applyFixup(const MCFragment &F, const MCFixup &Fixup,
     Data[i] = uint8_t(Value >> (i * 8));
 }
 
+// ML64.EXE (X86MasmEncoding): 'mov r32/r64, name' where name was not
+// defined when parsed. If it turns out to be a 'name:' label (LABEL class) ML64.EXE, which
+// reads the source twice, makes it the label's address; one-pass llvm-ml
+// emits a RIP-relative load as a relaxable fragment and decides at layout
+// (fixupNeedsRelaxationAdvanced / relaxInstruction).
+static bool isMasmForwardLabelMov(unsigned Opcode,
+                                  ArrayRef<MCOperand> Operands) {
+  if ((Opcode != X86::MOV64rm && Opcode != X86::MOV32rm) ||
+      Operands.size() != 6 || !Operands[1 + X86::AddrBaseReg].isReg() ||
+      Operands[1 + X86::AddrBaseReg].getReg() != X86::RIP ||
+      Operands[1 + X86::AddrIndexReg].getReg() ||
+      Operands[1 + X86::AddrSegmentReg].getReg() ||
+      !Operands[1 + X86::AddrDisp].isExpr())
+    return false;
+  const MCExpr *E = Operands[1 + X86::AddrDisp].getExpr();
+  if (const auto *BE = dyn_cast<MCBinaryExpr>(E))
+    if (isa<MCConstantExpr>(BE->getRHS()))
+      E = BE->getLHS();
+  const auto *SRE = dyn_cast<MCSymbolRefExpr>(E);
+  // Defined or not: by layout a forward name is defined; the parser's
+  // IP_MASM_FWD_LABEL and the name's kind decide (fixupNeedsRelaxationAdvanced).
+  return SRE && !SRE->getSpecifier() && !SRE->getSymbol().isTemporary();
+}
+
+// A defined 'name:' label of MasmParser (X86MasmEncoding): COFF class LABEL.
+static bool isMasmCodeLabel(const MCValue &Target) {
+  const MCSymbol *S = Target.getAddSym();
+  return S && !Target.getSubSym() && !Target.getSpecifier() &&
+         S->isDefined() &&
+         static_cast<const MCSymbolCOFF *>(S)->getClass() ==
+             COFF::IMAGE_SYM_CLASS_LABEL;
+}
+
 bool X86AsmBackend::mayNeedRelaxation(unsigned Opcode,
                                       ArrayRef<MCOperand> Operands,
                                       const MCSubtargetInfo &STI) const {
+  if (MasmEncoding && STI.getTargetTriple().isOSBinFormatCOFF() &&
+      isMasmForwardLabelMov(Opcode, Operands))
+    return true;
   unsigned SkipOperands = X86::isCCMPCC(Opcode) ? 2 : 0;
   return isRelaxableBranch(Opcode) ||
          (X86::getOpcodeForLongImmediateForm(Opcode) != Opcode &&
           Operands[Operands.size() - 1 - SkipOperands].isExpr());
 }
 
-bool X86AsmBackend::fixupNeedsRelaxationAdvanced(const MCFragment &,
+bool X86AsmBackend::fixupNeedsRelaxationAdvanced(const MCFragment &F,
                                                  const MCFixup &Fixup,
                                                  const MCValue &Target,
                                                  uint64_t Value,
                                                  bool Resolved) const {
+  // The forward-referenced 'mov r, name' (isMasmForwardLabelMov): the
+  // address form when name is a 'name:' label, else the load stays.
+  if (MasmEncoding && F.getKind() == MCFragment::FT_Relaxable &&
+      (F.getOpcode() == X86::MOV64rm || F.getOpcode() == X86::MOV32rm))
+    return (F.getInst().getFlags() & X86::IP_MASM_FWD_LABEL) &&
+           isMasmCodeLabel(Target);
   // If resolved, relax if the value is too big for a (signed) i8.
   //
   // Currently, `jmp local@plt` relaxes JMP even if the offset is small,
@@ -776,6 +819,18 @@ bool X86AsmBackend::fixupNeedsRelaxationAdvanced(const MCFragment &,
 // we can relax?
 void X86AsmBackend::relaxInstruction(MCInst &Inst,
                                      const MCSubtargetInfo &STI) const {
+  // ML64.EXE: mov r64/r32, <label> = mov r, imm64/imm32 of its address.
+  if (MasmEncoding &&
+      (Inst.getOpcode() == X86::MOV64rm || Inst.getOpcode() == X86::MOV32rm)) {
+    MCInst Imm;
+    Imm.setOpcode(Inst.getOpcode() == X86::MOV64rm ? X86::MOV64ri
+                                                   : X86::MOV32ri);
+    Imm.addOperand(Inst.getOperand(0));
+    Imm.addOperand(Inst.getOperand(1 + X86::AddrDisp));
+    Imm.setLoc(Inst.getLoc());
+    Inst = Imm;
+    return;
+  }
   // The only relaxations X86 does is from a 1byte pcrel to a 4byte pcrel.
   bool Is16BitMode = STI.hasFeature(X86::Is16Bit);
   unsigned RelaxedOp = getRelaxedOpcode(Inst, Is16BitMode);

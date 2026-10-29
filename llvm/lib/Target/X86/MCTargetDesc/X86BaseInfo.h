@@ -64,6 +64,9 @@ enum IPREFIXES {
   IP_USE_EVEX = 1U << 11,
   IP_USE_DISP8 = 1U << 12,
   IP_USE_DISP32 = 1U << 13,
+  // X86MasmEncoding: 'mov r32/r64, name' (no PTR) with name not yet defined;
+  // the address form if name becomes a 'name:' label (X86AsmBackend).
+  IP_MASM_FWD_LABEL = 1U << 14,
 };
 
 enum OperandType : unsigned {

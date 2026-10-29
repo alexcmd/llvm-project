@@ -27,6 +27,7 @@
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInst.h"
+#include "llvm/MC/MCInstBuilder.h"
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCParser/AsmLexer.h"
 #include "llvm/MC/MCParser/MCAsmParser.h"
@@ -100,6 +101,10 @@ class X86AsmParser : public MCTargetAsmParser {
   // MASM: the operand has an integer literal of 2^63 or more (written
   // positive; X86MasmEncoding: mov r64, 0FFFFFFFFFFFFFFFFh is movabs).
   bool MasmWideLiteral = false;
+  // X86MasmEncoding, 'xlat byte ptr seg:[(e)bx]': the prefixes ML64.EXE keeps
+  // (67 for a non-default address size, then the segment override).
+  MCRegister MasmXlatSeg;
+  bool MasmXlatAdSize = false;
 
   enum OpcodePrefix {
     OpcodePrefix_Default,
@@ -3311,6 +3316,9 @@ bool X86AsmParser::parseInstruction(ParseInstructionInfo &Info, StringRef Name,
   MCAsmParser &Parser = getParser();
   InstInfo = &Info;
 
+  MasmXlatSeg = MCRegister();
+  MasmXlatAdSize = false;
+
   // Reset the forced VEX encoding.
   ForcedOpcodePrefix = OpcodePrefix_Default;
   ForcedDispEncoding = DispEncoding_Default;
@@ -3864,6 +3872,17 @@ bool X86AsmParser::parseInstruction(ParseInstructionInfo &Info, StringRef Name,
   if ((Name == "xlat" || Name == "xlatb") && Operands.size() == 2) {
     X86Operand &Op1 = static_cast<X86Operand &>(*Operands[1]);
     if (Op1.isMem8()) {
+      if (getTargetOptions().X86MasmEncoding) {
+        MCRegister Base = Op1.getMemBaseReg();
+        MasmXlatSeg = Op1.getMemSegReg() == X86::DS ? MCRegister()
+                                                    : Op1.getMemSegReg();
+        MasmXlatAdSize =
+            Base && (is64BitMode()
+                         ? getX86MCRegisterClass(X86::GR32RegClassID).contains(Base)
+                     : is32BitMode()
+                         ? getX86MCRegisterClass(X86::GR16RegClassID).contains(Base)
+                         : getX86MCRegisterClass(X86::GR32RegClassID).contains(Base));
+      }
       Warning(Op1.getStartLoc(), "memory operand is only for determining the "
                                  "size, (R|E)BX will be used for the location");
       Operands.pop_back();
@@ -4239,6 +4258,21 @@ void X86AsmParser::emitInstruction(MCInst &Inst, OperandVector &Operands,
     // mov r64, 0FFFFFFFFFFFFFFFFh: ML64.EXE treats the value as the positive
     // 2^64-1, so it does not fit a sign-extended imm32: 48 b8 + imm64
     // (mov rax, -1 stays 48 c7 c0 ff ff ff ff).
+    // xlat byte ptr gs:[ebx] = 67 65 d7 (LLVM drops the operand: d7).
+    if (Inst.getOpcode() == X86::XLAT) {
+      if (MasmXlatAdSize)
+        Out.emitInstruction(MCInstBuilder(X86::ADDR32_PREFIX), getSTI());
+      unsigned SegPrefix = MasmXlatSeg == X86::FS   ? X86::FS_PREFIX
+                           : MasmXlatSeg == X86::GS ? X86::GS_PREFIX
+                           : MasmXlatSeg == X86::ES ? X86::ES_PREFIX
+                           : MasmXlatSeg == X86::CS ? X86::CS_PREFIX
+                           : MasmXlatSeg == X86::SS ? X86::SS_PREFIX
+                                                    : 0;
+      if (SegPrefix)
+        Out.emitInstruction(MCInstBuilder(SegPrefix), getSTI());
+    }
+    MasmXlatSeg = MCRegister();
+    MasmXlatAdSize = false;
     if (Inst.getOpcode() == X86::MOV64ri32 && Operands.size() == 3) {
       X86Operand &Src = static_cast<X86Operand &>(*Operands[2]);
       if (Src.isImm())

@@ -12,6 +12,7 @@
 #include "MCTargetDesc/X86MCAsmInfo.h"
 #include "MCTargetDesc/X86MCExpr.h"
 #include "MCTargetDesc/X86MCTargetDesc.h"
+#include "MCTargetDesc/X86MasmEncoding.h"
 #include "MCTargetDesc/X86TargetStreamer.h"
 #include "TargetInfo/X86TargetInfo.h"
 #include "X86Operand.h"
@@ -3714,8 +3715,9 @@ bool X86AsmParser::parseInstruction(ParseInstructionInfo &Info, StringRef Name,
     static_cast<X86Operand &>(*Operands[0]).setTokenValue(Repl);
   }
 
+  // (ML64.EXE encodes 'mov ax, ds' with 66 8c; the operands are Intel-order.)
   if ((Name == "mov" || Name == "movw" || Name == "movl") &&
-      (Operands.size() == 3)) {
+      (Operands.size() == 3) && !getTargetOptions().X86MasmEncoding) {
     X86Operand &Op1 = (X86Operand &)*Operands[1];
     X86Operand &Op2 = (X86Operand &)*Operands[2];
     SMLoc Loc = Op1.getEndLoc();
@@ -3884,7 +3886,9 @@ bool X86AsmParser::processInstruction(MCInst &Inst, const OperandVector &Ops) {
   if (getTargetOptions().X86Sse2Avx && convertSSEToAVX(Inst))
     return true;
 
+  // ML64.EXE keeps the operand order (and a 3-byte VEX) as written.
   if (ForcedOpcodePrefix != OpcodePrefix_VEX3 &&
+      !getTargetOptions().X86MasmEncoding &&
       X86::optimizeInstFromVEX3ToVEX2(Inst, MII.get(Inst.getOpcode())))
     return true;
 
@@ -4219,6 +4223,12 @@ void X86AsmParser::emitInstruction(MCInst &Inst, OperandVector &Operands,
   if (LVIInlineAsmHardening &&
       getSTI().hasFeature(X86::FeatureLVIControlFlowIntegrity))
     applyLVICFIMitigation(Inst, Out);
+
+  if (getTargetOptions().X86MasmEncoding) {
+    X86Operand &Op0 = static_cast<X86Operand &>(*Operands[0]);
+    X86::rewriteForMasmEncoding(Inst, MII, is64BitMode(),
+                                Op0.isToken() ? Op0.getToken() : "");
+  }
 
   Out.emitInstruction(Inst, getSTI());
 

@@ -1416,6 +1416,16 @@ bool MasmParser::parsePrimaryExpr(const MCExpr *&Res, SMLoc &EndLoc,
         return Error(FirstTokenLoc, "invalid token in expression");
       }
     }
+    // ML64.EXE: a lone '$' (lexed as an identifier) is the location counter;
+    // without X86MasmEncoding it stays a symbol named '$'.
+    if (Identifier == "$" && Lexer.getMAI().getDollarIsPC() &&
+        getContext().getTargetOptions().X86MasmEncoding) {
+      MCSymbol *Sym = Ctx.createTempSymbol();
+      Out.emitLabel(Sym);
+      Res = MCSymbolRefExpr::create(Sym, getContext());
+      EndLoc = FirstTokenLoc;
+      return false;
+    }
     // Parse named bitwise negation.
     if (Identifier.equals_insensitive("not")) {
       if (parsePrimaryExpr(Res, EndLoc, nullptr))

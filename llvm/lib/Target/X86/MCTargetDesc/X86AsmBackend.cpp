@@ -10,6 +10,7 @@
 #include "MCTargetDesc/X86EncodingOptimization.h"
 #include "MCTargetDesc/X86FixupKinds.h"
 #include "MCTargetDesc/X86MCAsmInfo.h"
+#include "MCTargetDesc/X86MasmEncoding.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/BinaryFormat/ELF.h"
 #include "llvm/BinaryFormat/MachO.h"
@@ -126,6 +127,12 @@ class X86AsmBackend : public MCAsmBackend {
 
   MCInst PrevInst;
   unsigned PrevInstOpcode = 0;
+
+protected:
+  // MCTargetOptions::X86MasmEncoding (COFF): ML64.EXE nops and relocations.
+  bool MasmEncoding = false;
+
+private:
   MCBoundaryAlignFragment *PendingBA = nullptr;
   std::pair<MCFragment *, size_t> PrevInstPosition;
 
@@ -603,6 +610,9 @@ MCFixupKindInfo X86AsmBackend::getFixupKindInfo(MCFixupKind Kind) const {
       {"reloc_signed_4byte_relax", 0, 32, 0},
       {"reloc_global_offset_table", 0, 32, 0},
       {"reloc_branch_4byte_pcrel", 0, 32, 0},
+      {"reloc_riprel_4byte_masm_imm1", 0, 32, 0},
+      {"reloc_riprel_4byte_masm_imm2", 0, 32, 0},
+      {"reloc_riprel_4byte_masm_imm4", 0, 32, 0},
       // clang-format on
   };
 
@@ -643,6 +653,9 @@ static unsigned getFixupKindSize(unsigned Kind) {
   case X86::reloc_signed_4byte_relax:
   case X86::reloc_global_offset_table:
   case X86::reloc_branch_4byte_pcrel:
+  case X86::reloc_riprel_4byte_masm_imm1:
+  case X86::reloc_riprel_4byte_masm_imm2:
+  case X86::reloc_riprel_4byte_masm_imm4:
   case FK_SecRel_4:
   case FK_Data_4:
     return 4;
@@ -689,6 +702,15 @@ void X86AsmBackend::applyFixup(const MCFragment &F, const MCFixup &Fixup,
   // Force relocation when there is a specifier. This might be too conservative
   // - GAS doesn't emit a relocation for call local@plt; local:.
   if (Target.getSpecifier())
+    IsResolved = false;
+  // ML64.EXE keeps a relocation for every RIP-relative operand, also one to a
+  // symbol of the instruction's own section.
+  if (MasmEncoding && IsResolved && Fixup.isPCRel() && Target.getAddSym() &&
+      !Target.getSubSym() &&
+      ((Fixup.getKind() >= X86::reloc_riprel_4byte &&
+        Fixup.getKind() <= X86::reloc_riprel_4byte_relax_evex) ||
+       (Fixup.getKind() >= X86::reloc_riprel_4byte_masm_imm1 &&
+        Fixup.getKind() <= X86::reloc_riprel_4byte_masm_imm4)))
     IsResolved = false;
   maybeAddReloc(F, Fixup, Target, Value, IsResolved);
 
@@ -971,6 +993,10 @@ unsigned X86AsmBackend::getMaximumNopSize(const MCSubtargetInfo &STI) const {
 /// \return - true on success, false on failure
 bool X86AsmBackend::writeNopData(raw_ostream &OS, uint64_t Count,
                                  const MCSubtargetInfo *STI) const {
+  if (MasmEncoding) {
+    X86::writeMasmNops(OS, Count);
+    return true;
+  }
   static const char Nops32Bit[10][11] = {
       // nop
       "\x90",
@@ -1093,9 +1119,10 @@ class WindowsX86AsmBackend : public X86AsmBackend {
 
 public:
   WindowsX86AsmBackend(const Target &T, bool is64Bit,
-                       const MCSubtargetInfo &STI)
+                       const MCSubtargetInfo &STI, bool MasmEncoding = false)
     : X86AsmBackend(T, STI)
     , Is64Bit(is64Bit) {
+    this->MasmEncoding = MasmEncoding;
   }
 
   std::optional<MCFixupKind> getFixupKind(StringRef Name) const override {
@@ -1484,7 +1511,7 @@ MCAsmBackend *llvm::createX86_32AsmBackend(const Target &T,
     return new DarwinX86AsmBackend(T, MRI, STI);
 
   if (TheTriple.isOSWindows() && TheTriple.isOSBinFormatCOFF())
-    return new WindowsX86AsmBackend(T, false, STI);
+    return new WindowsX86AsmBackend(T, false, STI, Options.X86MasmEncoding);
 
   uint8_t OSABI = MCELFObjectTargetWriter::getOSABI(TheTriple.getOS());
 
@@ -1503,12 +1530,12 @@ MCAsmBackend *llvm::createX86_64AsmBackend(const Target &T,
     return new DarwinX86AsmBackend(T, MRI, STI);
 
   if (TheTriple.isOSWindows() && TheTriple.isOSBinFormatCOFF())
-    return new WindowsX86AsmBackend(T, true, STI);
+    return new WindowsX86AsmBackend(T, true, STI, Options.X86MasmEncoding);
 
   if (TheTriple.isUEFI()) {
     assert(TheTriple.isOSBinFormatCOFF() &&
          "Only COFF format is supported in UEFI environment.");
-    return new WindowsX86AsmBackend(T, true, STI);
+    return new WindowsX86AsmBackend(T, true, STI, Options.X86MasmEncoding);
   }
 
   uint8_t OSABI = MCELFObjectTargetWriter::getOSABI(TheTriple.getOS());

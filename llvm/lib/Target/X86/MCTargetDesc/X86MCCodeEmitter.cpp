@@ -14,6 +14,7 @@
 #include "MCTargetDesc/X86FixupKinds.h"
 #include "MCTargetDesc/X86MCAsmInfo.h"
 #include "MCTargetDesc/X86MCTargetDesc.h"
+#include "MCTargetDesc/X86MasmEncoding.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/BinaryFormat/ELF.h"
 #include "llvm/MC/MCCodeEmitter.h"
@@ -26,6 +27,7 @@
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/MC/MCSymbol.h"
+#include "llvm/MC/MCTargetOptions.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/ErrorHandling.h"
 #include <cassert>
@@ -694,6 +696,12 @@ void X86MCCodeEmitter::emitMemModRMByte(
     int ImmSize = !Disp.isImm() && X86II::hasImm(TSFlags)
                       ? X86II::getSizeOfImm(TSFlags)
                       : 0;
+    // ML64.EXE: IMAGE_REL_AMD64_REL32_<ImmSize>, no immediate bias in place.
+    if (ImmSize && Ctx.getTargetOptions().X86MasmEncoding &&
+        STI.getTargetTriple().isOSBinFormatCOFF())
+      FixupKind = ImmSize == 1   ? X86::reloc_riprel_4byte_masm_imm1
+                  : ImmSize == 2 ? X86::reloc_riprel_4byte_masm_imm2
+                                 : X86::reloc_riprel_4byte_masm_imm4;
 
     emitImmediate(Disp, MI.getLoc(), FixupKind, true, StartByte, CB, Fixups,
                   -ImmSize);
@@ -1567,6 +1575,9 @@ void X86MCCodeEmitter::encodeInstruction(const MCInst &MI,
   uint64_t StartByte = CB.size();
 
   PrefixKind Kind = emitPrefixImpl(CurOp, MI, STI, CB);
+  if (Ctx.getTargetOptions().X86MasmEncoding)
+    X86::reorderPrefixesForMasm(CB, StartByte, CB.size(), TSFlags,
+                                MI.getFlags(), Kind != None);
 
   // It uses the VEX.VVVV field?
   bool HasVEX_4V = TSFlags & X86II::VEX_4V;

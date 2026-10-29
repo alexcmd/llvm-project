@@ -71,6 +71,10 @@ public:
 
   bool X86Sse2Avx = false;
 
+  // Encode x86 like Microsoft ML64.EXE (llvm-ml /ml64-encoding): its operand
+  // forms, prefix order, ALIGN nops and COFF relocations.
+  bool X86MasmEncoding = false;
+
   // For ELF relocations, controls section symbol conversion.
   RelocSectionSymType RelocSectionSym = RelocSectionSymType::All;
 

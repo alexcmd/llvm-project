@@ -269,6 +269,7 @@ int llvm_ml_main(int Argc, char **Argv, const llvm::ToolContext &) {
   MCOptions.MCFatalWarnings = InputArgs.hasArg(OPT_fatal_warnings);
   MCOptions.MCSaveTempLabels = InputArgs.hasArg(OPT_save_temp_labels);
   MCOptions.ShowMCInst = InputArgs.hasArg(OPT_show_inst);
+  MCOptions.X86MasmEncoding = InputArgs.hasArg(OPT_ml64_encoding);
   MCOptions.AsmVerbose = true;
 
   Triple TheTriple = GetTriple(ProgName, InputArgs);

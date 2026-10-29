@@ -108,6 +108,12 @@ class X86AsmParser : public MCTargetAsmParser {
   // (67 for a non-default address size, then the segment override).
   MCRegister MasmXlatSeg;
   bool MasmXlatAdSize = false;
+  // X86MasmEncoding: name of the 'name:' label taken as an address constant
+  // in this instruction (parseIntelOperand), checked in emitInstruction.
+  StringRef MasmLabelImm;
+  // X86MasmEncoding: 'mov r32/r64, name' with name not yet defined (no PTR):
+  // tagged IP_MASM_FWD_LABEL for the backend.
+  bool MasmFwdLabelMov = false;
 
   enum OpcodePrefix {
     OpcodePrefix_Default,
@@ -2905,19 +2911,18 @@ bool X86AsmParser::parseIntelOperand(OperandVector &Operands, StringRef Name) {
     return true;
 
   // ML64.EXE (X86MasmEncoding): an untyped 'name:' label (LABEL class, see
-  // MasmParser) as the source of 'mov r32/r64' is its address, with or
-  // without brackets: mov rax, lab(+c) = 48 b8 + ADDR64, mov eax, lab =
-  // b8 + ADDR32 ('qword ptr lab' stays a load). Only labels defined before
-  // the use are known here; other forms keep the memory operand (ML64
-  // rejects mov ax/push/cmp/add with such a label).
+  // MasmParser) without PTR is an address constant, with or without
+  // brackets, when it is a source operand (not of lea or a branch):
+  // mov rax, lab(+c) = 48 b8 + ADDR64, mov eax, lab / add eax, lab = imm32 +
+  // ADDR32; the forms ML64 rejects are diagnosed in emitInstruction. A label
+  // defined after the use is handled at layout for mov r32/r64
+  // (X86AsmBackend: a relaxable RIP load turned into the immediate form).
   if (Parser.isParsingMasm() && getTargetOptions().X86MasmEncoding &&
       is64BitMode() && !PtrInOperand && !BaseReg && !IndexReg && !RegNo &&
-      Name.equals_insensitive("mov") && Operands.size() == 2 &&
-      static_cast<X86Operand &>(*Operands[1]).isReg() &&
-      (getX86MCRegisterClass(X86::GR64RegClassID)
-           .contains(static_cast<X86Operand &>(*Operands[1]).getReg()) ||
-       getX86MCRegisterClass(X86::GR32RegClassID)
-           .contains(static_cast<X86Operand &>(*Operands[1]).getReg()))) {
+      (Operands.size() >= 2 || Name.equals_insensitive("push")) &&
+      !Name.equals_insensitive("lea") && !Name.starts_with_insensitive("j") &&
+      !Name.starts_with_insensitive("call") &&
+      !Name.starts_with_insensitive("loop")) {
     const MCExpr *E = Disp;
     if (const auto *BE = dyn_cast<MCBinaryExpr>(E))
       if ((BE->getOpcode() == MCBinaryExpr::Add ||
@@ -2929,9 +2934,13 @@ bool X86AsmParser::parseIntelOperand(OperandVector &Operands, StringRef Name) {
       if (!SRE->getSpecifier() && Sym.isDefined() && !Sym.isTemporary() &&
           getContext().getObjectFileType() == MCContext::IsCOFF &&
           Sym.getClass() == COFF::IMAGE_SYM_CLASS_LABEL) {
+        MasmLabelImm = SRE->getSymbol().getName();
         Operands.push_back(X86Operand::CreateImm(Disp, Start, End));
         return false;
       }
+      if (!SRE->getSpecifier() && Sym.isUndefined() && !Sym.isTemporary() &&
+          Name.equals_insensitive("mov") && Operands.size() == 2)
+        MasmFwdLabelMov = true;
     }
   }
 
@@ -3398,6 +3407,8 @@ bool X86AsmParser::parseInstruction(ParseInstructionInfo &Info, StringRef Name,
 
   MasmXlatSeg = MCRegister();
   MasmXlatAdSize = false;
+  MasmLabelImm = StringRef();
+  MasmFwdLabelMov = false;
 
   // Reset the forced VEX encoding.
   ForcedOpcodePrefix = OpcodePrefix_Default;
@@ -4386,6 +4397,51 @@ void X86AsmParser::emitInstruction(MCInst &Inst, OperandVector &Operands,
       getSTI().hasFeature(X86::FeatureLVIControlFlowIntegrity))
     applyLVICFIMitigation(Inst, Out);
 
+  if (MasmFwdLabelMov &&
+      (Inst.getOpcode() == X86::MOV64rm || Inst.getOpcode() == X86::MOV32rm))
+    Inst.setFlags(Inst.getFlags() | X86::IP_MASM_FWD_LABEL);
+  MasmFwdLabelMov = false;
+  if (getTargetOptions().X86MasmEncoding && !MasmLabelImm.empty()) {
+    // A 'name:' label as an address constant (parseIntelOperand): ML64.EXE
+    // takes it as imm64 for mov r64 and as imm32 + ADDR32 for 32-bit forms;
+    // the other forms are its errors A2024/A2070/A2084.
+    // (judged by the imm32 form: add eax, lab matches ADD32ri8 first)
+    unsigned Opc = X86::getOpcodeForLongImmediateForm(Inst.getOpcode());
+    uint64_t TSFlags = MII.get(Opc).TSFlags;
+    StringRef Mn = static_cast<X86Operand &>(*Operands[0]).isToken()
+                       ? static_cast<X86Operand &>(*Operands[0]).getToken()
+                       : StringRef();
+    SMLoc Loc = Operands[0]->getStartLoc();
+    StringRef Label = MasmLabelImm;
+    MasmLabelImm = StringRef();
+    if (Opc != X86::MOV64ri32 && Opc != X86::MOV64ri) {
+      bool Push = Mn.starts_with_insensitive("push");
+      bool Imul3 = Mn.equals_insensitive("imul") && Operands.size() == 4;
+      if (Push || Imul3) {
+        Error(Loc, "invalid instruction operands: label '" + Label +
+                       "' is an address constant here (ML64.EXE A2070)");
+        return;
+      }
+      if (TSFlags & X86II::REX_W) {
+        Error(Loc, "constant value too large: label '" + Label +
+                       "' is a 64-bit address constant here (ML64.EXE A2084)");
+        return;
+      }
+      unsigned ImmSize = X86II::getSizeOfImm(TSFlags);
+      if (ImmSize != 4) {
+        if (Mn.equals_insensitive("mov") && ImmSize == 2)
+          Error(Loc, "invalid operand size for instruction: label '" + Label +
+                         "' is an address constant here (ML64.EXE A2024)");
+        else
+          Error(Loc, "invalid instruction operands: label '" + Label +
+                         "' is an address constant here (ML64.EXE A2070)");
+        return;
+      }
+      // imm32 + ADDR32 in ML64.EXE's form (add eax, lab = 05 + ADDR32).
+      Inst.setOpcode(Opc);
+      X86::optimizeToFixedRegisterOrShortImmediateForm(Inst);
+    }
+  }
   if (getTargetOptions().X86MasmEncoding) {
     // mov r64, 0FFFFFFFFFFFFFFFFh: ML64.EXE treats the value as the positive
     // 2^64-1, so it does not fit a sign-extended imm32: 48 b8 + imm64

@@ -66,6 +66,8 @@ LLVM_ABI bool getX86Sse2Avx();
 
 LLVM_ABI bool getX86MasmEncoding();
 
+LLVM_ABI bool getX86MasmBugCompat();
+
 LLVM_ABI RelocSectionSymType getRelocSectionSym();
 
 LLVM_ABI bool getLargeEHEncoding();

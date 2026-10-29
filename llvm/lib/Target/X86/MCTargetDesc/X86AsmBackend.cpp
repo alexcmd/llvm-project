@@ -29,6 +29,7 @@
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSection.h"
 #include "llvm/MC/MCSubtargetInfo.h"
+#include "llvm/MC/MCSymbolCOFF.h"
 #include "llvm/MC/MCTargetOptions.h"
 #include "llvm/MC/MCValue.h"
 #include "llvm/MC/TargetRegistry.h"
@@ -131,6 +132,11 @@ class X86AsmBackend : public MCAsmBackend {
 protected:
   // MCTargetOptions::X86MasmEncoding (COFF): ML64.EXE nops and relocations.
   bool MasmEncoding = false;
+  // MCTargetOptions::X86MasmBugCompat: also ML64.EXE's miscompiles.
+  bool MasmBugCompat = false;
+  bool isMasmCrossSegProcBranch(const MCFragment &F, const MCFixup &Fixup,
+                                const MCValue &Target,
+                                const uint8_t *Data = nullptr) const;
 
 private:
   MCBoundaryAlignFragment *PendingBA = nullptr;
@@ -696,9 +702,64 @@ std::optional<bool> X86AsmBackend::evaluateFixup(const MCFragment &,
   return {};
 }
 
+// ML64-BUG(cross-seg-jmp): ML64.EXE 14.51 encodes a jmp, jcc, 'jmp short',
+// loop or jrcxz to a PROC of another code segment (without NEAR PTR) as the
+// short form with displacement 0 and no relocation - it continues at the next
+// instruction, whatever the target offset or distance (jmp near ptr and call
+// are encoded right). Measured on ML64.EXE output; no ML64-assembled member of
+// the VC/UCRT x64 libs contains such a branch.
+// \p Data (applyFixup): the fixup's bytes - the branch is told by the opcode
+// before them (a fragment's relaxable tail may be another instruction);
+// without it (fixupNeedsRelaxationAdvanced) by the relaxable instruction.
+bool X86AsmBackend::isMasmCrossSegProcBranch(const MCFragment &F,
+                                             const MCFixup &Fixup,
+                                             const MCValue &Target,
+                                             const uint8_t *Data) const {
+  if (!MasmEncoding || !Fixup.isPCRel())
+    return false;
+  const MCSymbol *S = Target.getAddSym();
+  if (!S || Target.getSubSym() || Target.getSpecifier() || !S->isInSection() ||
+      &S->getSection() == F.getParent() ||
+      (static_cast<const MCSymbolCOFF *>(S)->getType() >>
+       COFF::SCT_COMPLEX_TYPE_SHIFT) != COFF::IMAGE_SYM_DTYPE_FUNCTION)
+    return false;
+  if (Data) {
+    uint8_t Op = Data[-1];
+    if (Fixup.getKind() == FK_Data_1) // jmp short, jcc short, loop*, jrcxz
+      return Op == 0xEB || (Op >= 0x70 && Op <= 0x7F) ||
+             (Op >= 0xE0 && Op <= 0xE3);
+    return Fixup.getOffset() >= 1 &&
+           (Op == 0xE9 || // jmp rel32; call (e8) is right
+            (Fixup.getOffset() >= 2 && Data[-2] == 0x0F && (Op & 0xF0) == 0x80));
+  }
+  if (F.getKind() != MCFragment::FT_Relaxable)
+    return false;
+  unsigned Op = F.getOpcode();
+  return Op == X86::JMP_1 || Op == X86::JCC_1;
+}
+
 void X86AsmBackend::applyFixup(const MCFragment &F, const MCFixup &Fixup,
                                const MCValue &Target, uint8_t *Data,
                                uint64_t Value, bool IsResolved) {
+  // ML64-BUG(cross-seg-jmp): always warn; /ml64-bugcompat writes ML64's bytes.
+  if (isMasmCrossSegProcBranch(F, Fixup, Target, Data)) {
+    getContext().reportWarning(
+        Fixup.getLoc(),
+        "branch to PROC '" + Target.getAddSym()->getName() +
+            "' of another segment: ML64.EXE encodes it as a short jump with "
+            "displacement 0 and no relocation (it continues at the next "
+            "instruction); " +
+            (MasmBugCompat ? "emitting ML64.EXE's bytes (/ml64-bugcompat)"
+             : Fixup.getKind() == FK_Data_1
+                 ? "a rel8 branch cannot reach another section "
+                   "(/ml64-bugcompat: ML64.EXE's bytes)"
+                 : "emitting the branch to the PROC "
+                   "(/ml64-bugcompat: ML64.EXE's bytes)"));
+    if (MasmBugCompat) {
+      IsResolved = true;
+      Value = 0;
+    }
+  }
   // Force relocation when there is a specifier. This might be too conservative
   // - GAS doesn't emit a relocation for call local@plt; local:.
   if (Target.getSpecifier())
@@ -744,20 +805,65 @@ void X86AsmBackend::applyFixup(const MCFragment &F, const MCFixup &Fixup,
     Data[i] = uint8_t(Value >> (i * 8));
 }
 
+// ML64.EXE (X86MasmEncoding): 'mov r32/r64, name' where name was not
+// defined when parsed. If it turns out to be a 'name:' label (LABEL class) ML64.EXE, which
+// reads the source twice, makes it the label's address; one-pass llvm-ml
+// emits a RIP-relative load as a relaxable fragment and decides at layout
+// (fixupNeedsRelaxationAdvanced / relaxInstruction).
+static bool isMasmForwardLabelMov(unsigned Opcode,
+                                  ArrayRef<MCOperand> Operands) {
+  if ((Opcode != X86::MOV64rm && Opcode != X86::MOV32rm) ||
+      Operands.size() != 6 || !Operands[1 + X86::AddrBaseReg].isReg() ||
+      Operands[1 + X86::AddrBaseReg].getReg() != X86::RIP ||
+      Operands[1 + X86::AddrIndexReg].getReg() ||
+      Operands[1 + X86::AddrSegmentReg].getReg() ||
+      !Operands[1 + X86::AddrDisp].isExpr())
+    return false;
+  const MCExpr *E = Operands[1 + X86::AddrDisp].getExpr();
+  if (const auto *BE = dyn_cast<MCBinaryExpr>(E))
+    if (isa<MCConstantExpr>(BE->getRHS()))
+      E = BE->getLHS();
+  const auto *SRE = dyn_cast<MCSymbolRefExpr>(E);
+  // Defined or not: by layout a forward name is defined; the parser's
+  // IP_MASM_FWD_LABEL and the name's kind decide (fixupNeedsRelaxationAdvanced).
+  return SRE && !SRE->getSpecifier() && !SRE->getSymbol().isTemporary();
+}
+
+// A defined 'name:' label of MasmParser (X86MasmEncoding): COFF class LABEL.
+static bool isMasmCodeLabel(const MCValue &Target) {
+  const MCSymbol *S = Target.getAddSym();
+  return S && !Target.getSubSym() && !Target.getSpecifier() &&
+         S->isDefined() &&
+         static_cast<const MCSymbolCOFF *>(S)->getClass() ==
+             COFF::IMAGE_SYM_CLASS_LABEL;
+}
+
 bool X86AsmBackend::mayNeedRelaxation(unsigned Opcode,
                                       ArrayRef<MCOperand> Operands,
                                       const MCSubtargetInfo &STI) const {
+  if (MasmEncoding && STI.getTargetTriple().isOSBinFormatCOFF() &&
+      isMasmForwardLabelMov(Opcode, Operands))
+    return true;
   unsigned SkipOperands = X86::isCCMPCC(Opcode) ? 2 : 0;
   return isRelaxableBranch(Opcode) ||
          (X86::getOpcodeForLongImmediateForm(Opcode) != Opcode &&
           Operands[Operands.size() - 1 - SkipOperands].isExpr());
 }
 
-bool X86AsmBackend::fixupNeedsRelaxationAdvanced(const MCFragment &,
+bool X86AsmBackend::fixupNeedsRelaxationAdvanced(const MCFragment &F,
                                                  const MCFixup &Fixup,
                                                  const MCValue &Target,
                                                  uint64_t Value,
                                                  bool Resolved) const {
+  // The forward-referenced 'mov r, name' (isMasmForwardLabelMov): the
+  // address form when name is a 'name:' label, else the load stays.
+  // ML64-BUG(cross-seg-jmp) under /ml64-bugcompat: the short form stays.
+  if (MasmBugCompat && isMasmCrossSegProcBranch(F, Fixup, Target))
+    return false;
+  if (MasmEncoding && F.getKind() == MCFragment::FT_Relaxable &&
+      (F.getOpcode() == X86::MOV64rm || F.getOpcode() == X86::MOV32rm))
+    return (F.getInst().getFlags() & X86::IP_MASM_FWD_LABEL) &&
+           isMasmCodeLabel(Target);
   // If resolved, relax if the value is too big for a (signed) i8.
   //
   // Currently, `jmp local@plt` relaxes JMP even if the offset is small,
@@ -776,6 +882,18 @@ bool X86AsmBackend::fixupNeedsRelaxationAdvanced(const MCFragment &,
 // we can relax?
 void X86AsmBackend::relaxInstruction(MCInst &Inst,
                                      const MCSubtargetInfo &STI) const {
+  // ML64.EXE: mov r64/r32, <label> = mov r, imm64/imm32 of its address.
+  if (MasmEncoding &&
+      (Inst.getOpcode() == X86::MOV64rm || Inst.getOpcode() == X86::MOV32rm)) {
+    MCInst Imm;
+    Imm.setOpcode(Inst.getOpcode() == X86::MOV64rm ? X86::MOV64ri
+                                                   : X86::MOV32ri);
+    Imm.addOperand(Inst.getOperand(0));
+    Imm.addOperand(Inst.getOperand(1 + X86::AddrDisp));
+    Imm.setLoc(Inst.getLoc());
+    Inst = Imm;
+    return;
+  }
   // The only relaxations X86 does is from a 1byte pcrel to a 4byte pcrel.
   bool Is16BitMode = STI.hasFeature(X86::Is16Bit);
   unsigned RelaxedOp = getRelaxedOpcode(Inst, Is16BitMode);
@@ -1119,10 +1237,12 @@ class WindowsX86AsmBackend : public X86AsmBackend {
 
 public:
   WindowsX86AsmBackend(const Target &T, bool is64Bit,
-                       const MCSubtargetInfo &STI, bool MasmEncoding = false)
+                       const MCSubtargetInfo &STI, bool MasmEncoding = false,
+                       bool MasmBugCompat = false)
     : X86AsmBackend(T, STI)
     , Is64Bit(is64Bit) {
     this->MasmEncoding = MasmEncoding;
+    this->MasmBugCompat = MasmEncoding && MasmBugCompat;
   }
 
   std::optional<MCFixupKind> getFixupKind(StringRef Name) const override {
@@ -1530,12 +1650,14 @@ MCAsmBackend *llvm::createX86_64AsmBackend(const Target &T,
     return new DarwinX86AsmBackend(T, MRI, STI);
 
   if (TheTriple.isOSWindows() && TheTriple.isOSBinFormatCOFF())
-    return new WindowsX86AsmBackend(T, true, STI, Options.X86MasmEncoding);
+    return new WindowsX86AsmBackend(T, true, STI, Options.X86MasmEncoding,
+                                    Options.X86MasmBugCompat);
 
   if (TheTriple.isUEFI()) {
     assert(TheTriple.isOSBinFormatCOFF() &&
          "Only COFF format is supported in UEFI environment.");
-    return new WindowsX86AsmBackend(T, true, STI, Options.X86MasmEncoding);
+    return new WindowsX86AsmBackend(T, true, STI, Options.X86MasmEncoding,
+                                    Options.X86MasmBugCompat);
   }
 
   uint8_t OSABI = MCELFObjectTargetWriter::getOSABI(TheTriple.getOS());

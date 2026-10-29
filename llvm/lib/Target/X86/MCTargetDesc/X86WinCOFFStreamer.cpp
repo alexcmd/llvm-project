@@ -11,7 +11,9 @@
 #include "llvm/MC/MCAsmBackend.h"
 #include "llvm/MC/MCAssembler.h"
 #include "llvm/MC/MCCodeEmitter.h"
+#include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCObjectWriter.h"
+#include "llvm/MC/MCTargetOptions.h"
 #include "llvm/MC/MCWin64EH.h"
 #include "llvm/MC/MCWinCOFFStreamer.h"
 
@@ -27,6 +29,8 @@ public:
       : MCWinCOFFStreamer(C, std::move(AB), std::move(CE), std::move(OW)) {}
 
   void emitInstruction(const MCInst &Inst, const MCSubtargetInfo &STI) override;
+  void emitWinCFIStartProc(const MCSymbol *Symbol, SMLoc Loc) override;
+  void emitWinCFIEndProlog(SMLoc Loc) override;
   void emitWinEHHandlerData(SMLoc Loc) override;
   void emitWindowsUnwindTables(WinEH::FrameInfo *Frame) override;
   void emitWindowsUnwindTables() override;
@@ -37,6 +41,33 @@ public:
 void X86WinCOFFStreamer::emitInstruction(const MCInst &Inst,
                                          const MCSubtargetInfo &STI) {
   X86_MC::emitInstruction(*this, Inst, STI);
+}
+
+// ML64.EXE (X86MasmEncoding) creates a code section's .pdata at its first
+// PROC FRAME and the module's .xdata at the first .endprolog; the COFF section
+// table follows creation order (.text, .pdata, .xdata, <next segment>, ...).
+static bool isMasmUnwind(const MCContext &C) {
+  return C.getTargetOptions().X86MasmEncoding &&
+         C.getTargetTriple().getArch() == Triple::x86_64;
+}
+
+void X86WinCOFFStreamer::emitWinCFIStartProc(const MCSymbol *Symbol,
+                                             SMLoc Loc) {
+  MCWinCOFFStreamer::emitWinCFIStartProc(Symbol, Loc);
+  if (isMasmUnwind(getContext()) && getCurrentWinFrameInfo()) {
+    pushSection();
+    switchSection(getAssociatedPDataSection(getCurrentSectionOnly()));
+    popSection();
+  }
+}
+
+void X86WinCOFFStreamer::emitWinCFIEndProlog(SMLoc Loc) {
+  MCWinCOFFStreamer::emitWinCFIEndProlog(Loc);
+  if (isMasmUnwind(getContext()) && getCurrentWinFrameInfo()) {
+    pushSection();
+    switchSection(getAssociatedXDataSection(getCurrentSectionOnly()));
+    popSection();
+  }
 }
 
 void X86WinCOFFStreamer::emitWinEHHandlerData(SMLoc Loc) {

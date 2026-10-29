@@ -11,9 +11,11 @@
 #include "llvm/MC/MCAssembler.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCExpr.h"
+#include "llvm/MC/MCObjectFileInfo.h"
 #include "llvm/MC/MCObjectStreamer.h"
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSymbol.h"
+#include "llvm/MC/MCTargetOptions.h"
 #include "llvm/MC/MCValue.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/Win64EH.h"
@@ -174,6 +176,24 @@ static void EmitAbsDifference16(MCStreamer &Streamer, const MCSymbol *LHS,
   Streamer.emitValue(Diff, 2);
 }
 
+// ML64.EXE unwind layout (MCTargetOptions::X86MasmEncoding, x64): an
+// UNWIND_INFO without codes is 4 bytes, .xdata is 8-aligned, UOP_SetFPReg
+// carries the frame register in its op info, and .pdata relocates against the
+// function symbol and '$xdatasym' (a static symbol at the start of the
+// module's single .xdata) instead of section symbols. Section order:
+// X86WinCOFFStreamer.
+static bool isMasmUnwind(const MCContext &C) {
+  return C.getTargetOptions().X86MasmEncoding &&
+         C.getTargetTriple().getArch() == Triple::x86_64;
+}
+
+// '$xdatasym' when \p Sec is the module .xdata in ML64.EXE layout.
+static MCSymbol *getMasmXDataSym(MCContext &C, const MCSection *Sec) {
+  if (!isMasmUnwind(C) || Sec != C.getObjectFileInfo()->getXDataSection())
+    return nullptr;
+  return C.getOrCreateSymbol("$xdatasym");
+}
+
 static void EmitUnwindCode(MCStreamer &streamer, const MCSymbol *begin,
                            WinEH::Instruction &inst) {
   uint8_t b2;
@@ -216,6 +236,8 @@ static void EmitUnwindCode(MCStreamer &streamer, const MCSymbol *begin,
     streamer.emitInt8(b2);
     break;
   case Win64EH::UOP_SetFPReg:
+    if (isMasmUnwind(streamer.getContext()))
+      b2 |= (inst.Register & 0x0F) << 4;
     EmitAbsDifference(streamer, inst.Label, begin);
     streamer.emitInt8(b2);
     break;
@@ -280,8 +302,18 @@ static void EmitRuntimeFunction(MCStreamer &streamer,
   MCContext &context = streamer.getContext();
 
   streamer.emitValueToAlignment(Align(4));
-  EmitSymbolRefWithOfs(streamer, info->Begin, info->Begin);
-  EmitSymbolRefWithOfs(streamer, info->Begin, info->End);
+  const MCSymbol *Base = info->Begin;
+  if (isMasmUnwind(context) && info->Function && info->Function->isInSection() &&
+      &info->Function->getSection() == &info->Begin->getSection())
+    Base = info->Function;
+  EmitSymbolRefWithOfs(streamer, Base, info->Begin);
+  EmitSymbolRefWithOfs(streamer, Base, info->End);
+  if (MCSymbol *XSym = info->Symbol->isInSection()
+                           ? getMasmXDataSym(context, &info->Symbol->getSection())
+                           : nullptr) {
+    EmitSymbolRefWithOfs(streamer, XSym, info->Symbol);
+    return;
+  }
   streamer.emitValue(MCSymbolRefExpr::create(info->Symbol,
                                              MCSymbolRefExpr::VK_COFF_IMGREL32,
                                              context), 4);
@@ -899,6 +931,12 @@ static void EmitUnwindInfo(MCStreamer &streamer, WinEH::FrameInfo *info) {
   MCObjectStreamer *OS = (MCObjectStreamer *)(&streamer);
   MCSymbol *Label = context.createTempSymbol();
 
+  if (MCSymbol *XSym =
+          getMasmXDataSym(context, streamer.getCurrentSectionOnly())) {
+    streamer.getCurrentSectionOnly()->ensureMinAlignment(Align(8));
+    if (!XSym->isDefined())
+      streamer.emitLabel(XSym);
+  }
   streamer.emitValueToAlignment(Align(4));
   streamer.emitLabel(Label);
   info->Symbol = Label;
@@ -1049,7 +1087,7 @@ static void EmitUnwindInfo(MCStreamer &streamer, WinEH::FrameInfo *info) {
     streamer.emitValue(MCSymbolRefExpr::create(info->ExceptionHandler,
                                               MCSymbolRefExpr::VK_COFF_IMGREL32,
                                               context), 4);
-  else if (numCodes == 0) {
+  else if (numCodes == 0 && !isMasmUnwind(context)) {
     // The minimum size of an UNWIND_INFO struct is 8 bytes. If we're not
     // a chained unwind info, if there is no handler, and if there are fewer
     // than 2 slots used in the unwind code array, we have to pad to 8 bytes.

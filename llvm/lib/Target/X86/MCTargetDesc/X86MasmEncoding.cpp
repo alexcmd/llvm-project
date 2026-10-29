@@ -26,9 +26,10 @@
 // immediate use IMAGE_REL_AMD64_REL32_<imm size> (X86MCCodeEmitter,
 // X86WinCOFFObjectWriter), every RIP-relative operand keeps its relocation
 // (X86AsmBackend::applyFixup), branches to a function in the same section are
-// resolved (WinCOFFObjectWriter), '$' is the location counter (MasmParser).
-// Not reproduced: ML64 picks movabs for 'mov r64, 0FFFFFFFFFFFFFFFFh' but
-// 48 c7 c0 for 'mov r64, -1' (MASM's constants keep a sign; MCExpr does not).
+// resolved (WinCOFFObjectWriter), '$' is the location counter (MasmParser;
+// in code a LABEL symbol $$<offset>), 'mov r64, 0FFFFFFFFFFFFFFFFh' is movabs
+// but 'mov r64, -1' 48 c7 c0 (X86AsmParser: MASM constants keep a sign),
+// x64 unwind tables follow ML64's layout (MCWin64EH, X86WinCOFFStreamer).
 //
 //===----------------------------------------------------------------------===//
 

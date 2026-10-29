@@ -28,6 +28,7 @@
 #include "llvm/MC/MCSection.h"
 #include "llvm/MC/MCSectionCOFF.h"
 #include "llvm/MC/MCSymbol.h"
+#include "llvm/MC/MCTargetOptions.h"
 #include "llvm/MC/MCWin64EH.h"
 #include "llvm/MC/MCWinEH.h"
 #include "llvm/MC/MCWinEH4.h"
@@ -965,6 +966,12 @@ MCSection *MCStreamer::getAssociatedPDataSection(const MCSection *TextSec) {
 }
 
 MCSection *MCStreamer::getAssociatedXDataSection(const MCSection *TextSec) {
+  // ML64.EXE (X86MasmEncoding): one .xdata for all non-COMDAT code sections.
+  if (getContext().getTargetOptions().X86MasmEncoding &&
+      getContext().getTargetTriple().getArch() == Triple::x86_64 &&
+      !(static_cast<const MCSectionCOFF *>(TextSec)->getCharacteristics() &
+        COFF::IMAGE_SCN_LNK_COMDAT))
+    return getContext().getObjectFileInfo()->getXDataSection();
   return getWinCFISection(getContext(), &NextWinCFIID,
                           getContext().getObjectFileInfo()->getXDataSection(),
                           TextSec);

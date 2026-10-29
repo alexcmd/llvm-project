@@ -4383,6 +4383,9 @@ void X86AsmParser::emitInstruction(MCInst &Inst, OperandVector &Operands,
     X86Operand &Op0 = static_cast<X86Operand &>(*Operands[0]);
     X86::rewriteForMasmEncoding(Inst, MII, is64BitMode(),
                                 Op0.isToken() ? Op0.getToken() : "");
+    // An explicit {load}/{store} wins over ML64.EXE's reg,reg direction.
+    if (ForcedOpcodeForm != OpcodeForm_Default)
+      applyForcedOpcodeForm(Inst);
   }
 
   Out.emitInstruction(Inst, getSTI());

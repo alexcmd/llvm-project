@@ -9688,6 +9688,64 @@ def _SLASH_Zm : CLIgnoredJoined<"Zm">;
 def _SLASH_Zo : CLIgnoredFlag<"Zo">;
 def _SLASH_Zo_ : CLIgnoredFlag<"Zo-">;
 
+// Documented cl.exe switches that clang-cl lacked (tasks/compat/10). Accepted
+// as no-ops; each has a CLANG-CL-GAP tag. /PD is claimed in Driver.cpp, where
+// its D9007 warning is emitted. /analyze is task 40; /Qspectre-jmp is task 25.
+def _SLASH_Gu : CLIgnoredFlag<"Gu">; // CLANG-CL-GAP(Gu): no effect here
+def _SLASH_PD : CLFlag<"PD">;        // CLANG-CL-GAP(PD): macro dump with /E
+def _SLASH_PH : CLIgnoredFlag<"PH">; // CLANG-CL-GAP(PH): file_hash with /E
+def _SLASH_feature_APX : CLIgnoredFlag<"feature:APX">; // CLANG-CL-GAP(feature)
+def _SLASH_fpcvt_IA : CLIgnoredFlag<"fpcvt:IA">;       // CLANG-CL-GAP(fpcvt)
+def _SLASH_fpcvt_BC : CLIgnoredFlag<"fpcvt:BC">;       // CLANG-CL-GAP(fpcvt)
+def _SLASH_jumptablerdata : CLIgnoredFlag<"jumptablerdata">; // CLANG-CL-GAP(jtrd)
+def _SLASH_limitTemplateNotes : CLIgnoredJoined<"limitTemplateNotes:">; // CLANG-CL-GAP(ltn)
+def _SLASH_presetPadding : CLIgnoredFlag<"presetPadding">; // CLANG-CL-GAP(preset)
+def _SLASH_sourcelink : CLIgnoredJoined<"sourcelink:">; // CLANG-CL-GAP(sourcelink)
+def _SLASH_templateDepth : CLCompileJoined<"templateDepth:">, Alias<ftemplate_depth_EQ>;
+def _SLASH_volatileMetadata : CLIgnoredFlag<"volatileMetadata">; // CLANG-CL-GAP(volatilemd)
+def _SLASH_volatileMetadata_ : CLIgnoredFlag<"volatileMetadata-">; // CLANG-CL-GAP(volatilemd)
+
+// Undocumented cl.exe switches (cl /d1 internal toggles): cl accepts them
+// silently, so they are no-ops here too. CLANG-CL-GAP(hidden).
+def _SLASH_Bs : CLIgnoredFlag<"Bs">;
+def _SLASH_Bscn : CLIgnoredFlag<"Bscn">;
+def _SLASH_Zf : CLIgnoredFlag<"Zf">;
+def _SLASH_Zf_ : CLIgnoredFlag<"Zf-">;
+def _SLASH_WL_ : CLIgnoredFlag<"WL-">;
+def _SLASH_typedil : CLIgnoredFlag<"typedil">;
+def _SLASH_forceZ7 : CLIgnoredFlag<"forceZ7">;
+def _SLASH_in_memory_il : CLIgnoredFlag<"in_memory_il">;
+def _SLASH_noFileLocks : CLIgnoredFlag<"noFileLocks">;
+def _SLASH_allowIfExists : CLIgnoredFlag<"allowIfExists">;
+def _SLASH_allowIfExists_ : CLIgnoredFlag<"allowIfExists-">;
+def _SLASH_allowSuper : CLIgnoredFlag<"allowSuper">;
+def _SLASH_allowSuper_ : CLIgnoredFlag<"allowSuper-">;
+def _SLASH_presetPadding_ : CLIgnoredFlag<"presetPadding-">;
+def _SLASH_presetAggregateArray : CLIgnoredFlag<"presetAggregateArray">;
+def _SLASH_presetAggregateArray_ : CLIgnoredFlag<"presetAggregateArray-">;
+def _SLASH_presetAggregateStorage : CLIgnoredFlag<"presetAggregateStorage">;
+def _SLASH_presetAggregateStorage_ : CLIgnoredFlag<"presetAggregateStorage-">;
+def _SLASH_presetArrays : CLIgnoredFlag<"presetArrays">;
+def _SLASH_presetArrays_ : CLIgnoredFlag<"presetArrays-">;
+def _SLASH_presetArraysOfPointers : CLIgnoredFlag<"presetArraysOfPointers">;
+def _SLASH_presetArraysOfPointers_ : CLIgnoredFlag<"presetArraysOfPointers-">;
+def _SLASH_presetClassArray : CLIgnoredFlag<"presetClassArray">;
+def _SLASH_presetClassArray_ : CLIgnoredFlag<"presetClassArray-">;
+def _SLASH_presetClassStorage : CLIgnoredFlag<"presetClassStorage">;
+def _SLASH_presetClassStorage_ : CLIgnoredFlag<"presetClassStorage-">;
+def _SLASH_presetObjectStorage : CLIgnoredFlag<"presetObjectStorage">;
+def _SLASH_presetObjectStorage_ : CLIgnoredFlag<"presetObjectStorage-">;
+def _SLASH_presetPointerArray : CLIgnoredFlag<"presetPointerArray">;
+def _SLASH_presetPointerArray_ : CLIgnoredFlag<"presetPointerArray-">;
+def _SLASH_presetPointers : CLIgnoredFlag<"presetPointers">;
+def _SLASH_presetPointers_ : CLIgnoredFlag<"presetPointers-">;
+def _SLASH_presetPointersToMembers : CLIgnoredFlag<"presetPointersToMembers">;
+def _SLASH_presetPointersToMembers_ : CLIgnoredFlag<"presetPointersToMembers-">;
+def _SLASH_presetScalarArray : CLIgnoredFlag<"presetScalarArray">;
+def _SLASH_presetScalarArray_ : CLIgnoredFlag<"presetScalarArray-">;
+def _SLASH_presetScalars : CLIgnoredFlag<"presetScalars">;
+def _SLASH_presetScalars_ : CLIgnoredFlag<"presetScalars-">;
+
 
 // Unsupported:
 

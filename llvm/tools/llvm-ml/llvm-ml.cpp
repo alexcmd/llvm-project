@@ -11,6 +11,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/ADT/StringSwitch.h"
+#include "llvm/Config/llvm-config.h"
+#include "llvm/Support/VCSRevision.h"
 #include "llvm/MC/MCAsmBackend.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCCodeEmitter.h"
@@ -252,6 +254,12 @@ int llvm_ml_main(int Argc, char **Argv, const llvm::ToolContext &) {
     setCurrentDebugTypes(Arg->getValues().data(), Arg->getNumValues());
   }
 
+  if (InputArgs.hasArg(OPT_version)) {
+    // Same identity string as clang/lld: openrt marker + fork commit.
+    outs() << ProgName << " version " LLVM_VERSION_STRING " (" LLVM_REPOSITORY
+           << " " << LLVM_REVISION << ")\n";
+    return 0;
+  }
   if (InputArgs.hasArg(OPT_help)) {
     std::string Usage = llvm::formatv("{0} [ /options ] file", ProgName).str();
     T.printHelp(outs(), Usage.c_str(), "LLVM MASM Assembler",

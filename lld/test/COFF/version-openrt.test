@@ -1,0 +1,4 @@
+# lld-link --version carries the openrt marker and the fork commit.
+
+# RUN: lld-link --version | FileCheck %s
+# CHECK: LLD {{[0-9.]+}} (openrt {{[0-9a-f]+}})

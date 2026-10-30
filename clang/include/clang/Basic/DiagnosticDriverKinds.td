@@ -16,6 +16,14 @@ def warn_drv_ignoring_unknown_option : Warning<
 // MSVC text, verbatim (tasks/compat/03: rewritten clean-room before release).
 def warn_drv_cl_pd_requires_zc : Warning<
   "D9007 : '/PD' requires '/Zc:preprocessor'; option ignored">;
+// cl.exe 14.51 (probes_cl_decisions.md section 1): verbatim, exit codes differ (GAP).
+def err_drv_cl_requires_argument : Error<"D8004 : '%0' requires an argument">;
+def err_drv_cl_invalid_numeric_argument : Error<
+  "D8021 : invalid numeric argument '%0'">;
+def err_drv_cl_c1xx_unknown_flag : Error<
+  "fatal error C1007: unrecognized flag '-%0' in 'c1xx'">;
+def err_drv_cl_p2_unknown_flag : Error<
+  "fatal error C1007: unrecognized flag '-%0' in 'p2'">;
 def err_drv_unsupported_opt : Error<"unsupported option '%0'">;
 def err_drv_unsupported_opt_with_suggestion : Error<
   "unsupported option '%0'; did you mean '%1'?">;

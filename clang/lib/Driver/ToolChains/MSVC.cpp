@@ -293,6 +293,20 @@ void visualstudio::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   }
   Args.AddAllArgValues(CmdArgs, options::OPT__SLASH_link);
 
+  // cl.exe: /F<n> sets the PE stack reserve, read as hex unless 0x (probe: /F1000
+  // gives 0x1000); /KERNEL is a link flag. Both forwarded (classes J and K).
+  if (Arg *A = Args.getLastArg(options::OPT__SLASH_F)) {
+    A->claim();
+    StringRef N = A->getValue();
+    if (!N.empty())
+      CmdArgs.push_back(Args.MakeArgString(
+          Twine("/STACK:") + (N.starts_with_insensitive("0x") ? Twine(N) : Twine("0x") + N)));
+  }
+  if (Arg *A = Args.getLastArg(options::OPT__SLASH_KERNEL)) {
+    A->claim();
+    CmdArgs.push_back("/KERNEL");
+  }
+
   // Control Flow Guard checks
   for (const Arg *A : Args.filtered(options::OPT__SLASH_guard)) {
     StringRef GuardArgs = A->getValue();

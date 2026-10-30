@@ -8,11 +8,10 @@
 
 // RUN: env _CL_="@%t.rsp" %clang_cl -### -c %s 2>&1 | FileCheck %s --check-prefix=CL-RSP
 
-// RUN: env CL="/DENV=7" %clang_cl -### -c /DENV=3 %s 2>&1 | FileCheck %s --check-prefix=ORDER
+// RUN: env CL="/DENV=7" %clang_cl -### -c /DENV=3 %s 2>&1 | FileCheck %s --check-prefix=ORDER-CL
 // RUN: env CL="/DENV=7" _CL_="/DENV=9" %clang_cl -### -c /DENV=3 %s 2>&1 | FileCheck %s --check-prefix=ORDER
-// ORDER:      "-D" "ENV=7"
-// ORDER-NEXT: "-D" "ENV=3"
-// ORDER-NEXT: "-D" "ENV=9"
+// ORDER-CL: "-D" "ENV=7" {{.*}} "-D" "ENV=3"
+// ORDER: "-D" "ENV=7" {{.*}} "-D" "ENV=3" {{.*}} "-D" "ENV=9"
 
 // RUN: not env CL="@%t.missing" %clang_cl -### -c %s 2>&1 | FileCheck %s --check-prefix=MISSING
 // RUN: not env _CL_="@%t.missing" %clang_cl -### -c %s 2>&1 | FileCheck %s --check-prefix=MISSING

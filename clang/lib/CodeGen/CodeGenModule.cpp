@@ -1128,6 +1128,47 @@ CodeGenModule::StackProtectorAttribute(const Decl *D) const {
   return std::nullopt;
 }
 
+// cl.exe gives every file of the include closure its own JMC flag byte: headers
+// in post-order, the main file last (probes_cl_decisions.md section 2).
+static void collectJMCFiles(FileID FID,
+                            const DenseMap<FileID, SmallVector<FileID, 4>> &Kids,
+                            SmallVectorImpl<FileID> &Out) {
+  if (auto It = Kids.find(FID); It != Kids.end())
+    for (FileID Kid : It->second)
+      collectJMCFiles(Kid, Kids, Out);
+  Out.push_back(FID);
+}
+
+void CodeGenModule::emitJMCFileList() {
+  if (!CodeGenOpts.JMCInstrument || !getTriple().isWindowsMSVCEnvironment() ||
+      !getModuleDebugInfo())
+    return;
+  const SourceManager &SM = getContext().getSourceManager();
+  // Local FileIDs index the SLoc table; the include tree is rebuilt from the
+  // include locations (a file is a child of the file its #include sits in).
+  DenseMap<FileID, SmallVector<FileID, 4>> Kids;
+  for (unsigned I = 0, E = SM.local_sloc_entry_size(); I != E; ++I) {
+    FileID FID = FileID::get(I);
+    if (!SM.getSLocEntry(FID).isFile() || FID == SM.getMainFileID())
+      continue;
+    SourceLocation IncLoc = SM.getIncludeLoc(FID);
+    if (IncLoc.isValid())
+      Kids[SM.getFileID(IncLoc)].push_back(FID);
+  }
+  SmallVector<FileID, 16> Order;
+  collectJMCFiles(SM.getMainFileID(), Kids, Order);
+  NamedMDNode *Files =
+      getModule().getOrInsertNamedMetadata("llvm.msvc.jmc.files");
+  SmallPtrSet<const FileEntry *, 16> Seen;
+  for (FileID FID : Order) {
+    OptionalFileEntryRef FE = SM.getFileEntryRefForID(FID);
+    if (!FE || !Seen.insert(&FE->getFileEntry()).second)
+      continue;
+    Files->addOperand(
+        getModuleDebugInfo()->getOrCreateFile(SM.getLocForStartOfFile(FID)));
+  }
+}
+
 void CodeGenModule::Release() {
   Module *Primary = getContext().getCurrentNamedModule();
   if (CXX20ModuleInits && Primary && !Primary->isHeaderLikeModule())
@@ -1141,6 +1182,7 @@ void CodeGenModule::Release() {
   emitMultiVersionFunctions();
   emitPFPFieldsWithEvaluatedOffset();
   emitGlobalDeleteForwardingBodies();
+  emitJMCFileList();
 
   if (Context.getLangOpts().IncrementalExtensions &&
       GlobalTopLevelStmtBlockInFlight.first) {

@@ -862,6 +862,8 @@ def err_drv_invalid_or_unsupported_offload_target : Error<
 def err_drv_cuda_offload_only_emit_bc : Error<
   "CUDA offload target is supported only along with --emit-llvm">;
 
+def warn_drv_cl_jmc_requires_zi : Warning<
+  "D9007 : '/JMC' requires '/Zi, /ZI or /Z7'; option ignored">;
 def warn_drv_jmc_requires_debuginfo : Warning<
   "%0 requires debug info. Use %1 or debug options that enable debugger's "
   "stepping function; option ignored">,

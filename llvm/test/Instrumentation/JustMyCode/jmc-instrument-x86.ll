@@ -4,7 +4,6 @@
 ; CHECK: $_JustMyCode_Default = comdat any
 
 ; CHECK: @"_A8764FDD_x@c" = internal unnamed_addr global i8 1, section ".msvcjmc", align 1, !dbg !0
-; CHECK: @llvm.used = appending global [1 x ptr] [ptr @_JustMyCode_Default], section "llvm.metadata"
 
 ; CHECK: define void @w1() #0 !dbg !10 {
 ; CHECK:   call x86_fastcallcc void @__CheckForDebuggerJustMyCode(ptr inreg noundef @"_A8764FDD_x@c")

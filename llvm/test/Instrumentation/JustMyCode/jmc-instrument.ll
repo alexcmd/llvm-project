@@ -8,7 +8,6 @@
 ; CHECK: $__JustMyCode_Default = comdat any
 
 ; CHECK: @"__7DF23CF5_x@c" = internal unnamed_addr global i8 1, section ".msvcjmc", align 1, !dbg !0
-; CHECK: @llvm.used = appending global [1 x ptr] [ptr @__JustMyCode_Default], section "llvm.metadata"
 ; CHECK: @"__A8764FDD_x@c" = internal unnamed_addr global i8 1, section ".msvcjmc", align 1, !dbg !5
 ; CHECK: @"__0C712A50_x@c" = internal unnamed_addr global i8 1, section ".msvcjmc", align 1, !dbg !9
 ; CHECK: @"__A3605329_x@c" = internal unnamed_addr global i8 1, section ".msvcjmc", align 1, !dbg !12

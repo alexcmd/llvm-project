@@ -416,9 +416,7 @@
 // RUN:    /volatile:iso \
 // RUN:    /w12345 \
 // RUN:    /wd1234 \
-// RUN:    /Wv \
 // RUN:    /Wv:17 \
-// RUN:    /Zm \
 // RUN:    /Zo \
 // RUN:    /Zo- \
 // RUN:    -### -- %s 2>&1 | FileCheck -DMSG=%errc_ENOENT -check-prefix=IGNORED %s

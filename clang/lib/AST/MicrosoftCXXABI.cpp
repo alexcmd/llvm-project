@@ -234,10 +234,11 @@ MSInheritanceModel CXXRecordDecl::getMSInheritanceModel() const {
   return IA->getInheritanceModel();
 }
 
+// Null data member pointers: cl writes -1 in single-field models even for
+// polymorphic classes (task 21, PMF-NULL-DATA-POLY: SP/MP/UP = ff ff ff ff).
 bool CXXRecordDecl::nullFieldOffsetIsZero() const {
   return !inheritanceModelHasOnlyOneField(/*IsMemberFunction=*/false,
-                                          getMSInheritanceModel()) ||
-         (hasDefinition() && isPolymorphic());
+                                          getMSInheritanceModel());
 }
 
 MSVtorDispMode CXXRecordDecl::getMSVtorDispMode() const {

@@ -1851,17 +1851,9 @@ void MicrosoftCXXNameMangler::mangleTemplateArg(const TemplateDecl *TD,
           mangleMemberDataPointer(RD, nullptr, nullptr, QualType());
           return;
         }
-        // nullptr data pointers are always represented with a single field
-        // which is initialized with either 0 or -1.  Why -1?  Well, we need to
-        // distinguish the case where the data member is at offset zero in the
-        // record.
-        // However, we are free to use 0 *if* we would use multiple fields for
-        // non-nullptr member pointers.
-        if (!RD->nullFieldOffsetIsZero()) {
-          mangleIntegerLiteral(llvm::APSInt::get(-1),
-                               cast<NonTypeTemplateParmDecl>(Parm), T);
-          return;
-        }
+        // cl.exe mangles a nullptr data pointer function-template argument as 0
+        // for every inheritance model (task 21, PMF-NULL-DATA-POLY); class templates keep
+        // the representation mangled above (-1 or {0,-1}).
       }
     }
     mangleIntegerLiteral(llvm::APSInt::getUnsigned(0),

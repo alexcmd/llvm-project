@@ -9224,6 +9224,22 @@ def _SLASH_d1PP : CLFlag<"d1PP">,
 def _SLASH_d1reportAllClassLayout : CLFlag<"d1reportAllClassLayout">,
   HelpText<"Dump record layout information">,
   Alias<Xclang>, AliasArgs<["-fdump-record-layouts"]>;
+// cl.exe accepts these d1/d2 names silently (exit 0); the generic /d1 and /d2
+// joined defs reject everything else with C1007 (Clang.cpp). Output-producing
+// spellings (/d1reportTime, /d2cgsummary) are accepted, output not reproduced.
+def _SLASH_d1aliasParseTrees_ : CLIgnoredFlag<"d1aliasParseTrees-">;
+def _SLASH_d1autoclassinit : CLIgnoredFlag<"d1autoclassinit">;
+def _SLASH_d1pragmaOnceSymlinks : CLIgnoredFlag<"d1pragmaOnceSymlinks">;
+def _SLASH_d1safedelete : CLIgnoredFlag<"d1safedelete">;
+def _SLASH_d1Zi : CLIgnoredFlag<"d1Zi">;
+def _SLASH_d1reportTime : CLIgnoredFlag<"d1reportTime">;
+def _SLASH_d1reportSingleClassLayout : CLIgnoredJoined<"d1reportSingleClassLayout">;
+def _SLASH_d2Fastcap : CLIgnoredFlag<"d2Fastcap">;
+def _SLASH_d2cgsummary : CLIgnoredFlag<"d2cgsummary">;
+// cl crashes (C1001) on /d2Zi; accepted, the crash is not reproduced.
+def _SLASH_d2Zi : CLIgnoredFlag<"d2Zi">;
+// cl accepts /d2foo silently (the only unknown /d2 name that is silent).
+def _SLASH_d2foo : CLIgnoredFlag<"d2foo">;
 def _SLASH_diagnostics_caret : CLFlag<"diagnostics:caret">,
   HelpText<"Enable caret and column diagnostics (default)">;
 def _SLASH_diagnostics_column : CLFlag<"diagnostics:column">,
@@ -9767,6 +9783,7 @@ def _SLASH_favor : CLJoined<"favor">;
 def _SLASH_fsanitize_address_use_after_return : CLJoined<"fsanitize-address-use-after-return">;
 def _SLASH_fno_sanitize_address_vcasan_lib : CLJoined<"fno-sanitize-address-vcasan-lib">;
 def _SLASH_F : CLJoinedOrSeparate<"F">;
+def _SLASH_KERNEL : CLFlag<"KERNEL">;
 def _SLASH_Fm : CLJoined<"Fm">;
 def _SLASH_Fr : CLJoined<"Fr">;
 def _SLASH_FR : CLJoined<"FR">;
@@ -9804,6 +9821,11 @@ def _SLASH_Qspectre_load_cf : CLFlag<"Qspectre-load-cf">;
 def _SLASH_Qvec_report : CLJoined<"Qvec-report">;
 def _SLASH_reference : CLJoinedOrSeparate<"reference">;
 def _SLASH_sourceDependencies : CLJoinedOrSeparate<"sourceDependencies">;
+// cl.exe takes an argument for these and gives D8004 without one (Clang.cpp).
+def _SLASH_fileMapping : CLJoinedOrSeparate<"fileMapping">;
+def _SLASH_ifcOutput : CLJoinedOrSeparate<"ifcOutput">;
+def _SLASH_scanDependencies : CLJoinedOrSeparate<"scanDependencies">;
+def _SLASH_dA : CLJoinedOrSeparate<"dA">;
 def _SLASH_sourceDependenciesDirectives : CLJoinedOrSeparate<"sourceDependencies:directives">;
 def _SLASH_translateInclude : CLFlag<"translateInclude">;
 def _SLASH_u : CLFlag<"u">;

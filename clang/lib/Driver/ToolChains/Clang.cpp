@@ -6675,6 +6675,33 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
 
   Args.AddAllArgs(CmdArgs, options::OPT_R_Group);
 
+  // cl.exe: these take an argument; without one it is D8004 (exit 2).
+  for (const Arg *A : Args.filtered(options::OPT__SLASH_fileMapping,
+                                    options::OPT__SLASH_ifcOutput,
+                                    options::OPT__SLASH_scanDependencies,
+                                    options::OPT__SLASH_dA,
+                                    options::OPT__SLASH_sourceDependencies,
+                                    options::OPT__SLASH_headerUnit)) {
+    A->claim();
+    if (A->getValue()[0] == '\0' && !A->getSpelling().empty())
+      D.Diag(diag::err_drv_cl_requires_argument) << A->getSpelling();
+  }
+
+  // cl.exe: an unknown /d1 name is C1007 from c1xx, an unknown /d2 name C1007
+  // from p2; a bare name is D8004 (probes_cl_decisions.md section 1). Known
+  // spellings have their own defs in Options.td and never reach here.
+  for (const Arg *A : Args.filtered(options::OPT__SLASH_d1,
+                                    options::OPT__SLASH_d2)) {
+    A->claim();
+    bool IsD1 = A->getOption().matches(options::OPT__SLASH_d1);
+    if (A->getValue()[0] == '\0')
+      D.Diag(diag::err_drv_cl_requires_argument) << A->getSpelling();
+    else if (IsD1)
+      D.Diag(diag::err_drv_cl_c1xx_unknown_flag) << A->getValue();
+    else
+      D.Diag(diag::err_drv_cl_p2_unknown_flag) << A->getValue();
+  }
+
   for (const Arg *A : Args.filtered(options::OPT_W_Group, options::OPT__SLASH_wd,
                                     options::OPT__SLASH_we,
                                     options::OPT__SLASH_wo,
@@ -6689,15 +6716,25 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
       StringRef Value = A->getValue();
       unsigned Level = 1;
       if (A->getOption().matches(options::OPT__SLASH_w)) {
-        if (Value.size() < 2 || Value[0] < '0' || Value[0] > '9')
+        // cl.exe: a bare /w<l> is D8004; a non-digit level is D8021.
+        if (Value.size() == 1 && Value[0] >= '0' && Value[0] <= '9') {
+          D.Diag(diag::err_drv_cl_requires_argument) << ("/w" + Value).str();
           continue;
+        }
+        if (Value.size() < 2 || Value[0] < '0' || Value[0] > '9') {
+          D.Diag(diag::err_drv_cl_invalid_numeric_argument)
+              << ("/w" + Value).str();
+          continue;
+        }
         Level = Value[0] - '0';
         Value = Value.drop_front();
       }
       unsigned WarningNumber;
       if (Value.getAsInteger(10, WarningNumber)) {
-        D.Diag(diag::err_drv_invalid_int_value)
-            << A->getAsString(Args) << A->getValue();
+        D.Diag(diag::err_drv_cl_invalid_numeric_argument)
+            << (A->getOption().matches(options::OPT__SLASH_w)
+                    ? "/w" + A->getValue()
+                    : A->getSpelling() + A->getValue()).str();
         continue;
       }
 

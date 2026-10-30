@@ -407,3 +407,43 @@ def tlbid : P_priv<"tlbid">;
 def tlbout : P_priv<"tlbout">;
 def verbose_all : P_priv<"verbose">;
 def guardsym : P_priv<"guardsym">;
+
+// link.exe options lld-link does not implement (tasks/compat/14). They are
+// parsed here; Driver.cpp refuses or ignores them.
+// CLR, signing and PGO change the image: they are errors (LNK-style),
+// never silently ignored.
+def clr_flag_supportlasterror : F<"CLRSUPPORTLASTERROR">;  // LLD-GAP(clr)
+def clr_flag_unmanagedcodecheck : F<"CLRUNMANAGEDCODECHECK">;  // LLD-GAP(clr)
+def clr_p_assemblylinkresource : P_priv<"ASSEMBLYLINKRESOURCE">;  // LLD-GAP(clr)
+def clr_p_assemblymodule : P_priv<"ASSEMBLYMODULE">;  // LLD-GAP(clr)
+def clr_p_assemblyresource : P_priv<"ASSEMBLYRESOURCE">;  // LLD-GAP(clr)
+def clr_p_imagetype : P_priv<"CLRIMAGETYPE">;  // LLD-GAP(clr)
+def clr_p_loaderoptimization : P_priv<"CLRLOADEROPTIMIZATION">;  // LLD-GAP(clr)
+def clr_p_threadattribute : P_priv<"CLRTHREADATTRIBUTE">;  // LLD-GAP(clr)
+def clr_flag_noassembly : F<"NOASSEMBLY">;  // LLD-GAP(clr)
+def clr_p_midl : P_priv<"MIDL">;  // LLD-GAP(clr)
+def clr_flag_winmd : F<"WINMD">;  // LLD-GAP(clr)
+def clr_flag_winmddelaysign : F<"WINMDDELAYSIGN">;  // LLD-GAP(clr)
+def clr_p_winmdfile : P_priv<"WINMDFILE">;  // LLD-GAP(clr)
+def clr_p_winmdkeycontainer : P_priv<"WINMDKEYCONTAINER">;  // LLD-GAP(clr)
+def clr_p_winmdkeyfile : P_priv<"WINMDKEYFILE">;  // LLD-GAP(clr)
+def sign_flag_delaysign : F<"DELAYSIGN">;  // LLD-GAP(signing)
+def sign_p_keycontainer : P_priv<"KEYCONTAINER">;  // LLD-GAP(signing)
+def sign_p_keyfile : P_priv<"KEYFILE">;  // LLD-GAP(signing)
+def pgo_flag_genprofile : F<"GENPROFILE">;  // LLD-GAP(pgo)
+def pgo_flag_fastgenprofile : F<"FASTGENPROFILE">;  // LLD-GAP(pgo)
+def pgo_flag_useprofile : F<"USEPROFILE">;  // LLD-GAP(pgo)
+def pgo_flag_spgo : F<"SPGO">;  // LLD-GAP(pgo)
+def pgo_flag_spdembed : F<"SPDEMBED">;  // LLD-GAP(pgo)
+def pgo_p_spd : P_priv<"SPD">;  // LLD-GAP(pgo)
+def pgo_p_spdin : P_priv<"SPDIN">;  // LLD-GAP(pgo)
+
+// Accepted and ignored (LLD-GAP): no effect on the image that lld-link
+// produces here. Kept so that link lines copied from MSVC projects parse.
+def gap_p_sourcelink : P_priv<"SOURCELINK">;  // LLD-GAP(ignored)
+def gap_flag_emitvolatilemetadata : F<"EMITVOLATILEMETADATA">;  // LLD-GAP(ignored)
+def gap_flag_dynamicdeopt : F<"DYNAMICDEOPT">;  // LLD-GAP(ignored)
+def gap_flag_dynamicdeopt_allowicf : F<"DYNAMICDEOPT-ALLOWICF">;  // LLD-GAP(ignored)
+def gap_flag_exportpadmin : F<"EXPORTPADMIN">;  // LLD-GAP(ignored)
+def gap_p_linkreprotarget : P_priv<"LINKREPROTARGET">;  // LLD-GAP(ignored)
+def gap_p_pdbinject : P_priv<"PDBINJECT">;  // LLD-GAP(ignored)

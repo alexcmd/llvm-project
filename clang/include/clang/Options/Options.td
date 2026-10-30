@@ -9230,6 +9230,10 @@ def _SLASH_GA : CLFlag<"GA">, Alias<ftlsmodel_EQ>, AliasArgs<["local-exec"]>,
   HelpText<"Assume thread-local variables are defined in the executable">;
 def _SLASH_GR : CLFlag<"GR">, HelpText<"Emit RTTI data (default)">;
 def _SLASH_GR_ : CLFlag<"GR-">, HelpText<"Do not emit RTTI data">;
+// Link-time switches cl.exe accepts and ignores when compiling. They must not
+// be read as /D macros (/DEBUG:CTYPES would define "EBUG:CTYPES").
+def _SLASH_DEBUG_link : CLIgnoredJoined<"DEBUG">;
+def _SLASH_DYNAMICDEOPT_link : CLIgnoredJoined<"DYNAMICDEOPT">;
 def _SLASH_GF : CLIgnoredFlag<"GF">,
   HelpText<"Enable string pooling (default)">;
 def _SLASH_GF_ : CLFlag<"GF-">, HelpText<"Disable string pooling">,

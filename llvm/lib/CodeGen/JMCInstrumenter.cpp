@@ -190,7 +190,7 @@ bool runImpl(Module &M) {
         if (CUs->getNumOperands())
           CU = dyn_cast<DICompileUnit>(CUs->getOperand(0));
       SmallVector<GlobalValue *, 16> Used;
-      for (const MDNode *N : Files->operands())
+      for (MDNode *N : Files->operands())
         if (auto *File = dyn_cast<DIFile>(N))
           if (auto *GV = dyn_cast<GlobalVariable>(getFlag(File, CU)))
             Used.push_back(GV);

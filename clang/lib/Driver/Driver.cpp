@@ -7542,6 +7542,13 @@ llvm::Error driver::expandResponseFiles(SmallVectorImpl<const char *> &Args,
   if (llvm::Error Err = ECtx.expandResponseFiles(Args))
     return Err;
 
+  // cl.exe reads every '@' argument as a response file, so one left here is a
+  // missing file (D8022), not an input. -cc1 arguments are not CL-style.
+  if (ClangCLMode && !(Args.size() > 1 && Args[1] &&
+                       StringRef(Args[1]).starts_with("-cc1")))
+    if (llvm::Error Err = checkCLResponseFilesExist(Args))
+      return Err;
+
   // If -cc1 came from a response file, remove the EOL sentinels.
   auto FirstArg = llvm::find_if(llvm::drop_begin(Args),
                                 [](const char *A) { return A != nullptr; });
@@ -7553,6 +7560,15 @@ llvm::Error driver::expandResponseFiles(SmallVectorImpl<const char *> &Args,
     }
   }
 
+  return llvm::Error::success();
+}
+
+llvm::Error driver::checkCLResponseFilesExist(ArrayRef<const char *> Args) {
+  for (const char *Arg : Args)
+    if (Arg && Arg[0] == '@')
+      return llvm::createStringError(
+          llvm::inconvertibleErrorCode(),
+          "clang-cl: error: D8022 : cannot open '%s'", Arg + 1);
   return llvm::Error::success();
 }
 

@@ -846,6 +846,10 @@ llvm::Error expandResponseFiles(SmallVectorImpl<const char *> &Args,
                                 bool ClangCLMode, llvm::BumpPtrAllocator &Alloc,
                                 llvm::vfs::FileSystem *FS = nullptr);
 
+/// CL mode: an '@file' argument still present after response file expansion
+/// names a missing file, which is error D8022 (cl.exe) and not an input file.
+llvm::Error checkCLResponseFilesExist(ArrayRef<const char *> Args);
+
 /// Apply a space separated list of edits to the input argument lists.
 /// See applyOneOverrideOption.
 void applyOverrideOptions(SmallVectorImpl<const char *> &Args,

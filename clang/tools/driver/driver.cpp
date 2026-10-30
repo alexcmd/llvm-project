@@ -497,6 +497,11 @@ int clang_main(int Argc, char **Argv, const llvm::ToolContext &ToolContext) {
   }
 #endif
 
+  // cl.exe exits 2 for any failed compile (C-coded errors, C1083 missing
+  // source, /WX); clang-cl used to exit 1 (probed 14.51.36231).
+  if (ClangCLMode && Res == 1)
+    Res = 2;
+
   // If we have multiple failing commands, we return the result of the first
   // failing command.
   return Res;

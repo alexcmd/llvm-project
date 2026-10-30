@@ -4,7 +4,7 @@
 // RUN:     FileCheck %s --check-prefix=MULTILIB
 // RUN: not %clang %s -stdlibs=foo -hell -version -### 2>&1 | \
 // RUN:     FileCheck %s --check-prefix=DID-YOU-MEAN
-// RUN: %clang_cl -cake-is-lie -%0 -%d -HHHH -munknown-to-clang-option -print-stats -funknown-to-clang-option -### -c -- %s 2>&1 | \
+// RUN: %clang_cl -cake-is-lie -%0 -%d -QQQQ -munknown-to-clang-option -print-stats -funknown-to-clang-option -### -c -- %s 2>&1 | \
 // RUN:     FileCheck %s --check-prefix=CL
 // RUN: %clang_cl -Brepo -### -- %s 2>&1 | \
 // RUN:     FileCheck %s --check-prefix=CL-DID-YOU-MEAN
@@ -12,11 +12,11 @@
 // RUN:     FileCheck %s --check-prefix=CL-DID-YOU-MEAN-SLASH
 // RUN: not %clang_cl /Brepo -### /Tc%s /link 2>&1 | \
 // RUN:     FileCheck %s --check-prefix=CL-DID-YOU-MEAN-SLASH
-// RUN: not %clang_cl -cake-is-lie -%0 -%d -HHHH -munknown-to-clang-option -print-stats -funknown-to-clang-option -c -Werror=unknown-argument -### -- %s 2>&1 | \
+// RUN: not %clang_cl -cake-is-lie -%0 -%d -QQQQ -munknown-to-clang-option -print-stats -funknown-to-clang-option -c -Werror=unknown-argument -### -- %s 2>&1 | \
 // RUN:     FileCheck %s --check-prefix=CL-ERROR
 // RUN: not %clang_cl -helo -Werror=unknown-argument -### -- %s 2>&1 | \
 // RUN:     FileCheck %s --check-prefix=CL-ERROR-DID-YOU-MEAN
-// RUN: %clang_cl -cake-is-lie -%0 -%d -HHHH -munknown-to-clang-option -print-stats -funknown-to-clang-option -c -Wno-unknown-argument -### -- %s 2>&1 | \
+// RUN: %clang_cl -cake-is-lie -%0 -%d -QQQQ -munknown-to-clang-option -print-stats -funknown-to-clang-option -c -Wno-unknown-argument -### -- %s 2>&1 | \
 // RUN:     FileCheck %s --check-prefix=SILENT
 // RUN: not %clang -cc1as -hell --version 2>&1 | \
 // RUN:     FileCheck %s --check-prefix=CC1AS-DID-YOU-MEAN
@@ -41,7 +41,7 @@
 // CL: warning: unknown argument ignored in clang-cl: '-cake-is-lie'
 // CL: warning: unknown argument ignored in clang-cl: '-%0'
 // CL: warning: unknown argument ignored in clang-cl: '-%d'
-// CL: warning: unknown argument ignored in clang-cl: '-HHHH'
+// CL: warning: unknown argument ignored in clang-cl: '-QQQQ'
 // CL: warning: unknown argument ignored in clang-cl: '-munknown-to-clang-option'
 // CL: warning: unknown argument ignored in clang-cl: '-print-stats'
 // CL: warning: unknown argument ignored in clang-cl: '-funknown-to-clang-option'
@@ -50,7 +50,7 @@
 // CL-ERROR: error: unknown argument ignored in clang-cl: '-cake-is-lie'
 // CL-ERROR: error: unknown argument ignored in clang-cl: '-%0'
 // CL-ERROR: error: unknown argument ignored in clang-cl: '-%d'
-// CL-ERROR: error: unknown argument ignored in clang-cl: '-HHHH'
+// CL-ERROR: error: unknown argument ignored in clang-cl: '-QQQQ'
 // CL-ERROR: error: unknown argument ignored in clang-cl: '-munknown-to-clang-option'
 // CL-ERROR: error: unknown argument ignored in clang-cl: '-print-stats'
 // CL-ERROR: error: unknown argument ignored in clang-cl: '-funknown-to-clang-option'

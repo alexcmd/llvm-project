@@ -6702,6 +6702,11 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
       D.Diag(diag::err_drv_cl_p2_unknown_flag) << A->getValue();
   }
 
+  // cl.exe is silent about __assume with side effects (the discard matches it,
+  // CGBuiltin); the warning stays available with an explicit -Wassume later.
+  if (D.IsCLMode())
+    CmdArgs.push_back("-Wno-assume");
+
   for (const Arg *A : Args.filtered(options::OPT_W_Group, options::OPT__SLASH_wd,
                                     options::OPT__SLASH_we,
                                     options::OPT__SLASH_wo,

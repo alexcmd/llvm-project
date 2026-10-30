@@ -1,37 +1,37 @@
-RUN: not lld-link 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15 16 17 18 19 20 \
-RUN:   21 22 2>&1 | FileCheck -check-prefix=DEFAULT %s
+RUN: not lld-link /nodefaultliba /nodefaultlibb /nodefaultlibc /nodefaultlibd /nodefaultlibe /nodefaultlibf /nodefaultlibg /nodefaultlibh /nodefaultlibi /nodefaultlibj /nodefaultlibk /nodefaultlibl /nodefaultlibm /nodefaultlibn /nodefaultlibo /nodefaultlibp /nodefaultlibq /nodefaultlibr /nodefaultlibs /nodefaultlibt \
+RUN:   /nodefaultlibu /nodefaultlibv 2>&1 | FileCheck -check-prefix=DEFAULT %s
 
-DEFAULT:      could not open '01'
-DEFAULT:      could not open '20'
+DEFAULT:      could not open '/nodefaultliba'
+DEFAULT:      could not open '/nodefaultlibt'
 DEFAULT-NEXT: too many errors emitted, stopping now (use /errorlimit:0 to see all errors)
-DEFAULT-NOT:  could not open '21'
+DEFAULT-NOT:  could not open '/nodefaultlibu'
 
-RUN: not lld-link /errorlimit:5 01 02 03 04 05 06 07 08 09 10 2>&1 \
+RUN: not lld-link /errorlimit:5 /nodefaultliba /nodefaultlibb /nodefaultlibc /nodefaultlibd /nodefaultlibe /nodefaultlibf /nodefaultlibg /nodefaultlibh /nodefaultlibi /nodefaultlibj 2>&1 \
 RUN:   | FileCheck -check-prefix=LIMIT5 %s
 
-LIMIT5:      could not open '01'
-LIMIT5:      could not open '05'
+LIMIT5:      could not open '/nodefaultliba'
+LIMIT5:      could not open '/nodefaultlibe'
 LIMIT5-NEXT: too many errors emitted, stopping now (use /errorlimit:0 to see all errors)
-LIMIT5-NOT:  could not open '06'
+LIMIT5-NOT:  could not open '/nodefaultlibf'
 
-RUN: not lld-link /errorlimit:0 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15 \
-RUN:   16 17 18 19 20 21 22 2>&1 | FileCheck -check-prefix=UNLIMITED %s
+RUN: not lld-link /errorlimit:0 /nodefaultliba /nodefaultlibb /nodefaultlibc /nodefaultlibd /nodefaultlibe /nodefaultlibf /nodefaultlibg /nodefaultlibh /nodefaultlibi /nodefaultlibj /nodefaultlibk /nodefaultlibl /nodefaultlibm /nodefaultlibn /nodefaultlibo \
+RUN:   /nodefaultlibp /nodefaultlibq /nodefaultlibr /nodefaultlibs /nodefaultlibt /nodefaultlibu /nodefaultlibv 2>&1 | FileCheck -check-prefix=UNLIMITED %s
 
-UNLIMITED:     could not open '01'
-UNLIMITED:     could not open '20'
-UNLIMITED:     could not open '21'
-UNLIMITED:     could not open '22'
+UNLIMITED:     could not open '/nodefaultliba'
+UNLIMITED:     could not open '/nodefaultlibt'
+UNLIMITED:     could not open '/nodefaultlibu'
+UNLIMITED:     could not open '/nodefaultlibv'
 UNLIMITED-NOT: too many errors emitted, stopping now (use /errorlimit:0 to see all errors)
 
-RUN: not lld-link /errorlimit:XYZ 01 02 03 04 05 06 07 08 09 10 11 12 13 14 \
-RUN:   15 16 17 18 19 20 21 22 2>&1 | FileCheck -check-prefix=WRONG %s
+RUN: not lld-link /errorlimit:XYZ /nodefaultliba /nodefaultlibb /nodefaultlibc /nodefaultlibd /nodefaultlibe /nodefaultlibf /nodefaultlibg /nodefaultlibh /nodefaultlibi /nodefaultlibj /nodefaultlibk /nodefaultlibl /nodefaultlibm /nodefaultlibn \
+RUN:   /nodefaultlibo /nodefaultlibp /nodefaultlibq /nodefaultlibr /nodefaultlibs /nodefaultlibt /nodefaultlibu /nodefaultlibv 2>&1 | FileCheck -check-prefix=WRONG %s
 
 WRONG:      /errorlimit: number expected, but got XYZ
 
-RUN: not lld-link -lldmingw 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15 16 17 18 19 20 \
-RUN:   21 22 2>&1 | FileCheck -check-prefix=MINGW-DEFAULT %s
+RUN: not lld-link -lldmingw /nodefaultliba /nodefaultlibb /nodefaultlibc /nodefaultlibd /nodefaultlibe /nodefaultlibf /nodefaultlibg /nodefaultlibh /nodefaultlibi /nodefaultlibj /nodefaultlibk /nodefaultlibl /nodefaultlibm /nodefaultlibn /nodefaultlibo /nodefaultlibp /nodefaultlibq /nodefaultlibr /nodefaultlibs /nodefaultlibt \
+RUN:   /nodefaultlibu /nodefaultlibv 2>&1 | FileCheck -check-prefix=MINGW-DEFAULT %s
 
-MINGW-DEFAULT:      could not open '01'
-MINGW-DEFAULT:      could not open '20'
+MINGW-DEFAULT:      could not open '/nodefaultliba'
+MINGW-DEFAULT:      could not open '/nodefaultlibt'
 MINGW-DEFAULT-NEXT: too many errors emitted, stopping now (use --error-limit=0 to see all errors)
-MINGW-DEFAULT-NOT:  could not open '21'
+MINGW-DEFAULT-NOT:  could not open '/nodefaultlibu'

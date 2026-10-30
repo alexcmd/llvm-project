@@ -3,7 +3,7 @@
 # The rest are accepted and ignored (LLD-GAP).
 
 # RUN: not lld-link /out:%t.exe /entry:main /subsystem:console \
-# RUN:   %p/Inputs/hello64.obj /CLRIMAGETYPE:IJW /DELAYSIGN /KEYFILE:x.snk \
+# RUN:   %p/Inputs/std64.lib %p/Inputs/hello64.obj /CLRIMAGETYPE:IJW /DELAYSIGN /KEYFILE:x.snk \
 # RUN:   /GENPROFILE /USEPROFILE /SPGO /SPD:x.pdb /WINMDFILE:x.winmd \
 # RUN:   2>&1 | FileCheck %s --check-prefix=ERR
 # ERR-DAG: error: '/CLRIMAGETYPE:IJW' is not supported by lld-link
@@ -17,12 +17,12 @@
 
 # RUN: rm -f %t.ign.exe
 # RUN: lld-link /out:%t.ign.exe /entry:main /subsystem:console \
-# RUN:   %p/Inputs/hello64.obj /SOURCELINK:x.json /EMITVOLATILEMETADATA \
+# RUN:   %p/Inputs/std64.lib %p/Inputs/hello64.obj /SOURCELINK:x.json /EMITVOLATILEMETADATA \
 # RUN:   /DYNAMICDEOPT /DYNAMICDEOPT-ALLOWICF /EXPORTPADMIN \
 # RUN:   /LINKREPROTARGET:x.dll /PDBINJECT:MAPFILE /DEBUG:LAZY /OPT:STRICTICF
 # RUN: ls %t.ign.exe
 
 # DEBUG value forms link.exe accepts are full debug info here.
 # RUN: lld-link /out:%t.dbg.exe /entry:main /subsystem:console \
-# RUN:   %p/Inputs/hello64.obj /DEBUG:CTYPES /DEBUG:FORCEFULL
+# RUN:   %p/Inputs/std64.lib %p/Inputs/hello64.obj /DEBUG:CTYPES /DEBUG:FORCEFULL
 # RUN: ls %t.dbg.exe

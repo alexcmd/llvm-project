@@ -246,7 +246,7 @@ int NonZeroVBPtr::*n_d_memptr;
 int Unspecified::*u_d_memptr;
 int UnspecSingle::*us_d_memptr;
 // CHECK: @"?s_d_memptr@@3PQSingle@@HQ1@" = dso_local global i32 -1, align 4
-// CHECK: @"?p_d_memptr@@3PQPolymorphic@@HQ1@" = dso_local global i32 0, align 4
+// CHECK: @"?p_d_memptr@@3PQPolymorphic@@HQ1@" = dso_local global i32 -1, align 4 (cl: ff ff ff ff, task 21)
 // CHECK: @"?m_d_memptr@@3PQMultiple@@HQ1@" = dso_local global i32 -1, align 4
 // CHECK: @"?v_d_memptr@@3PQVirtual@@HQ1@" = dso_local global { i32, i32 }
 // CHECK:   { i32 0, i32 -1 }, align 4

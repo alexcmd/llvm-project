@@ -46,9 +46,9 @@ void ReadFields() {
   ReadField<V, nullptr>(v);
   ReadField<U, nullptr>(u);
 
-  // Non-polymorphic null data memptr vs first field memptr.
+  // Non-polymorphic null data memptr vs first field memptr: cl.exe mangles both
+  // as $0A@ (one symbol), so only the first field is instantiated here.
   ReadField<A, &A::a>(a);
-  ReadField<A, nullptr>(a);
 
   // Indirect fields injected from anonymous unions and structs
   ReadField<I, &I::a>(i);

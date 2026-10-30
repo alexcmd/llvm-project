@@ -3273,6 +3273,8 @@ void Driver::BuildInputs(const ToolChain &TC, DerivedArgList &Args,
       if (DiagnoseInputExistence(Value, Ty, /*TypoCorrect=*/true,
                                  Args.hasArg(options::OPT__SLASH_options_strict)))
         Inputs.push_back(std::make_pair(Ty, A));
+      else if (IsCLMode() && Value.starts_with("/"))
+        A->claim(); // cl.exe ignores it silently after D9002.
 
     } else if (A->getOption().matches(options::OPT__SLASH_Tc)) {
       StringRef Value = A->getValue();

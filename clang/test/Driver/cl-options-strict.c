@@ -19,5 +19,6 @@
 // LAX: warning: D9002 : ignoring unknown option '/bogusopt'
 // LAX: warning: D9002 : ignoring unknown option '/EBUG'
 // LAX-NOT: did you mean
+// LAX-NOT: argument unused
 // LAX-NOT: no such file
 // LAX: "-cc1"

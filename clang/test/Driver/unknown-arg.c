@@ -8,9 +8,9 @@
 // RUN:     FileCheck %s --check-prefix=CL
 // RUN: %clang_cl -Brepo -### -- %s 2>&1 | \
 // RUN:     FileCheck %s --check-prefix=CL-DID-YOU-MEAN
-// RUN: not %clang_cl /Brepo -### -- %s 2>&1 | \
+// RUN: %clang_cl /Brepo -### -- %s 2>&1 | \
 // RUN:     FileCheck %s --check-prefix=CL-DID-YOU-MEAN-SLASH
-// RUN: not %clang_cl /Brepo -### /Tc%s /link 2>&1 | \
+// RUN: %clang_cl /Brepo -### /Tc%s /link 2>&1 | \
 // RUN:     FileCheck %s --check-prefix=CL-DID-YOU-MEAN-SLASH
 // RUN: not %clang_cl -cake-is-lie -%0 -%d -QQQQ -munknown-to-clang-option -print-stats -funknown-to-clang-option -c -Werror=unknown-argument -### -- %s 2>&1 | \
 // RUN:     FileCheck %s --check-prefix=CL-ERROR
@@ -46,7 +46,7 @@
 // CL: warning: unknown argument ignored in clang-cl: '-print-stats'
 // CL: warning: unknown argument ignored in clang-cl: '-funknown-to-clang-option'
 // CL-DID-YOU-MEAN: warning: unknown argument ignored in clang-cl '-Brepo'; did you mean '-Brepro'?
-// CL-DID-YOU-MEAN-SLASH: error: no such file or directory: '/Brepo'; did you mean '/Brepro'?
+// CL-DID-YOU-MEAN-SLASH: warning: D9002 : ignoring unknown option '/Brepo'
 // CL-ERROR: error: unknown argument ignored in clang-cl: '-cake-is-lie'
 // CL-ERROR: error: unknown argument ignored in clang-cl: '-%0'
 // CL-ERROR: error: unknown argument ignored in clang-cl: '-%d'

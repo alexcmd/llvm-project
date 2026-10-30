@@ -39,6 +39,9 @@ def err_drv_cl_guard_include : Error<
   "%0: fatal error C1083: Cannot open include file: 'guardcfw.h': No such file or directory">;
 def err_drv_cl_enc_file : Error<
   "%0 : fatal error C1083: Cannot open compiler generated file: '%1': No such file or directory">;
+// cl.exe: unknown /option is D9002 (warning, ignored); under /options:strict D8043.
+def err_drv_cl_unknown_option_strict : Error<
+  "D8043 : unknown option '%0'">;
 def err_drv_unsupported_opt : Error<"unsupported option '%0'">;
 def err_drv_unsupported_opt_with_suggestion : Error<
   "unsupported option '%0'; did you mean '%1'?">;

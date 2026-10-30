@@ -532,8 +532,8 @@ public:
   /// issue a diagnostic and return false.
   /// If TypoCorrect is true and the file does not exist, see if it looks
   /// like a likely typo for a flag and if so print a "did you mean" blurb.
-  bool DiagnoseInputExistence(StringRef Value, types::ID Ty,
-                              bool TypoCorrect) const;
+  bool DiagnoseInputExistence(StringRef Value, types::ID Ty, bool TypoCorrect,
+                              bool ClOptionsStrict = false) const;
 
   /// BuildJobs - Bind actions to concrete tools and translate
   /// arguments to form the list of jobs to run.

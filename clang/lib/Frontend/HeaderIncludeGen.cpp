@@ -14,6 +14,7 @@
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/FileSystem.h"
+#include "llvm/Support/IOSandbox.h"
 #include "llvm/Support/JSON.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/raw_ostream.h"
@@ -182,6 +183,8 @@ public:
 static std::string clIncludePath(const SourceManager &SM,
                                  SourceLocation HashLoc, StringRef SearchPath,
                                  StringRef RelativePath, bool IsAngled) {
+  // Path spelling only, not a file access; runs inside cc1 (IO sandbox on).
+  auto BypassSandbox = llvm::sys::sandbox::scopedDisable();
   auto AbsDir = [](StringRef D) {
     SmallString<256> P(D.empty() ? StringRef(".") : D);
     llvm::sys::fs::make_absolute(P);
@@ -202,6 +205,7 @@ static std::string clIncludePath(const SourceManager &SM,
 
 // /sourceDependencies spelling: full path, backslashes, lower case.
 static std::string clDependencyPath(StringRef ClPath) {
+  auto BypassSandbox = llvm::sys::sandbox::scopedDisable();
   SmallString<256> P(ClPath);
   llvm::sys::fs::make_absolute(P);
   llvm::sys::path::remove_dots(P, /*remove_dot_dot=*/true,
@@ -601,6 +605,8 @@ public:
 };
 
 void SourceDependenciesCallback::EndOfMainFile() {
+  // Writes the requested output file, as ModuleDependencyCollector does.
+  auto BypassSandbox = llvm::sys::sandbox::scopedDisable();
   OptionalFileEntryRef FE = SM.getFileEntryRefForID(SM.getMainFileID());
   if (!FE)
     return;

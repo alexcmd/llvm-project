@@ -3004,7 +3004,8 @@ void Driver::BuildUniversalActions(Compilation &C, const ToolChain &TC,
 }
 
 bool Driver::DiagnoseInputExistence(StringRef Value, types::ID Ty,
-                                    bool TypoCorrect) const {
+                                    bool TypoCorrect,
+                                    bool ClOptionsStrict) const {
   if (!getCheckInputsExist())
     return true;
 
@@ -3022,6 +3023,18 @@ bool Driver::DiagnoseInputExistence(StringRef Value, types::ID Ty,
 
   if (getVFS().exists(Value))
     return true;
+
+  // cl.exe: an unknown /option is never a missing file and gets no "did you
+  // mean" text. Default: warning D9002 and go on (exit 0). /options:strict:
+  // error D8043 (exit 2). Probed with cl 14.51.36231, including near misses
+  // such as /EBUG.
+  if (IsCLMode() && Value.starts_with("/")) {
+    if (ClOptionsStrict)
+      Diag(clang::diag::err_drv_cl_unknown_option_strict) << Value;
+    else
+      Diag(clang::diag::warn_drv_ignoring_unknown_option) << Value;
+    return false;
+  }
 
   if (TypoCorrect) {
     // Check if the filename is a typo for an option flag. OptTable thinks
@@ -3247,7 +3260,8 @@ void Driver::BuildInputs(const ToolChain &TC, DerivedArgList &Args,
           Args.hasArgNoClaim(options::OPT_hipstdpar))
         Ty = types::TY_HIP;
 
-      if (DiagnoseInputExistence(Value, Ty, /*TypoCorrect=*/true))
+      if (DiagnoseInputExistence(Value, Ty, /*TypoCorrect=*/true,
+                                 Args.hasArg(options::OPT__SLASH_options_strict)))
         Inputs.push_back(std::make_pair(Ty, A));
 
     } else if (A->getOption().matches(options::OPT__SLASH_Tc)) {

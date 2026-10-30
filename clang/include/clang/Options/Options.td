@@ -9345,6 +9345,9 @@ def _SLASH_WX_ : CLFlag<"WX-">,
   Alias<W_Joined>, AliasArgs<["no-error"]>;
 def _SLASH_w_flag : CLFlag<"w">, HelpText<"Disable all warnings">, Alias<w>;
 def _SLASH_wd : CLCompileJoined<"wd">;
+// /options:strict: unknown /options are D8043 errors instead of D9002 (Driver.cpp).
+def _SLASH_options_strict : CLFlag<"options:strict">,
+  HelpText<"Unknown compiler options are errors">;
 def _SLASH_vd : CLJoined<"vd">, HelpText<"Control vtordisp placement">,
   Alias<vtordisp_mode_EQ>;
 def _SLASH_X : CLFlag<"X">,

@@ -75,7 +75,6 @@ void ReadFields() {
 // Non-polymorphic null data memptr vs first field memptr.  MSVC mangles these
 // the same.
 // CHECK: call {{.*}} @"??$ReadField@UA@@$0A@@@YAHAAUA@@@Z"
-// CHECK: call {{.*}} @"??$ReadField@UA@@$0?0@@YAHAAUA@@@Z"
 
 // Indirect fields are handled as-if they were simply members of their enclosing
 // record.

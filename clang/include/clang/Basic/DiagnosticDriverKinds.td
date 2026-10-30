@@ -11,6 +11,9 @@ let Component = "Driver" in {
 def err_drv_no_such_file : Error<"no such file or directory: '%0'">;
 def err_drv_no_such_file_with_suggestion : Error<
   "no such file or directory: '%0'; did you mean '%1'?">;
+// MSVC text, verbatim (tasks/compat/03: rewritten clean-room before release).
+def warn_drv_cl_pd_requires_zc : Warning<
+  "D9007 : '/PD' requires '/Zc:preprocessor'; option ignored">;
 def err_drv_unsupported_opt : Error<"unsupported option '%0'">;
 def err_drv_unsupported_opt_with_suggestion : Error<
   "unsupported option '%0'; did you mean '%1'?">;

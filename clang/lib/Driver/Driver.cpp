@@ -1497,6 +1497,16 @@ Compilation *Driver::BuildCompilation(ArrayRef<const char *> ArgList) {
     }
   }
 
+  // cl.exe ignores /PD without /Zc:preprocessor, with a warning. The macro dump
+  // of /E is not implemented (CLANG-CL-GAP(PD)).
+  if (IsCLMode())
+    if (Arg *PD = Args.getLastArg(options::OPT__SLASH_PD)) {
+      PD->claim();
+      if (!llvm::is_contained(Args.getAllArgValues(options::OPT__SLASH_Zc),
+                              "preprocessor"))
+        Diag(diag::warn_drv_cl_pd_requires_zc);
+    }
+
   // Check for working directory option before accessing any files
   if (Arg *WD = Args.getLastArg(options::OPT_working_directory))
     if (VFS->setCurrentWorkingDirectory(WD->getValue()))

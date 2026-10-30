@@ -184,31 +184,31 @@ static std::string clIncludePath(const SourceManager &SM,
                                  StringRef RelativePath, bool IsAngled) {
   auto AbsDir = [](StringRef D) {
     SmallString<256> P(D.empty() ? StringRef(".") : D);
-    sys::fs::make_absolute(P);
-    sys::path::remove_dots(P, /*remove_dot_dot=*/true);
+    llvm::sys::fs::make_absolute(P);
+    llvm::sys::path::remove_dots(P, /*remove_dot_dot=*/true);
     return P;
   };
   SmallString<256> IncDir =
-      AbsDir(sys::path::parent_path(SM.getFilename(HashLoc)));
+      AbsDir(llvm::sys::path::parent_path(SM.getFilename(HashLoc)));
   if (!IsAngled && StringRef(IncDir).equals_insensitive(AbsDir(SearchPath))) {
     SmallString<256> Native;
-    sys::path::native(IncDir, Native, sys::path::Style::windows_backslash);
-    return (Native + "\\" + RelativePath).str().str();
+    llvm::sys::path::native(IncDir, Native, llvm::sys::path::Style::windows_backslash);
+    return std::string(Native) + "\\" + RelativePath.str();
   }
   if (SearchPath.empty())
     return RelativePath.str();
-  return (SearchPath + "\\" + RelativePath).str();
+  return SearchPath.str() + "\\" + RelativePath.str();
 }
 
 // /sourceDependencies spelling: full path, backslashes, lower case.
 static std::string clDependencyPath(StringRef ClPath) {
   SmallString<256> P(ClPath);
-  sys::fs::make_absolute(P);
-  sys::path::remove_dots(P, /*remove_dot_dot=*/true,
-                         sys::path::Style::windows_backslash);
+  llvm::sys::fs::make_absolute(P);
+  llvm::sys::path::remove_dots(P, /*remove_dot_dot=*/true,
+                         llvm::sys::path::Style::windows_backslash);
   for (char &C : P)
     C = llvm::toLower(C == '/' ? '\\' : C);
-  return P.str().str();
+  return std::string(P);
 }
 
 static void PrintHeaderInfo(raw_ostream *OutputFile, StringRef Filename,
@@ -612,10 +612,10 @@ void SourceDependenciesCallback::EndOfMainFile() {
     SmallString<256> Path(OutPath);
     bool EndsWithSep = StringRef(OutPath).ends_with("\\") ||
                        StringRef(OutPath).ends_with("/");
-    if (EndsWithSep || sys::fs::is_directory(OutPath)) {
+    if (EndsWithSep || llvm::sys::fs::is_directory(OutPath)) {
       if (!EndsWithSep)
         Path += '\\';
-      Path += sys::path::filename(MainName);
+      Path += llvm::sys::path::filename(MainName);
       Path += ".json";
     }
     std::error_code EC;

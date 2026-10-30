@@ -67,6 +67,10 @@ public:
   /// Destination of cl.exe style /showIncludes info.
   ShowIncludesDestination ShowIncludesDest = ShowIncludesDestination::None;
 
+  /// Output for cl.exe /sourceDependencies JSON: a file, "-" for stdout, or a
+  /// directory (gets <source name>.json). Empty when not requested.
+  std::string SourceDependenciesFile;
+
   /// The format for the dependency file.
   DependencyOutputFormat OutputFormat = DependencyOutputFormat::Make;
 

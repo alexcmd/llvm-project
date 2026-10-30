@@ -8959,6 +8959,12 @@ void Clang::AddClangCLArgs(const ArgList &Args, types::ID InputType,
       CmdArgs.push_back("-sys-header-deps");
   }
 
+  // cl.exe /sourceDependencies <file>: JSON written by the frontend.
+  if (Arg *A = Args.getLastArg(options::OPT__SLASH_sourceDependencies)) {
+    CmdArgs.push_back("-sourceDependencies-json");
+    CmdArgs.push_back(A->getValue());
+  }
+
   // This controls whether or not we emit RTTI data for polymorphic types.
   if (Args.hasFlag(options::OPT__SLASH_GR_, options::OPT__SLASH_GR,
                    /*Default=*/false))

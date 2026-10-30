@@ -1535,6 +1535,10 @@ def dependency_dot : Separate<["-"], "dependency-dot">,
   Visibility<[ClangOption, CC1Option]>,
   HelpText<"Filename to write DOT-formatted header dependencies to">,
   MarshallingInfoString<DependencyOutputOpts<"DOTOutputFile">>;
+def sourceDependencies_json : Separate<["-"], "sourceDependencies-json">,
+  Visibility<[CC1Option]>,
+  HelpText<"Write cl.exe /sourceDependencies JSON to this file, - or directory">,
+  MarshallingInfoString<DependencyOutputOpts<"SourceDependenciesFile">>;
 def module_dependency_dir : Separate<["-"], "module-dependency-dir">,
   Visibility<[ClangOption, CC1Option]>,
   HelpText<"Directory to dump module dependencies to">,

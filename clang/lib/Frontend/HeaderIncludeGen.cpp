@@ -12,7 +12,10 @@
 #include "clang/Frontend/Utils.h"
 #include "clang/Lex/Preprocessor.h"
 #include "llvm/ADT/SmallString.h"
+#include "llvm/ADT/StringExtras.h"
+#include "llvm/Support/FileSystem.h"
 #include "llvm/Support/JSON.h"
+#include "llvm/Support/Path.h"
 #include "llvm/Support/raw_ostream.h"
 using namespace clang;
 
@@ -27,6 +30,8 @@ class HeaderIncludesCallback : public PPCallbacks {
   bool ShowAllHeaders;
   bool ShowDepth;
   bool MSStyle;
+  // cl.exe spelling of the include being entered (set by InclusionDirective).
+  std::string PendingIncludePath;
 
 public:
   HeaderIncludesCallback(const Preprocessor *PP, bool ShowAllHeaders_,
@@ -52,6 +57,14 @@ public:
 
   void FileSkipped(const FileEntryRef &SkippedFile, const Token &FilenameTok,
                    SrcMgr::CharacteristicKind FileType) override;
+
+  void InclusionDirective(SourceLocation HashLoc, const Token &IncludeTok,
+                          StringRef FileName, bool IsAngled,
+                          CharSourceRange FilenameRange,
+                          OptionalFileEntryRef File, StringRef SearchPath,
+                          StringRef RelativePath, const Module *SuggestedModule,
+                          bool ModuleImported,
+                          SrcMgr::CharacteristicKind FileType) override;
 
 private:
   bool ShouldShowHeader(SrcMgr::CharacteristicKind HeaderType) {
@@ -160,6 +173,42 @@ public:
   void moduleImport(SourceLocation ImportLoc, ModuleIdPath Path,
                     const Module *Imported) override;
 };
+}
+
+// cl.exe spelling of an include, as /showIncludes and /sourceDependencies print
+// it. A quoted include found next to the including file is that directory made
+// absolute, a backslash, then the spelled name. Any other include is its search
+// directory as given, a backslash, then the name.
+static std::string clIncludePath(const SourceManager &SM,
+                                 SourceLocation HashLoc, StringRef SearchPath,
+                                 StringRef RelativePath, bool IsAngled) {
+  auto AbsDir = [](StringRef D) {
+    SmallString<256> P(D.empty() ? StringRef(".") : D);
+    sys::fs::make_absolute(P);
+    sys::path::remove_dots(P, /*remove_dot_dot=*/true);
+    return P;
+  };
+  SmallString<256> IncDir =
+      AbsDir(sys::path::parent_path(SM.getFilename(HashLoc)));
+  if (!IsAngled && StringRef(IncDir).equals_insensitive(AbsDir(SearchPath))) {
+    SmallString<256> Native;
+    sys::path::native(IncDir, Native, sys::path::Style::windows_backslash);
+    return (Native + "\\" + RelativePath).str().str();
+  }
+  if (SearchPath.empty())
+    return RelativePath.str();
+  return (SearchPath + "\\" + RelativePath).str();
+}
+
+// /sourceDependencies spelling: full path, backslashes, lower case.
+static std::string clDependencyPath(StringRef ClPath) {
+  SmallString<256> P(ClPath);
+  sys::fs::make_absolute(P);
+  sys::path::remove_dots(P, /*remove_dot_dot=*/true,
+                         sys::path::Style::windows_backslash);
+  for (char &C : P)
+    C = llvm::toLower(C == '/' ? '\\' : C);
+  return P.str().str();
 }
 
 static void PrintHeaderInfo(raw_ostream *OutputFile, StringRef Filename,
@@ -301,9 +350,25 @@ void HeaderIncludesCallback::FileChanged(SourceLocation Loc,
   // "<command line>" and "<built-in>" in a bunch of places.
   if (Reason == PPCallbacks::EnterFile &&
       UserLoc.getFilename() != StringRef("<command line>")) {
-    PrintHeaderInfo(OutputFile, UserLoc.getFilename(), ShowDepth, IncludeDepth,
-                    MSStyle);
+    PrintHeaderInfo(OutputFile,
+                    PendingIncludePath.empty()
+                        ? UserLoc.getFilename()
+                        : StringRef(PendingIncludePath),
+                    ShowDepth, IncludeDepth, MSStyle);
   }
+  PendingIncludePath.clear();
+}
+
+void HeaderIncludesCallback::InclusionDirective(
+    SourceLocation HashLoc, const Token &IncludeTok, StringRef FileName,
+    bool IsAngled, CharSourceRange FilenameRange, OptionalFileEntryRef File,
+    StringRef SearchPath, StringRef RelativePath,
+    const Module *SuggestedModule, bool ModuleImported,
+    SrcMgr::CharacteristicKind FileType) {
+  PendingIncludePath.clear();
+  if (MSStyle && File)
+    PendingIncludePath =
+        clIncludePath(SM, HashLoc, SearchPath, RelativePath, IsAngled);
 }
 
 void HeaderIncludesCallback::FileSkipped(const FileEntryRef &SkippedFile,
@@ -495,4 +560,92 @@ void HeaderIncludesDirectPerFileCallback::moduleImport(SourceLocation ImportLoc,
 
   HeaderIncludeInfo DependenciesEntry(Loc, *ModuleMapFile, Imported);
   Dependencies[*FromFile].push_back(DependenciesEntry);
+}
+
+namespace {
+/// Collects the entered include files and writes the cl.exe /sourceDependencies
+/// JSON (Version 1.2, CRLF, 4-space indent) at the end of the main file.
+class SourceDependenciesCallback : public PPCallbacks {
+  SourceManager &SM;
+  std::string OutPath;
+  std::string PendingPath;
+  std::vector<std::string> Includes;
+
+public:
+  SourceDependenciesCallback(SourceManager &SM, StringRef OutPath)
+      : SM(SM), OutPath(OutPath) {}
+
+  void InclusionDirective(SourceLocation HashLoc, const Token &IncludeTok,
+                          StringRef FileName, bool IsAngled,
+                          CharSourceRange FilenameRange,
+                          OptionalFileEntryRef File, StringRef SearchPath,
+                          StringRef RelativePath, const Module *SuggestedModule,
+                          bool ModuleImported,
+                          SrcMgr::CharacteristicKind FileType) override {
+    PendingPath.clear();
+    if (File)
+      PendingPath =
+          clIncludePath(SM, HashLoc, SearchPath, RelativePath, IsAngled);
+  }
+
+  void FileChanged(SourceLocation Loc, FileChangeReason Reason,
+                   SrcMgr::CharacteristicKind FileType,
+                   FileID PrevFID) override {
+    if (Reason != PPCallbacks::EnterFile || PendingPath.empty())
+      return;
+    Includes.push_back(clDependencyPath(PendingPath));
+    PendingPath.clear();
+  }
+
+  void EndOfMainFile() override;
+};
+
+void SourceDependenciesCallback::EndOfMainFile() {
+  OptionalFileEntryRef FE = SM.getFileEntryRefForID(SM.getMainFileID());
+  if (!FE)
+    return;
+  StringRef MainName = FE->getName();
+
+  std::unique_ptr<raw_ostream> Owned;
+  raw_ostream *OS = &llvm::outs();
+  if (OutPath != "-") {
+    SmallString<256> Path(OutPath);
+    bool EndsWithSep = StringRef(OutPath).ends_with("\\") ||
+                       StringRef(OutPath).ends_with("/");
+    if (EndsWithSep || sys::fs::is_directory(OutPath)) {
+      if (!EndsWithSep)
+        Path += '\\';
+      Path += sys::path::filename(MainName);
+      Path += ".json";
+    }
+    std::error_code EC;
+    auto FOS = std::make_unique<llvm::raw_fd_ostream>(
+        Path, EC, llvm::sys::fs::OF_TextWithCRLF);
+    if (EC)
+      return;
+    Owned = std::move(FOS);
+    OS = Owned.get();
+  }
+
+  std::string Source = clDependencyPath(MainName);
+  llvm::json::OStream J(*OS, 4);
+  J.object([&] {
+    J.attribute("Version", "1.2");
+    J.attributeObject("Data", [&] {
+      J.attribute("Source", Source);
+      J.attribute("ProvidedModule", "");
+      J.attributeArray("Includes", [&] {
+        for (const std::string &I : Includes)
+          J.value(llvm::json::Value(I));
+      });
+    });
+  });
+  OS->flush();
+}
+} // namespace
+
+void clang::AttachSourceDependencies(Preprocessor &PP,
+                                     const DependencyOutputOptions &DepOpts) {
+  PP.addPPCallbacks(std::make_unique<SourceDependenciesCallback>(
+      PP.getSourceManager(), DepOpts.SourceDependenciesFile));
 }

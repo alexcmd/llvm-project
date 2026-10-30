@@ -188,6 +188,11 @@ void AttachHeaderIncludeGen(Preprocessor &PP,
                             StringRef OutputPath = {},
                             bool ShowDepth = true, bool MSStyle = false);
 
+/// AttachSourceDependencies - Write cl.exe /sourceDependencies JSON for the
+/// main file at the end of the translation unit (DepOpts.SourceDependenciesFile).
+void AttachSourceDependencies(Preprocessor &PP,
+                              const DependencyOutputOptions &DepOpts);
+
 /// The ChainedIncludesSource class converts headers to chained PCHs in
 /// memory, mainly for testing.
 IntrusiveRefCntPtr<ExternalSemaSource>

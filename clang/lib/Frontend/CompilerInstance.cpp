@@ -558,6 +558,9 @@ void CompilerInstance::createPreprocessor(TranslationUnitKind TUKind) {
                            /*ShowDepth=*/true, /*MSStyle=*/true);
   }
 
+  if (!DepOpts.SourceDependenciesFile.empty())
+    AttachSourceDependencies(*PP, DepOpts);
+
   if (GetDependencyDirectives)
     PP->setDependencyDirectivesGetter(*GetDependencyDirectives);
 

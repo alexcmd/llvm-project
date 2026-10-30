@@ -116,13 +116,24 @@ static void insertTargetAndModeArgs(const ParsedClangName &NameParts,
   }
 }
 
-static void getCLEnvVarOptions(std::string &EnvValue, llvm::StringSaver &Saver,
-                               SmallVectorImpl<const char *> &Opts) {
+static llvm::Error getCLEnvVarOptions(std::string &EnvValue,
+                                      llvm::BumpPtrAllocator &Alloc,
+                                      llvm::StringSaver &Saver,
+                                      llvm::vfs::FileSystem *VFS,
+                                      SmallVectorImpl<const char *> &Opts) {
   llvm::cl::TokenizeWindowsCommandLine(EnvValue, Saver, Opts);
+  // '@file' in CL and _CL_ is expanded as on the command line, as cl.exe does.
+  llvm::cl::ExpansionContext ECtx(Alloc, llvm::cl::TokenizeWindowsCommandLine);
+  ECtx.setVFS(VFS);
+  if (llvm::Error Err = ECtx.expandResponseFiles(Opts))
+    return Err;
+  if (llvm::Error Err = driver::checkCLResponseFilesExist(Opts))
+    return Err;
   // The first instance of '#' should be replaced with '=' in each option.
   for (const char *Opt : Opts)
     if (char *NumberSignPtr = const_cast<char *>(::strchr(Opt, '#')))
       *NumberSignPtr = '=';
+  return llvm::Error::success();
 }
 
 template <class T>
@@ -264,7 +275,7 @@ int clang_main(int Argc, char **Argv, const llvm::ToolContext &ToolContext) {
 
   if (llvm::Error Err = expandResponseFiles(Args, ClangCLMode, A, VFS.get())) {
     llvm::errs() << toString(std::move(Err)) << '\n';
-    return 1;
+    return ClangCLMode ? 2 : 1;
   }
 
   // Handle -cc1 integrated tools.
@@ -297,7 +308,11 @@ int clang_main(int Argc, char **Argv, const llvm::ToolContext &ToolContext) {
     std::optional<std::string> OptCL = llvm::sys::Process::GetEnv("CL");
     if (OptCL) {
       SmallVector<const char *, 8> PrependedOpts;
-      getCLEnvVarOptions(*OptCL, Saver, PrependedOpts);
+      if (llvm::Error Err = getCLEnvVarOptions(*OptCL, A, Saver, VFS.get(),
+                                               PrependedOpts)) {
+        llvm::errs() << toString(std::move(Err)) << '\n';
+        return 2;
+      }
 
       // Insert right after the program name to prepend to the argument list.
       Args.insert(Args.begin() + 1, PrependedOpts.begin(), PrependedOpts.end());
@@ -306,7 +321,11 @@ int clang_main(int Argc, char **Argv, const llvm::ToolContext &ToolContext) {
     std::optional<std::string> Opt_CL_ = llvm::sys::Process::GetEnv("_CL_");
     if (Opt_CL_) {
       SmallVector<const char *, 8> AppendedOpts;
-      getCLEnvVarOptions(*Opt_CL_, Saver, AppendedOpts);
+      if (llvm::Error Err = getCLEnvVarOptions(*Opt_CL_, A, Saver, VFS.get(),
+                                               AppendedOpts)) {
+        llvm::errs() << toString(std::move(Err)) << '\n';
+        return 2;
+      }
 
       // Insert at the end of the argument list to append.
       Args.append(AppendedOpts.begin(), AppendedOpts.end());

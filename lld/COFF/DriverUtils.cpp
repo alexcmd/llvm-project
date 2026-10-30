@@ -918,6 +918,7 @@ ParsedDirectives ArgParser::parseDirectives(StringRef s) {
 // link.exe has an interesting feature. If LINK or _LINK_ environment
 // variables exist, their contents are handled as command line strings.
 // So you can pass extra arguments using them.
+// Order as link.exe: LINK, then the command line, then _LINK_ (last one wins).
 void ArgParser::addLINK(SmallVector<const char *, 256> &argv) {
   // Concatenate LINK env and command line arguments, and then parse them.
   if (std::optional<std::string> s = Process::GetEnv("LINK")) {
@@ -926,7 +927,7 @@ void ArgParser::addLINK(SmallVector<const char *, 256> &argv) {
   }
   if (std::optional<std::string> s = Process::GetEnv("_LINK_")) {
     std::vector<const char *> v = tokenize(*s);
-    argv.insert(std::next(argv.begin()), v.begin(), v.end());
+    argv.append(v.begin(), v.end());
   }
 }
 

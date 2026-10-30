@@ -1131,12 +1131,14 @@ CodeGenModule::StackProtectorAttribute(const Decl *D) const {
 // cl.exe gives every file of the include closure its own JMC flag byte: headers
 // in post-order, the main file last (probes_cl_decisions.md section 2).
 static void collectJMCFiles(
-    FileID FID, const llvm::DenseMap<FileID, llvm::SmallVector<FileID, 4>> &Kids,
-    llvm::SmallVectorImpl<FileID> &Out) {
-  if (auto It = Kids.find(FID); It != Kids.end())
-    for (FileID Kid : It->second)
+    FileEntryRef File,
+    const llvm::DenseMap<const FileEntry *, llvm::SmallVector<FileEntryRef, 4>>
+        &Kids,
+    llvm::SmallVectorImpl<FileEntryRef> &Out) {
+  if (auto It = Kids.find(&File.getFileEntry()); It != Kids.end())
+    for (FileEntryRef Kid : It->second)
       collectJMCFiles(Kid, Kids, Out);
-  Out.push_back(FID);
+  Out.push_back(File);
 }
 
 void CodeGenModule::emitJMCFileList() {
@@ -1144,28 +1146,36 @@ void CodeGenModule::emitJMCFileList() {
       !getModuleDebugInfo())
     return;
   const SourceManager &SM = getContext().getSourceManager();
+  OptionalFileEntryRef Main = SM.getFileEntryRefForID(SM.getMainFileID());
+  if (!Main)
+    return;
   // The include tree from the include locations: a file is a child of the file
   // its #include sits in. Local SLoc entries are in include order.
-  llvm::DenseMap<FileID, llvm::SmallVector<FileID, 4>> Kids;
+  llvm::DenseMap<const FileEntry *, llvm::SmallVector<FileEntryRef, 4>> Kids;
   for (unsigned I = 0, E = SM.local_sloc_entry_size(); I != E; ++I) {
     const auto &Entry = SM.getLocalSLocEntry(I);
     if (!Entry.isFile())
       continue;
-    FileID FID = SM.getFileID(SourceLocation::getFileLoc(Entry.getOffset()));
-    if (FID == SM.getMainFileID())
+    const SrcMgr::FileInfo &FI = Entry.getFile();
+    OptionalFileEntryRef Child = FI.getContentCache().OrigEntry;
+    SourceLocation IncLoc = FI.getIncludeLoc();
+    if (!Child || IncLoc.isInvalid())
       continue;
-    SourceLocation IncLoc = SM.getIncludeLoc(FID);
-    if (IncLoc.isValid())
-      Kids[SM.getFileID(IncLoc)].push_back(FID);
+    OptionalFileEntryRef Parent = SM.getFileEntryRefForID(SM.getFileID(IncLoc));
+    if (!Parent)
+      continue;
+    Kids[&Parent->getFileEntry()].push_back(*Child);
   }
-  llvm::SmallVector<FileID, 16> Order;
-  collectJMCFiles(SM.getMainFileID(), Kids, Order);
+  llvm::SmallVector<FileEntryRef, 16> Order;
+  collectJMCFiles(*Main, Kids, Order);
   llvm::NamedMDNode *Files =
       getModule().getOrInsertNamedMetadata("llvm.msvc.jmc.files");
   llvm::SmallPtrSet<const FileEntry *, 16> Seen;
-  for (FileID FID : Order) {
-    OptionalFileEntryRef FE = SM.getFileEntryRefForID(FID);
-    if (!FE || !Seen.insert(&FE->getFileEntry()).second)
+  for (FileEntryRef File : Order) {
+    if (!Seen.insert(&File.getFileEntry()).second)
+      continue;
+    FileID FID = SM.translateFile(File);
+    if (FID.isInvalid())
       continue;
     Files->addOperand(
         getModuleDebugInfo()->getOrCreateFile(SM.getLocForStartOfFile(FID)));

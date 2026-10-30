@@ -9232,6 +9232,7 @@ def _SLASH_d1autoclassinit : CLIgnoredFlag<"d1autoclassinit">;
 def _SLASH_d1pragmaOnceSymlinks : CLIgnoredFlag<"d1pragmaOnceSymlinks">;
 def _SLASH_d1safedelete : CLIgnoredFlag<"d1safedelete">;
 def _SLASH_d1Zi : CLIgnoredFlag<"d1Zi">;
+def _SLASH_d1import_no_registry : CLIgnoredFlag<"d1import_no_registry">;
 def _SLASH_d1reportTime : CLIgnoredFlag<"d1reportTime">;
 def _SLASH_d1reportSingleClassLayout : CLIgnoredJoined<"d1reportSingleClassLayout">;
 def _SLASH_d2Fastcap : CLIgnoredFlag<"d2Fastcap">;

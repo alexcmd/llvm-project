@@ -769,9 +769,11 @@ private:
   /// Get the source of the given file ID.
   std::optional<StringRef> getSource(const SourceManager &SM, FileID FID);
 
+public:
   /// Convenience function to get the file debug info descriptor for the input
-  /// location.
+  /// location (JMC file list, CodeGenModule::emitJMCFileList).
   llvm::DIFile *getOrCreateFile(SourceLocation Loc);
+private:
 
   /// Create a file debug info descriptor for a source file.
   llvm::DIFile *

@@ -711,7 +711,7 @@ void (D::*convertCToD(void (C::*mp)()))() {
 // CHECK:   br label
 //
 //        memptr.converted:                                 ; preds = %memptr.convert, %entry
-// CHECK:   phi { ptr, i32, i32 } [ { ptr null, i32 0, i32 -1 }, {{.*}} ], [ {{.*}} ]
+// CHECK:   phi { ptr, i32, i32 } [ { ptr null, i32 0, i32 0 }, {{.*}} ], [ {{.*}} ]
 // CHECK: }
 }
 

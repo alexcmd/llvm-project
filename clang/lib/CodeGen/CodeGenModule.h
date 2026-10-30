@@ -743,6 +743,9 @@ public:
   /// Finalize LLVM code generation.
   void Release();
 
+  /// JMC on MSVC: the include closure as DIFiles, cl order (CodeGenModule.cpp).
+  void emitJMCFileList();
+
   /// Get the current Atomic options.
   AtomicOptions getAtomicOpts() { return AtomicOpts; }
 

@@ -67,16 +67,16 @@ ModulePass *llvm::createJMCInstrumenterPass() { return new JMCInstrumenter(); }
 namespace {
 const char CheckFunctionName[] = "__CheckForDebuggerJustMyCode";
 
-std::string getFlagName(DISubprogram &SP, bool UseX86FastCall) {
+std::string getFlagName(const DIFile &File, bool UseX86FastCall) {
   // absolute windows path:           windows_backslash
   // relative windows backslash path: windows_backslash
   // relative windows slash path:     posix
   // absolute posix path:             posix
   // relative posix path:             posix
   sys::path::Style PathStyle =
-      has_root_name(SP.getDirectory(), sys::path::Style::windows_backslash) ||
-              SP.getDirectory().contains("\\") ||
-              SP.getFilename().contains("\\")
+      has_root_name(File.getDirectory(), sys::path::Style::windows_backslash) ||
+              File.getDirectory().contains("\\") ||
+              File.getFilename().contains("\\")
           ? sys::path::Style::windows_backslash
           : sys::path::Style::posix;
   // Best effort path normalization. This is to guarantee an unique flag symbol
@@ -84,11 +84,14 @@ std::string getFlagName(DISubprogram &SP, bool UseX86FastCall) {
   // paths, or paths with a specific prefix (see the -fdebug-compilation-dir
   // flag), so only hash paths in debuginfo. Don't expand them to absolute
   // paths.
-  SmallString<256> FilePath(SP.getDirectory());
-  sys::path::append(FilePath, PathStyle, SP.getFilename());
+  SmallString<256> FilePath(File.getDirectory());
+  sys::path::append(FilePath, PathStyle, File.getFilename());
   sys::path::native(FilePath, PathStyle);
   sys::path::remove_dots(FilePath, /*remove_dot_dot=*/true, PathStyle);
 
+  // CLANG-CL-GAP(JMC-HASH): cl hashes the file name too and its hash is not
+  // known (probes_cl_decisions.md section 2); the djb hash of the directory
+  // is kept, so the symbol differs from cl while the flag bytes match.
   // The naming convention for the flag name is __<hash>_<file name> with '.' in
   // <file name> replaced with '@'. For example C:\file.any.c would have a flag
   // __D032E919_file@any@c. The naming convention match MSVC's format however
@@ -106,10 +109,10 @@ std::string getFlagName(DISubprogram &SP, bool UseX86FastCall) {
          "_" + Suffix;
 }
 
-void attachDebugInfo(GlobalVariable &GV, DISubprogram &SP) {
+void attachDebugInfo(GlobalVariable &GV, DICompileUnit *CU, DIFile *File) {
+  if (!CU)
+    return;
   Module &M = *GV.getParent();
-  DICompileUnit *CU = SP.getUnit();
-  assert(CU);
   DIBuilder DB(M, false, CU);
 
   auto *DType =
@@ -117,7 +120,7 @@ void attachDebugInfo(GlobalVariable &GV, DISubprogram &SP) {
                          llvm::DINode::FlagArtificial);
 
   auto *DGVE = DB.createGlobalVariableExpression(
-      CU, GV.getName(), /*LinkageName=*/StringRef(), SP.getFile(),
+      CU, GV.getName(), /*LinkageName=*/StringRef(), File,
       /*LineNo=*/0, DType, /*IsLocalToUnit=*/true, /*IsDefined=*/true);
   GV.addMetadata(LLVMContext::MD_dbg, *DGVE);
   DB.finalize();
@@ -160,30 +163,58 @@ bool runImpl(Module &M) {
 
   GlobalValue *CheckFunction = nullptr;
   DenseMap<DISubprogram *, Constant *> SavedFlags(8);
+  // Flag for a file, created once (CodeView symbol __<hash>_<file>).
+  auto getFlag = [&](DIFile *File, DICompileUnit *CU) -> Constant * {
+    std::string FlagName = getFlagName(*File, UseX86FastCall);
+    IntegerType *FlagTy = Type::getInt8Ty(Ctx);
+    return M.getOrInsertGlobal(FlagName, FlagTy, [&] {
+      // FIXME: Put the GV in comdat and have linkonce_odr linkage to save
+      //        .msvcjmc section space? maybe not worth it.
+      GlobalVariable *GV = new GlobalVariable(
+          M, FlagTy, /*isConstant=*/false, GlobalValue::InternalLinkage,
+          ConstantInt::get(FlagTy, 1), FlagName);
+      GV->setSection(FlagSymbolSection);
+      GV->setAlignment(Align(1));
+      GV->setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
+      attachDebugInfo(*GV, CU, File);
+      return GV;
+    });
+  };
+
+  // clang lists the include closure in cl order (CodeGenModule::emitJMCFileList):
+  // one flag byte per file, kept alive as cl's are (llvm.used).
+  if (!IsELF)
+    if (NamedMDNode *Files = M.getNamedMetadata("llvm.msvc.jmc.files")) {
+      DICompileUnit *CU = nullptr;
+      if (NamedMDNode *CUs = M.getNamedMetadata("llvm.dbg.cu"))
+        if (CUs->getNumOperands())
+          CU = dyn_cast<DICompileUnit>(CUs->getOperand(0));
+      SmallVector<GlobalValue *, 16> Used;
+      for (const MDNode *N : Files->operands())
+        if (auto *File = dyn_cast<DIFile>(N))
+          if (auto *GV = dyn_cast<GlobalVariable>(getFlag(File, CU)))
+            Used.push_back(GV);
+      appendToUsed(M, Used);
+    }
+
   for (auto &F : M) {
     if (F.isDeclaration())
       continue;
     auto *SP = F.getSubprogram();
-    if (!SP)
+    if (!SP || !SP->getFile())
       continue;
 
     Constant *&Flag = SavedFlags[SP];
-    if (!Flag) {
-      std::string FlagName = getFlagName(*SP, UseX86FastCall);
-      IntegerType *FlagTy = Type::getInt8Ty(Ctx);
-      Flag = M.getOrInsertGlobal(FlagName, FlagTy, [&] {
-        // FIXME: Put the GV in comdat and have linkonce_odr linkage to save
-        //        .msvcjmc section space? maybe not worth it.
-        GlobalVariable *GV = new GlobalVariable(
-            M, FlagTy, /*isConstant=*/false, GlobalValue::InternalLinkage,
-            ConstantInt::get(FlagTy, 1), FlagName);
-        GV->setSection(FlagSymbolSection);
-        GV->setAlignment(Align(1));
-        GV->setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
-        attachDebugInfo(*GV, *SP);
-        return GV;
-      });
-    }
+    if (!Flag)
+      Flag = getFlag(SP->getFile(), SP->getUnit());
+  }
+  for (auto &F : M) {
+    if (F.isDeclaration())
+      continue;
+    auto *SP = F.getSubprogram();
+    if (!SP || !SP->getFile())
+      continue;
+    Constant *Flag = SavedFlags[SP];
 
     if (!CheckFunction) {
       Function *DefaultCheckFunc =
@@ -206,8 +237,8 @@ bool runImpl(Module &M) {
         }
         CheckFunction = CheckFunc;
 
+        // No /INCLUDE of the default: cl links without one (probes section 2).
         StringRef DefaultCheckFunctionName = DefaultCheckFunc->getName();
-        appendToUsed(M, {DefaultCheckFunc});
         Comdat *C = M.getOrInsertComdat(DefaultCheckFunctionName);
         C->setSelectionKind(Comdat::Any);
         DefaultCheckFunc->setComdat(C);

@@ -5030,8 +5030,7 @@ renderDebugOptions(const ToolChain &TC, const Driver &D, const llvm::Triple &T,
       if (DebugInfoKind >= llvm::codegenoptions::DebugInfoConstructor)
         CmdArgs.push_back("-fjmc");
       else if (D.IsCLMode())
-        D.Diag(clang::diag::warn_drv_jmc_requires_debuginfo) << "/JMC"
-                                                             << "'/Zi', '/Z7'";
+        D.Diag(clang::diag::warn_drv_cl_jmc_requires_zi);
       else
         D.Diag(clang::diag::warn_drv_jmc_requires_debuginfo) << "-fjmc"
                                                              << "-g";

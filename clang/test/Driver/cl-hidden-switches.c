@@ -8,8 +8,8 @@
 // RUN: not %clang_cl --target=x86_64-pc-windows-msvc -### /c /w1wtest.cpp -- %s 2>&1 | FileCheck --check-prefix=D8021-W1 %s
 // RUN: %clang_cl --target=x86_64-pc-windows-msvc -### /F1000 /KERNEL -- %s 2>&1 | FileCheck --check-prefix=LINK %s
 
-// SILENT-NOT: error
-// SILENT-NOT: warning
+// SILENT-NOT: error:
+// SILENT-NOT: warning:
 // C1007-C1XX: fatal error C1007: unrecognized flag '-foo' in 'c1xx'
 // C1007-P2: fatal error C1007: unrecognized flag '-ZO-' in 'p2'
 // D8004-D1: D8004 : '/d1' requires an argument

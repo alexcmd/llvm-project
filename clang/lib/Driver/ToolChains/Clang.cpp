@@ -6698,8 +6698,10 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
       D.Diag(diag::err_drv_cl_requires_argument) << A->getSpelling();
     else if (IsD1)
       D.Diag(diag::err_drv_cl_c1xx_unknown_flag) << A->getValue();
-    else
+    else {
       D.Diag(diag::err_drv_cl_p2_unknown_flag) << A->getValue();
+      C.setClExitOne();
+    }
   }
 
   // cl.exe is silent about __assume with side effects (the discard matches it,
@@ -6707,6 +6709,35 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   if (D.IsCLMode())
     CmdArgs.push_back("-Wno-assume");
 
+  // cl.exe: /ZX (C1083, exit 1), bare /guard (C1034 or C1083), /ZW and /clr
+  // on a C file (D8048, D8045). Input-dependent, so checked per job.
+  for (const Arg *A : Args.filtered(options::OPT__SLASH_ZX)) {
+    A->claim();
+    SmallString<128> Src(Inputs[0].getBaseInput());
+    llvm::sys::fs::make_absolute(Src);
+    SmallString<128> Obj(Output.isFilename() ? Output.getFilename() : "a.obj");
+    llvm::sys::fs::make_absolute(Obj);
+    C.setClExitOne();
+    D.Diag(diag::err_drv_cl_enc_file) << Src << (Obj + ".enc");
+  }
+  for (const Arg *A : Args.filtered(options::OPT__SLASH_guard_bare)) {
+    A->claim();
+    // The guard header is read through the include path: none set is C1034.
+    if (!Args.hasArg(options::OPT_I) &&
+        llvm::sys::Process::GetEnv("INCLUDE").value_or("").empty())
+      D.Diag(diag::err_drv_cl_guard_no_include) << Inputs[0].getBaseInput();
+    else
+      D.Diag(diag::err_drv_cl_guard_include) << Inputs[0].getBaseInput();
+  }
+  for (const Arg *A : Args.filtered(options::OPT__SLASH_ZW, options::OPT__SLASH_clr)) {
+    A->claim();
+    if (Inputs[0].getType() != types::TY_C)
+      continue;
+    if (A->getOption().matches(options::OPT__SLASH_ZW))
+      D.Diag(diag::err_drv_cl_c_no_zw) << Inputs[0].getBaseInput();
+    else
+      D.Diag(diag::err_drv_cl_c_no_clr) << Inputs[0].getBaseInput();
+  }
   for (const Arg *A : Args.filtered(options::OPT_W_Group, options::OPT__SLASH_wd,
                                     options::OPT__SLASH_we,
                                     options::OPT__SLASH_wo,

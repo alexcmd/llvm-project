@@ -343,6 +343,10 @@ public:
   /// Force driver to fail before toolchain is created. This is necessary when
   /// error happens in action builder.
   void setContainsError() { ContainsError = true; }
+  // cl.exe exits 1, not 2, for C1007 in p2 and C1083 on /ZX (Clang.cpp, driver.cpp).
+  bool ClExitOne = false;
+  void setClExitOne() { ClExitOne = true; }
+  bool clExitOne() const { return ClExitOne; }
 
   /// Redirect - Redirect output of this compilation. Can only be done once.
   ///

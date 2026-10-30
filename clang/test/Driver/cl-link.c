@@ -46,8 +46,8 @@
 // DEBUG: "-debug"
 
 // Don't pass through /libpath: if it's not after a /link flag:
-// RUN: not %clang_cl /Tc%s /libpath:foo -fuse-ld=link -### /link /libpath:bar 2>&1 | FileCheck --check-prefix=LIBPATH %s
-// LIBPATH: error: no such file or directory: '/libpath:foo'
+// RUN: %clang_cl /Tc%s /libpath:foo -fuse-ld=link -### /link /libpath:bar 2>&1 | FileCheck --check-prefix=LIBPATH %s
+// LIBPATH: warning: D9002 : ignoring unknown option '/libpath:foo'
 // LIBPATH: libpath:bar
 
 // PR27234

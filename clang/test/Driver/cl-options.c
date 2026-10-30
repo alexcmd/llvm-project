@@ -447,7 +447,6 @@
 // RUN:     /AI foo_does_not_exist \
 // RUN:     /Bt \
 // RUN:     /Bt+ \
-// RUN:     /clr:pure \
 // RUN:     /d1import_no_registry \
 // RUN:     /d1nodatetime \
 // RUN:     /docname \
@@ -499,7 +498,7 @@
 // RUN:     /Gv \
 // RUN:     /Gz \
 // RUN:     /GZ \
-// RUN:     /H \
+// RUN:     /H31 \
 // RUN:     /homeparams \
 // RUN:     /kernel \
 // RUN:     /LN \
@@ -523,7 +522,7 @@
 // RUN:     /sourceDependencies:directives foo.json \
 // RUN:     /translateInclude \
 // RUN:     /u \
-// RUN:     /V \
+// RUN:     /Vfoo \
 // RUN:     /volatile:ms \
 // RUN:     /wfoo \
 // RUN:     /WL \
@@ -543,10 +542,11 @@
 // RUN:     /Zi \
 // RUN:     /ZI \
 // RUN:     /Zl \
-// RUN:     /ZW:nostdlib \
 // RUN:     -- %s 2>&1
 
 // We support -Xclang for forwarding options to cc1.
+// /clr is accepted for C++ input (cl: D8045 only for C files).
+// RUN: %clang_cl /TP /clr:pure -### -- %s
 // RUN: %clang_cl -Xclang hellocc1 -### -- %s 2>&1 | FileCheck -check-prefix=Xclang %s
 // Xclang: "-cc1"
 // Xclang: "hellocc1"

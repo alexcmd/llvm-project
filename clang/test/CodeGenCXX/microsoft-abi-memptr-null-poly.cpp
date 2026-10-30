@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -emit-llvm -o - %s | FileCheck %s
+// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -emit-llvm -o - %s | FileCheck %s
 // Null data member pointers in single-field models are -1, polymorphic or not, as
 // cl.exe (task 21, PMF-NULL-DATA-POLY). Function-template arguments are always 0,
 // class-template arguments -1 (single field) or {0,-1} (virtual base), as cl.exe mangles.

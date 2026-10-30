@@ -298,7 +298,7 @@ void visualstudio::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   if (Arg *A = Args.getLastArg(options::OPT__SLASH_F)) {
     A->claim();
     StringRef N = A->getValue();
-    if (!N.empty())
+    if (!N.empty() && N.find_first_not_of("0123456789abcdefABCDEFxX") == StringRef::npos)
       CmdArgs.push_back(Args.MakeArgString(
           Twine("/STACK:") + (N.starts_with_insensitive("0x") ? Twine(N) : Twine("0x") + N)));
   }

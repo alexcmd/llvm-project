@@ -4341,7 +4341,79 @@ void Driver::handleArguments(Compilation &C, DerivedArgList &Args,
       // It has to have a value.
       Diag(clang::diag::err_drv_missing_argument) << A->getSpelling() << 1;
       Args.eraseArg(options::OPT__SLASH_o);
+    } else {
+      Diag(clang::diag::warn_drv_cl_deprecated_option) << "o";
     }
+  }
+
+  // cl.exe 14.51 argument-value checks (probes_cl_decisions.md section 1). Bare
+  // forms are D8004, non-numeric values D8021, deprecated letters D9035 (warning,
+  // the option still works). /F<text> other than /Ft<dir> is D8021; /Ft<dir> is
+  // the type-library option, accepted (GAP).
+  auto IsClNumber = [](StringRef S) {
+    if (S.starts_with_insensitive("0x")) {
+      S = S.drop_front(2);
+      return !S.empty() && S.find_first_not_of("0123456789abcdefABCDEF") == StringRef::npos;
+    }
+    return !S.empty() && S.find_first_not_of("0123456789") == StringRef::npos;
+  };
+  for (const Arg *A : Args.filtered(options::OPT__SLASH_F)) {
+    A->claim();
+    StringRef V = A->getValue();
+    if (V == "t")
+      Diag(clang::diag::err_drv_cl_requires_argument) << "/Ft";
+    else if (!V.starts_with("t") && !IsClNumber(V))
+      Diag(clang::diag::err_drv_cl_invalid_numeric_argument) << ("/F" + V).str();
+  }
+  for (const Arg *A : Args.filtered(options::OPT__SLASH_H)) {
+    A->claim();
+    StringRef V = A->getValue();
+    if (V.empty())
+      Diag(clang::diag::err_drv_cl_requires_argument) << "/H";
+    else if (IsClNumber(V))
+      Diag(clang::diag::warn_drv_cl_deprecated_option) << "H";
+    else
+      Diag(clang::diag::err_drv_cl_invalid_numeric_argument) << ("/H" + V).str();
+  }
+  for (const Arg *A : Args.filtered(options::OPT__SLASH_V)) {
+    A->claim();
+    if (A->getValue()[0] == '\0')
+      Diag(clang::diag::err_drv_cl_requires_argument) << "/V";
+    else
+      Diag(clang::diag::warn_drv_cl_deprecated_option) << "V";
+  }
+  for (const Arg *A : Args.filtered(options::OPT__SLASH_Ze)) {
+    A->claim();
+    Diag(clang::diag::warn_drv_cl_deprecated_option) << "Ze";
+  }
+  for (const Arg *A : Args.filtered(options::OPT__SLASH_Wv_)) {
+    A->claim();
+    if (A->getValue()[0] == '\0')
+      Diag(clang::diag::err_drv_cl_invalid_numeric_argument) << "/Wv";
+  }
+  for (const Arg *A : Args.filtered(options::OPT__SLASH_W_joined)) {
+    A->claim();
+    StringRef V = A->getValue();
+    if (V.empty())
+      Diag(clang::diag::err_drv_cl_requires_argument) << "/W";
+    else if (V.size() == 1 && V[0] >= '5' && V[0] <= '9')
+      Diag(clang::diag::warn_drv_cl_invalid_warning_level) << V;
+    else
+      Diag(clang::diag::err_drv_cl_invalid_numeric_argument) << ("/W" + V).str();
+  }
+  for (const Arg *A : Args.filtered(options::OPT__SLASH_Zm)) {
+    A->claim();
+    if (A->getValue()[0] == '\0')
+      Diag(clang::diag::err_drv_cl_requires_argument) << "/Zm";
+  }
+  for (const Arg *A : Args.filtered(options::OPT__SLASH_sourcelink_bare)) {
+    A->claim();
+    Diag(clang::diag::err_drv_cl_requires_argument) << "/sourcelink";
+  }
+  for (const Arg *A : Args.filtered(options::OPT__SLASH_Yl)) {
+    A->claim();
+    if (A->getValue()[0] == '\0')
+      Diag(clang::diag::err_drv_cl_c1_unknown_flag) << "Yl";
   }
 
   // Ignore /Yc/Yu if both /Yc and /Yu passed but with different filenames.

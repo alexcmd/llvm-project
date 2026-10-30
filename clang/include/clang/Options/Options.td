@@ -9238,6 +9238,7 @@ def _SLASH_d1reportSingleClassLayout : CLIgnoredJoined<"d1reportSingleClassLayou
 def _SLASH_d2Fastcap : CLIgnoredFlag<"d2Fastcap">;
 def _SLASH_d2cgsummary : CLIgnoredFlag<"d2cgsummary">;
 // cl crashes (C1001) on /d2Zi; accepted, the crash is not reproduced.
+// CLANG-CL-GAP(d2Zi-ice): cl.exe crashes (C1001) on /d2Zi; accepted here.
 def _SLASH_d2Zi : CLIgnoredFlag<"d2Zi">;
 // cl accepts /d2foo silently (the only unknown /d2 name that is silent).
 def _SLASH_d2foo : CLIgnoredFlag<"d2foo">;
@@ -9546,6 +9547,8 @@ def _SLASH_Fo : CLCompileJoined<"Fo">,
   HelpText<"Set output object file (with /c)">,
   MetaVarName<"<file or dir/>">;
 def _SLASH_Fo_COLON : CLCompileJoinedOrSeparate<"Fo:">, Alias<_SLASH_Fo>;
+// Bare /guard: C1034 or C1083 by include path (Clang.cpp).
+def _SLASH_guard_bare : CLFlag<"guard">;
 def _SLASH_guard : CLJoined<"guard:">,
   HelpText<"Enable Control Flow Guard with /guard:cf, or only the table with /guard:cf,nochecks. "
            "Enable EH Continuation Guard with /guard:ehcont">;
@@ -9694,7 +9697,9 @@ def _SLASH_utf8 : CLIgnoredFlag<"utf-8">,
 def _SLASH_w : CLCompileJoined<"w">;
 def _SLASH_we : CLCompileJoined<"we">;
 def _SLASH_wo : CLCompileJoined<"wo">;
-def _SLASH_Wv_ : CLIgnoredJoined<"Wv">;
+def _SLASH_Wv_ : CLJoined<"Wv">;  // bare: D8021 (Driver.cpp); /Wv:<ver> ignored
+// Any other /W<text>: D8004 bare, D9014 for /W5..9, else D8021 (Driver.cpp).
+def _SLASH_W_joined : CLJoined<"W">;
 def _SLASH_Zc___cplusplus : CLIgnoredFlag<"Zc:__cplusplus">;
 def _SLASH_Zc_auto : CLIgnoredFlag<"Zc:auto">;
 def _SLASH_Zc_forScope : CLIgnoredFlag<"Zc:forScope">;
@@ -9718,6 +9723,7 @@ def _SLASH_jumptablerdata : CLIgnoredFlag<"jumptablerdata">; // CLANG-CL-GAP(jtr
 def _SLASH_limitTemplateNotes : CLIgnoredJoined<"limitTemplateNotes:">; // CLANG-CL-GAP(ltn)
 def _SLASH_presetPadding : CLIgnoredFlag<"presetPadding">; // CLANG-CL-GAP(preset)
 def _SLASH_sourcelink : CLIgnoredJoined<"sourcelink:">; // CLANG-CL-GAP(sourcelink)
+def _SLASH_sourcelink_bare : CLFlag<"sourcelink">; // bare: D8004 (Driver.cpp)
 def _SLASH_templateDepth : CLCompileJoined<"templateDepth:">, Alias<ftemplate_depth_EQ>;
 def _SLASH_volatileMetadata : CLIgnoredFlag<"volatileMetadata">; // CLANG-CL-GAP(volatilemd)
 def _SLASH_volatileMetadata_ : CLIgnoredFlag<"volatileMetadata-">; // CLANG-CL-GAP(volatilemd)
@@ -9801,7 +9807,8 @@ def _SLASH_Gm : CLFlag<"Gm">;
 def _SLASH_Gm_ : CLFlag<"Gm-">;
 def _SLASH_GT : CLFlag<"GT">;
 def _SLASH_GZ : CLFlag<"GZ">;
-def _SLASH_H : CLFlag<"H">;
+// /H<n> is deprecated (D9035); bare D8004, /H<text> D8021 (Driver.cpp).
+def _SLASH_H : CLJoined<"H">;
 def _SLASH_headername : CLJoined<"headerName:">;
 def _SLASH_headerUnit : CLJoinedOrSeparate<"headerUnit">;
 def _SLASH_headerUnitAngle : CLJoinedOrSeparate<"headerUnit:angle">;
@@ -9830,7 +9837,8 @@ def _SLASH_dA : CLJoinedOrSeparate<"dA">;
 def _SLASH_sourceDependenciesDirectives : CLJoinedOrSeparate<"sourceDependencies:directives">;
 def _SLASH_translateInclude : CLFlag<"translateInclude">;
 def _SLASH_u : CLFlag<"u">;
-def _SLASH_V : CLFlag<"V">;
+// Deprecated: /V<text> warns D9035 (VERBOSE, VERSION), bare is D8004 (Driver.cpp).
+def _SLASH_V : CLJoined<"V">;
 def _SLASH_WL : CLFlag<"WL">;
 def _SLASH_Wp64 : CLFlag<"Wp64">;
 def _SLASH_Yd : CLFlag<"Yd">;
@@ -9841,6 +9849,8 @@ def _SLASH_Ze : CLFlag<"Ze">;
 def _SLASH_Zg : CLFlag<"Zg">;
 def _SLASH_ZI : CLFlag<"ZI">;
 def _SLASH_ZW : CLJoined<"ZW">;
+// C1083 on a missing compiler-generated .obj.enc, exit 1 (Clang.cpp).
+def _SLASH_ZX : CLFlag<"ZX">;
 
 //===----------------------------------------------------------------------===//
 // clang-dxc Options

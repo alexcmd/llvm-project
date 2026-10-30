@@ -396,15 +396,15 @@ void polymorphicMemPtrs() {
   if (memptr)
     memptr = 0;
 // Member pointers for polymorphic classes include the vtable slot in their
-// offset and use 0 to represent null.
+// offset and use -1 to represent null (cl.exe; task 21 PMF-NULL-DATA-POLY).
 // CHECK:      define dso_local void @"?polymorphicMemPtrs@@YAXXZ"() {{.*}} {
 // CHECK:        %[[memptr:.*]] = alloca i32, align 4
 // CHECK-NEXT:   store i32 4, ptr %[[memptr]], align 4
 // CHECK-NEXT:   store i32 8, ptr %[[memptr]], align 4
 // CHECK-NEXT:   %[[memptr_val:.*]] = load i32, ptr %[[memptr]], align 4
-// CHECK-NEXT:   %{{.*}} = icmp ne i32 %[[memptr_val]], 0
+// CHECK-NEXT:   %{{.*}} = icmp ne i32 %[[memptr_val]], -1
 // CHECK-NEXT:   br i1 %{{.*}}, label %{{.*}}, label %{{.*}}
-// CHECK:        store i32 0, ptr %[[memptr]], align 4
+// CHECK:        store i32 -1, ptr %[[memptr]], align 4
 // CHECK:        ret void
 // CHECK:      }
 }

@@ -9,5 +9,5 @@
 
 // CHECK-NOT: EBUG
 // CHECK-NOT: warning
-// FOO: "-DFOO=1"
+// FOO: "-D" "FOO=1"
 // FOO-NOT: EBUG

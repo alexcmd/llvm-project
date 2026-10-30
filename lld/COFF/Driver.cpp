@@ -150,6 +150,36 @@ static bool isCrtend(StringRef s) {
 // (a limited resource on Windows) for the duration that the future is pending.
 using MBErrPair = std::pair<std::unique_ptr<MemoryBuffer>, std::error_code>;
 
+// link.exe reads a '/' argument that is not an existing file as an option. A
+// known option that needs its ':' value but has none is LNK1146 (fatal, exit
+// 1146); any other is LNK4044 (warning, ignored; under /WX LNK1218 and exit
+// 4044). Probed with link 14.51.36231. Never LNK1181 for these. Returns true
+// when the argument was taken as an option.
+static bool handleSlashArgAsOption(COFFLinkerContext &ctx, StringRef arg) {
+  if (!arg.starts_with("/") || sys::fs::exists(arg))
+    return false;
+  std::string withColon = (arg + ":").str();
+  const char *argv[] = {withColon.c_str()};
+  unsigned missingIndex = 0, missingCount = 0;
+  opt::InputArgList parsed =
+      ctx.optTable.ParseArgs(argv, missingIndex, missingCount);
+  for (const opt::Arg *a : parsed)
+    if (a->getOption().getID() != OPT_INPUT) {
+      llvm::errs() << "LINK : fatal error LNK1146: no argument specified with "
+                      "option '"
+                   << arg << "'\n";
+      exitLld(1146);
+    }
+  llvm::errs() << "LINK : warning LNK4044: unrecognized option '" << arg
+               << "'; ignored\n";
+  if (ctx.e.fatalWarnings) {
+    llvm::errs() << "LINK : error LNK1218: warning treated as error; no output "
+                    "file generated\n";
+    exitLld(4044);
+  }
+  return true;
+}
+
 // Create a std::future that opens and maps a file using the best strategy for
 // the host platform.
 static std::future<MBErrPair> createFutureForFile(std::string path,
@@ -2414,6 +2444,8 @@ void LinkerDriver::linkerMain(ArrayRef<const char *> argsArr) {
           enqueuePath(*path, inLib, InputOpt::WholeArchive);
         break;
       case OPT_INPUT:
+        if (handleSlashArgAsOption(ctx, arg->getValue()))
+          break;
         if (std::optional<StringRef> path = findFileIfNew(arg->getValue()))
           enqueuePath(*path, inLib,
                       isWholeArchive(*path) ? InputOpt::WholeArchive

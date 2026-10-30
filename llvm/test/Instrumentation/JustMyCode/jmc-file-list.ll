@@ -1,11 +1,11 @@
 ; cl gives one flag per file in clang's list (llvm.msvc.jmc.files, cl order):
 ; the header flag is created and kept (llvm.used) even with no function in it,
-; and the main file is last. The default check function is not pinned.
+; and the main file is last (its flag is kept too). The default check function is not pinned.
 ; RUN: opt -passes=jmc-instrumenter -S < %s | FileCheck %s
 
 ; CHECK: @"_{{[0-9A-F]+}}_hdr@h" = internal unnamed_addr global i8 1, section ".msvcjmc", align 1, !dbg !{{[0-9]+}}
 ; CHECK: @"_A8764FDD_x@c" = internal unnamed_addr global i8 1, section ".msvcjmc", align 1, !dbg !{{[0-9]+}}
-; CHECK: @llvm.used = appending global [1 x ptr] [ptr @"_{{[0-9A-F]+}}_hdr@h"], section "llvm.metadata"
+; CHECK: @llvm.used = appending global [2 x ptr] [ptr @"_{{[0-9A-F]+}}_hdr@h", ptr @"_A8764FDD_x@c"], section "llvm.metadata"
 ; CHECK-NOT: @__JustMyCode_Default
 ; CHECK-NOT: /INCLUDE
 ; CHECK: define void @w1() #0 !dbg !{{[0-9]+}} {

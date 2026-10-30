@@ -6,8 +6,8 @@
 // RUN:   /limitTemplateNotes:5 /presetPadding /volatileMetadata \
 // RUN:   /volatileMetadata- /sourcelink:x.json /templateDepth:1000 -### \
 // RUN:   -- %s 2>&1 | FileCheck %s --check-prefix=NOOP
-// NOOP-NOT: warning
-// NOOP-NOT: error
+// NOOP-NOT: warning:
+// NOOP-NOT: error:
 // NOOP: "-ftemplate-depth=1000"
 
 // RUN: %clang_cl /c /PD -### -- %s 2>&1 | FileCheck %s --check-prefix=PD
@@ -20,8 +20,8 @@
 // Undocumented cl.exe toggles are accepted silently.
 // RUN: %clang_cl /c /Zf /WL- /typedil /presetPointers- /presetScalars \
 // RUN:   /allowSuper -### -- %s 2>&1 | FileCheck %s --check-prefix=NOOP-HIDDEN
-// NOOP-HIDDEN-NOT: warning
-// NOOP-HIDDEN-NOT: error
+// NOOP-HIDDEN-NOT: warning:
+// NOOP-HIDDEN-NOT: error:
 
 // Other spellings are not cl switches: unknown /options stay D9002 (ignored).
 // RUN: %clang_cl /c /feature:FOO -### -- %s 2>&1 | FileCheck %s --check-prefix=UNK

@@ -3037,6 +3037,13 @@ bool Driver::DiagnoseInputExistence(StringRef Value, types::ID Ty,
     }
   }
 
+  // cl.exe ignores an unknown /option with warning D9002 and goes on (probed
+  // 14.51.36231); it is not a missing input file.
+  if (IsCLMode() && Value.starts_with("/")) {
+    Diag(clang::diag::warn_drv_ignoring_unknown_option) << Value;
+    return false;
+  }
+
   // In CL mode, don't error on apparently non-existent linker inputs, because
   // they can be influenced by linker flags the clang driver might not
   // understand.

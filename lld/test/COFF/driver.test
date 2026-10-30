@@ -1,6 +1,6 @@
 # RUN: not lld-link nosuchfile.obj >& %t.log
-# RUN: FileCheck -DMSG=%errc_ENOENT -check-prefix=MISSING %s < %t.log
-MISSING: 'nosuchfile.obj': [[MSG]]
+# RUN: FileCheck -check-prefix=MISSING %s < %t.log
+MISSING: LINK : fatal error LNK1181: cannot open input file 'nosuchfile.obj'
 
 # RUN: lld-link --version | FileCheck -check-prefix=VERSION %s
 VERSION: {{LLD [0-9]+\.[0-9]+}}

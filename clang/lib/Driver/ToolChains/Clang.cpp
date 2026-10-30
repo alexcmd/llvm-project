@@ -6675,20 +6675,45 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
 
   Args.AddAllArgs(CmdArgs, options::OPT_R_Group);
 
-  for (const Arg *A :
-       Args.filtered(options::OPT_W_Group, options::OPT__SLASH_wd)) {
+  for (const Arg *A : Args.filtered(options::OPT_W_Group, options::OPT__SLASH_wd,
+                                    options::OPT__SLASH_we,
+                                    options::OPT__SLASH_wo,
+                                    options::OPT__SLASH_w)) {
     A->claim();
-    if (A->getOption().getID() == options::OPT__SLASH_wd) {
+    if (A->getOption().matches(options::OPT__SLASH_wd) ||
+        A->getOption().matches(options::OPT__SLASH_we) ||
+        A->getOption().matches(options::OPT__SLASH_wo) ||
+        A->getOption().matches(options::OPT__SLASH_w)) {
+      // /w<l><n>: level digit then the warning number. Other /w forms are
+      // not warnings and stay silent, as cl ignores them.
+      StringRef Value = A->getValue();
+      unsigned Level = 1;
+      if (A->getOption().matches(options::OPT__SLASH_w)) {
+        if (Value.size() < 2 || Value[0] < '0' || Value[0] > '9')
+          continue;
+        Level = Value[0] - '0';
+        Value = Value.drop_front();
+      }
       unsigned WarningNumber;
-      if (StringRef(A->getValue()).getAsInteger(10, WarningNumber)) {
+      if (Value.getAsInteger(10, WarningNumber)) {
         D.Diag(diag::err_drv_invalid_int_value)
             << A->getAsString(Args) << A->getValue();
         continue;
       }
 
-      if (auto Group = diagGroupFromCLWarningID(WarningNumber)) {
-        CmdArgs.push_back(Args.MakeArgString(
-            "-Wno-" + DiagnosticIDs::getWarningOptionForGroup(*Group)));
+      // Unmapped ids are silent, as in cl.exe.
+      auto Group = diagGroupFromCLWarningID(WarningNumber);
+      if (!Group)
+        continue;
+      StringRef Name = DiagnosticIDs::getWarningOptionForGroup(*Group);
+      if (A->getOption().matches(options::OPT__SLASH_wd) || Level == 0) {
+        CmdArgs.push_back(Args.MakeArgString("-Wno-" + Name));
+      } else if (A->getOption().matches(options::OPT__SLASH_we)) {
+        CmdArgs.push_back(Args.MakeArgString("-Werror=" + Name));
+      } else {
+        // CLANG-CL-GAP(wo-warn-once): clang has no warn-once switch, so /wo
+        // enables the group as a normal warning.
+        CmdArgs.push_back(Args.MakeArgString("-W" + Name));
       }
       continue;
     }

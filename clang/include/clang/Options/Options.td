@@ -9674,7 +9674,9 @@ def _SLASH_sdl : CLIgnoredFlag<"sdl">;
 def _SLASH_sdl_ : CLIgnoredFlag<"sdl-">;
 def _SLASH_utf8 : CLIgnoredFlag<"utf-8">,
   HelpText<"Set source and runtime encoding to UTF-8 (default)">;
-def _SLASH_w : CLIgnoredJoined<"w">;
+def _SLASH_w : CLCompileJoined<"w">;
+def _SLASH_we : CLCompileJoined<"we">;
+def _SLASH_wo : CLCompileJoined<"wo">;
 def _SLASH_Wv_ : CLIgnoredJoined<"Wv">;
 def _SLASH_Zc___cplusplus : CLIgnoredFlag<"Zc:__cplusplus">;
 def _SLASH_Zc_auto : CLIgnoredFlag<"Zc:auto">;

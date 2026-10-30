@@ -1,0 +1,7 @@
+# A missing input is the fatal LNK1181 of link.exe; lld-link exits 1181.
+# The exit status itself is probed by hand (lit cannot check a status value).
+
+# RUN: yaml2obj %p/Inputs/ret42.yaml -o %t.obj
+# RUN: not lld-link /out:%t.exe /entry:main %t.obj nosuch-lnk1181.obj 2>&1 | FileCheck %s
+
+# CHECK: LINK : fatal error LNK1181: cannot open input file 'nosuch-lnk1181.obj'

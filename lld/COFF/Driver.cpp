@@ -444,8 +444,12 @@ void LinkerDriver::enqueuePath(StringRef path, bool lazy, InputOpt inputOpt) {
       // the option `/nodefaultlib` than a reference to a file in the root
       // directory.
       std::string nearest;
-      if (ctx.optTable.findNearest(pathStr, nearest) > 1)
-        Err(ctx) << msg;
+      if (ctx.optTable.findNearest(pathStr, nearest) > 1) {
+        // link.exe: LNK1181 is fatal and exits 1181 (probed 14.51.36231).
+        llvm::errs() << "LINK : fatal error LNK1181: cannot open input file '"
+                     << pathStr << "'\n";
+        exitLld(1181);
+      }
       else
         Err(ctx) << msg << "; did you mean '" << nearest << "'";
     } else {

@@ -2,7 +2,7 @@
 // (cl.exe does this), and a missing file is error D8022 with exit code 2.
 // Order as cl.exe: CL, then the command line, then _CL_ (last one wins).
 
-// RUN: printf '%%s\n' '/DFROMRSP=1' > %t.rsp
+// RUN: printf '/DFROMRSP=1' > %t.rsp
 // RUN: env CL="@%t.rsp" %clang_cl -### -c -- %s 2>&1 | FileCheck %s --check-prefix=CL-RSP
 // CL-RSP: "-D" "FROMRSP=1"
 

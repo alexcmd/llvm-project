@@ -738,9 +738,11 @@ int A::*reinterpret(int B::*mp) {
 int A::*reinterpret(int C::*mp) {
   return reinterpret_cast<int A::*>(mp);
 // CHECK: define dso_local i32 @"?reinterpret@Test2@@YAPQA@1@HPQC@1@H@Z"{{.*}}  {
+// C (polymorphic) and A now both use -1 for null (task 21, PMF-NULL-DATA-POLY),
+// so the representations agree and no null conversion is emitted.
 // CHECK:   %[[mp:.*]] = load i32, ptr
-// CHECK:   %[[cmp:.*]] = icmp ne i32 %[[mp]], 0
-// CHECK:   select i1 %[[cmp]], i32 %[[mp]], i32 -1
+// CHECK-NOT: select
+// CHECK:   ret i32
 // CHECK: }
 }
 

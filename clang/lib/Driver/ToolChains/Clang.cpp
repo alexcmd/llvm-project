@@ -6716,14 +6716,14 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
       StringRef Value = A->getValue();
       unsigned Level = 1;
       if (A->getOption().matches(options::OPT__SLASH_w)) {
-        // cl.exe: a bare /w<l> is D8004; a non-digit level is D8021.
+        // cl.exe: a bare /w<l> is D8004; a non-digit suffix (/wfoo) is the
+        // unknown-option warning D9002 (rc 0); a bad number is D8021.
         if (Value.size() == 1 && Value[0] >= '0' && Value[0] <= '9') {
           D.Diag(diag::err_drv_cl_requires_argument) << ("/w" + Value).str();
           continue;
         }
         if (Value.size() < 2 || Value[0] < '0' || Value[0] > '9') {
-          D.Diag(diag::err_drv_cl_invalid_numeric_argument)
-              << ("/w" + Value).str();
+          D.Diag(diag::warn_drv_ignoring_unknown_option) << ("/w" + Value).str();
           continue;
         }
         Level = Value[0] - '0';

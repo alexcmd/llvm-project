@@ -33,7 +33,7 @@ SPELLNODEFAULTLIB: ignoring unknown argument '-nodefaultlibs', did you mean '-no
 SPELLNODEFAULTLIB: no input files
 
 # RUN: not lld-link /nodefaultlibs 2>&1 | FileCheck -check-prefix=SPELLNODEFAULTLIB_SLASH %s
-SPELLNODEFAULTLIB_SLASH: could not open '/nodefaultlibs': {{.*}}; did you mean '/nodefaultlib'
+SPELLNODEFAULTLIB_SLASH: LINK : warning LNK4044: unrecognized option '/nodefaultlibs'; ignored
 SPELLNODEFAULTLIB_SLASH-NOT: no input files
 
 # Getting flags as typo corrections for normal input files is a side effect

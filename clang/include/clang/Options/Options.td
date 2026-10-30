@@ -9533,6 +9533,12 @@ def _SLASH_FA : CLJoined<"FA">,
 def _SLASH_Fa : CLJoined<"Fa">,
   HelpText<"Set assembly output file name (with /FA)">,
   MetaVarName<"<file or dir/>">;
+// cl.exe 14.51 accepts these silently (no output with /c): /FD bare only (/FDx
+// is D8021), /Fw and /Fl take any value. Without their own defs they fell into
+// the /F<n> stack option and hit D8021 (Driver.cpp).
+def _SLASH_FD : CLFlag<"FD">, Flags<[HelpHidden]>;
+def _SLASH_Fw : CLJoined<"Fw">, Flags<[HelpHidden]>;
+def _SLASH_Fl : CLJoined<"Fl">, Flags<[HelpHidden]>;
 def _SLASH_FI : CLJoinedOrSeparate<"FI">,
   HelpText<"Include file before parsing">, Alias<include_>;
 def _SLASH_Fe : CLJoined<"Fe">,

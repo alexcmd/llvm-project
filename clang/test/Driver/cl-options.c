@@ -435,7 +435,8 @@
 // LINKUNUSED-NOT: argument unused during compilation
 
 // Support ignoring warnings about unused arguments.
-// RUN: not %clang_cl /Abracadabra -Qunused-arguments -### -- %s 2>&1 | FileCheck -check-prefix=UNUSED %s
+// RUN: %clang_cl /Abracadabra -Qunused-arguments -### -- %s 2>&1 | FileCheck -check-prefix=UNUSED %s
+// UNUSED: warning: D9002 : ignoring unknown option '/Abracadabra'
 // UNUSED-NOT: argument unused during compilation
 
 // Unsupported but parsed options. Check that we don't error on them.

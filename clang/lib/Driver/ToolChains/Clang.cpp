@@ -7856,6 +7856,12 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
       CmdArgs.push_back("-fms-cxx-eh4");
     else
       CmdArgs.push_back("-fno-ms-cxx-eh4");
+  } else if (C.getDriver().IsCLMode() &&
+             Triple.getArch() == llvm::Triple::x86_64 &&
+             Triple.isWindowsMSVCEnvironment()) {
+    // cl.exe x64 defaults to __CxxFrameHandler4 (probed on 14.51.36231);
+    // x86 and arm64 stay on __CxxFrameHandler3. /d2FH4- selects FH3.
+    CmdArgs.push_back("-fms-cxx-eh4");
   }
 
   // Handle exception personalities

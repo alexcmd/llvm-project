@@ -452,7 +452,6 @@
 // RUN:     /clr:pure \
 // RUN:     /d1import_no_registry \
 // RUN:     /d1nodatetime \
-// RUN:     /d2TrimInlines \
 // RUN:     /docname \
 // RUN:     /dynamicdeopt \
 // RUN:     /experimental:external \

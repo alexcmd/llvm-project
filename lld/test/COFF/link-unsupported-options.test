@@ -1,0 +1,28 @@
+# link.exe options that lld-link does not implement. CLR, signing and PGO
+# change the image, so they are errors (LNK-style), never silently ignored.
+# The rest are accepted and ignored (LLD-GAP).
+
+# RUN: not lld-link /out:%t.exe /entry:main /subsystem:console \
+# RUN:   %p/Inputs/hello64.obj /CLRIMAGETYPE:IJW /DELAYSIGN /KEYFILE:x.snk \
+# RUN:   /GENPROFILE /USEPROFILE /SPGO /SPD:x.pdb /WINMDFILE:x.winmd \
+# RUN:   2>&1 | FileCheck %s --check-prefix=ERR
+# ERR-DAG: error: '/CLRIMAGETYPE:IJW' is not supported by lld-link
+# ERR-DAG: error: '/DELAYSIGN' is not supported by lld-link
+# ERR-DAG: error: '/KEYFILE:x.snk' is not supported by lld-link
+# ERR-DAG: error: '/GENPROFILE' is not supported by lld-link
+# ERR-DAG: error: '/USEPROFILE' is not supported by lld-link
+# ERR-DAG: error: '/SPGO' is not supported by lld-link
+# ERR-DAG: error: '/SPD:x.pdb' is not supported by lld-link
+# ERR-DAG: error: '/WINMDFILE:x.winmd' is not supported by lld-link
+
+# RUN: rm -f %t.ign.exe
+# RUN: lld-link /out:%t.ign.exe /entry:main /subsystem:console \
+# RUN:   %p/Inputs/hello64.obj /SOURCELINK:x.json /EMITVOLATILEMETADATA \
+# RUN:   /DYNAMICDEOPT /DYNAMICDEOPT-ALLOWICF /EXPORTPADMIN \
+# RUN:   /LINKREPROTARGET:x.dll /PDBINJECT:MAPFILE /DEBUG:LAZY /OPT:STRICTICF
+# RUN: ls %t.ign.exe
+
+# DEBUG value forms link.exe accepts are full debug info here.
+# RUN: lld-link /out:%t.dbg.exe /entry:main /subsystem:console \
+# RUN:   %p/Inputs/hello64.obj /DEBUG:CTYPES /DEBUG:FORCEFULL
+# RUN: ls %t.dbg.exe

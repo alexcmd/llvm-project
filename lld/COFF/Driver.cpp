@@ -1774,6 +1774,24 @@ void LinkerDriver::linkerMain(ArrayRef<const char *> argsArr) {
   if (auto *arg = args.getLastArg(OPT_out))
     config->outputFile = arg->getValue();
 
+  // link.exe CLR, signing and PGO options change the image. lld-link does not
+  // implement them: they are errors, never silently ignored (tasks/compat/14).
+  for (auto *arg : args.filtered(
+           OPT_clr_flag_supportlasterror, OPT_clr_flag_unmanagedcodecheck,
+           OPT_clr_p_assemblylinkresource, OPT_clr_p_assemblymodule,
+           OPT_clr_p_assemblyresource, OPT_clr_p_imagetype,
+           OPT_clr_p_loaderoptimization, OPT_clr_p_threadattribute,
+           OPT_clr_flag_noassembly, OPT_clr_p_midl, OPT_clr_flag_winmd,
+           OPT_clr_flag_winmddelaysign, OPT_clr_p_winmdfile,
+           OPT_clr_p_winmdkeycontainer, OPT_clr_p_winmdkeyfile,
+           OPT_sign_flag_delaysign, OPT_sign_p_keycontainer,
+           OPT_sign_p_keyfile, OPT_pgo_flag_genprofile,
+           OPT_pgo_flag_fastgenprofile, OPT_pgo_flag_useprofile,
+           OPT_pgo_flag_spgo, OPT_pgo_flag_spdembed, OPT_pgo_p_spd,
+           OPT_pgo_p_spdin))
+    Err(ctx) << "'" << arg->getAsString(args)
+             << "' is not supported by lld-link";
+
   // Handle /verbose
   if (args.hasArg(OPT_verbose))
     config->verbose = true;
@@ -1813,6 +1831,10 @@ void LinkerDriver::linkerMain(ArrayRef<const char *> argsArr) {
         Warn(ctx) << "/debug:fastlink unsupported; using /debug:full";
         s = "full";
       }
+      // link.exe accepts these three; lld-link has no such debug modes, so they
+      // are full debug info (LLD-GAP(debug-ctypes-lazy-forcefull)).
+      if (s == "ctypes" || s == "lazy" || s == "forcefull")
+        s = "full";
       if (s == "none") {
         config->debug = false;
         config->incremental = false;
@@ -2083,6 +2105,8 @@ void LinkerDriver::linkerMain(ArrayRef<const char *> argsArr) {
         if (s.getAsInteger(10, config->ltoPartitions) ||
             config->ltoPartitions == 0)
           Err(ctx) << "/opt:lldltopartitions: invalid partition count: " << s;
+      } else if (s == "stricticf") {
+        // link.exe ICF strictness is not modelled (LLD-GAP(opt-stricticf)).
       } else if (s != "lbr" && s != "nolbr")
         Err(ctx) << "/opt: unknown option: " << s;
     }

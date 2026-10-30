@@ -6731,10 +6731,11 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
       }
       unsigned WarningNumber;
       if (Value.getAsInteger(10, WarningNumber)) {
+        Twine Prefix = A->getOption().matches(options::OPT__SLASH_w)
+                           ? Twine("/w")
+                           : Twine(A->getSpelling());
         D.Diag(diag::err_drv_cl_invalid_numeric_argument)
-            << (A->getOption().matches(options::OPT__SLASH_w)
-                    ? "/w" + A->getValue()
-                    : A->getSpelling() + A->getValue()).str();
+            << (Prefix + A->getValue()).str();
         continue;
       }
 

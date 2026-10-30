@@ -67,6 +67,8 @@ def gmtime : LLVMFlag<"gmtime">, Alias<utc>;
 def help : MLFlag<"?">,
            HelpText<"Display available options">;
 def help_long : MLFlag<"help">, Alias<help>;
+def version : LLVMFlag<"version">,
+           HelpText<"Display the llvm-ml version (openrt build identity)">;
 def assemble_only : MLFlag<"c">, HelpText<"Assemble only; do not link">;
 def define : MLJoinedOrSeparate<"D">, MetaVarName<"<macro>=<value>">,
              HelpText<"Define <macro> to <value> (or blank if <value> "

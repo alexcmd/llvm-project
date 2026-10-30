@@ -1,0 +1,5 @@
+# The llvm-ml version line carries the openrt marker and the fork commit.
+
+# RUN: llvm-ml --version | FileCheck %s
+# CHECK: llvm-ml version {{[0-9.]+}} (openrt {{[0-9a-f]+}})
+# CHECK-NOT: Microsoft

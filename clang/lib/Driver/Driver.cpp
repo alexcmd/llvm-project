@@ -4357,6 +4357,11 @@ void Driver::handleArguments(Compilation &C, DerivedArgList &Args,
     }
     return !S.empty() && S.find_first_not_of("0123456789") == StringRef::npos;
   };
+  // /FD, /Fw, /Fl: accepted silently (see Options.td); no compile effect.
+  for (const Arg *A :
+       Args.filtered(options::OPT__SLASH_FD, options::OPT__SLASH_Fw,
+                     options::OPT__SLASH_Fl))
+    A->claim();
   for (const Arg *A : Args.filtered(options::OPT__SLASH_F)) {
     A->claim();
     StringRef V = A->getValue();

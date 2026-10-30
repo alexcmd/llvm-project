@@ -2898,8 +2898,12 @@ GetNullMemberPointerFields(const MemberPointerType *MPT,
     fields.push_back(getZeroInt());
   if (inheritanceModelHasVBPtrOffsetField(Inheritance))
     fields.push_back(getZeroInt());
-  if (inheritanceModelHasVBTableOffsetField(Inheritance))
-    fields.push_back(getAllOnesInt());
+  if (inheritanceModelHasVBTableOffsetField(Inheritance)) {
+    // cl: a null function pointer is 16 zero bytes (task 21, PMF-NULL-VBASE);
+    // only the data member pointer keeps -1 in the vbtable offset.
+    fields.push_back(MPT->isMemberFunctionPointer() ? getZeroInt()
+                                                    : getAllOnesInt());
+  }
 }
 
 llvm::Constant *

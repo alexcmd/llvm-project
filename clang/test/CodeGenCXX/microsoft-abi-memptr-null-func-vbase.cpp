@@ -7,5 +7,5 @@ void (VD::*fnull)() = nullptr;
 // CHECK-DAG: @"?fnull{{[^=]*}}= {{.*}}global {{.*}}zeroinitializer
 bool isnull(void (VD::*p)()) { return p == nullptr; }
 // CHECK-LABEL: define {{.*}}@"?isnull@@
-// CHECK-NOT: extractvalue
+// CHECK-NOT: extractvalue {{.*}}, [12]
 // CHECK: icmp

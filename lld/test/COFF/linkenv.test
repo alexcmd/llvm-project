@@ -7,3 +7,18 @@ CHECK: OVERVIEW: LLVM Linker
 # RUN:     FileCheck --check-prefix=ERR %s
 
 ERR: error: no input files
+
+# link.exe order: LINK, then the command line, then _LINK_ (last /out wins).
+# RUN: rm -f %t.cmd.exe %t.link.exe %t.last.exe
+# RUN: env LINK=/out:%t.link.exe _LINK_=/out:%t.last.exe lld-link \
+# RUN:   /out:%t.cmd.exe /entry:main /subsystem:console %p/Inputs/hello64.obj
+# RUN: ls %t.last.exe
+# RUN: not ls %t.cmd.exe
+# RUN: not ls %t.link.exe
+
+# Without _LINK_ the command line /out beats LINK.
+# RUN: rm -f %t.cmd.exe %t.link.exe
+# RUN: env LINK=/out:%t.link.exe lld-link \
+# RUN:   /out:%t.cmd.exe /entry:main /subsystem:console %p/Inputs/hello64.obj
+# RUN: ls %t.cmd.exe
+# RUN: not ls %t.link.exe

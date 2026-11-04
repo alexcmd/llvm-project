@@ -22,6 +22,7 @@
 
 #include "llvm/CodeGen/JMCInstrumenter.h"
 #include "llvm/ADT/SmallString.h"
+#include <array>
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/IR/DIBuilder.h"
@@ -67,7 +68,49 @@ ModulePass *llvm::createJMCInstrumenterPass() { return new JMCInstrumenter(); }
 namespace {
 const char CheckFunctionName[] = "__CheckForDebuggerJustMyCode";
 
-std::string getFlagName(const DIFile &File, bool UseX86FastCall) {
+// CRC-32, reflected polynomial 0xEDB88320, initial value 0, no final xor (the
+// register is not inverted, unlike zlib crc32). cl hashes this way (see
+// tasks/compat/data/jmc_hash.md).
+uint32_t msvcJMCHash(StringRef Path) {
+  static const auto Table = [] {
+    std::array<uint32_t, 256> T{};
+    for (uint32_t I = 0; I != 256; ++I) {
+      uint32_t C = I;
+      for (int K = 0; K != 8; ++K)
+        C = (C >> 1) ^ (C & 1 ? 0xEDB88320u : 0u);
+      T[I] = C;
+    }
+    return T;
+  }();
+  uint32_t Crc = 0;
+  for (unsigned char C : Path)
+    Crc = Table[(Crc & 0xFF) ^ C] ^ (Crc >> 8);
+  return Crc;
+}
+
+std::string getFlagName(const DIFile &File, bool UseX86FastCall, bool IsMSVC) {
+  if (IsMSVC) {
+    // cl: full path (directory + file name), '/' -> '\', dots removed, case
+    // as spelled. The hash covers the whole path; the suffix is the file name
+    // (fname + ext) with '.' replaced by '@'.
+    SmallString<256> FullPath(File.getDirectory());
+    sys::path::append(FullPath, sys::path::Style::windows_backslash,
+                      File.getFilename());
+    for (char &C : FullPath)
+      if (C == '/')
+        C = '\\';
+    sys::path::remove_dots(FullPath, /*remove_dot_dot=*/true,
+                           sys::path::Style::windows_backslash);
+    std::string Suffix;
+    for (auto C :
+         sys::path::filename(FullPath, sys::path::Style::windows_backslash))
+      Suffix.push_back(C == '.' ? '@' : C);
+    return (UseX86FastCall ? "_" : "__") +
+           utohexstr(msvcJMCHash(FullPath), /*LowerCase=*/false,
+                     /*Width=*/8) +
+           "_" + Suffix;
+  }
+  // ELF: unchanged.
   // absolute windows path:           windows_backslash
   // relative windows backslash path: windows_backslash
   // relative windows slash path:     posix
@@ -89,9 +132,6 @@ std::string getFlagName(const DIFile &File, bool UseX86FastCall) {
   sys::path::native(FilePath, PathStyle);
   sys::path::remove_dots(FilePath, /*remove_dot_dot=*/true, PathStyle);
 
-  // CLANG-CL-GAP(JMC-HASH): cl hashes the file name too and its hash is not
-  // known (probes_cl_decisions.md section 2); the djb hash of the directory
-  // is kept, so the symbol differs from cl while the flag bytes match.
   // The naming convention for the flag name is __<hash>_<file name> with '.' in
   // <file name> replaced with '@'. For example C:\file.any.c would have a flag
   // __D032E919_file@any@c. The naming convention match MSVC's format however
@@ -165,7 +205,7 @@ bool runImpl(Module &M) {
   DenseMap<DISubprogram *, Constant *> SavedFlags(8);
   // Flag for a file, created once (CodeView symbol __<hash>_<file>).
   auto getFlag = [&](DIFile *File, DICompileUnit *CU) -> Constant * {
-    std::string FlagName = getFlagName(*File, UseX86FastCall);
+    std::string FlagName = getFlagName(*File, UseX86FastCall, IsMSVC);
     IntegerType *FlagTy = Type::getInt8Ty(Ctx);
     return M.getOrInsertGlobal(FlagName, FlagTy, [&] {
       // FIXME: Put the GV in comdat and have linkonce_odr linkage to save

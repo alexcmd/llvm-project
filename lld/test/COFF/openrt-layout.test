@@ -67,4 +67,4 @@ the Windows SDK: std64.lib comes from <sdk>\Lib\10.0.11111.0\um\x64.
 # RUN:   /winsdkdir:%t.dir/empty /defaultlib:std64 /entry:main /out:%t.exe 2>&1 \
 # RUN:   | FileCheck --check-prefix=NOTFOUND %s
 
-NOTFOUND: could not open 'std64.lib'
+NOTFOUND: LINK : fatal error LNK1181: cannot open input file 'std64.lib'

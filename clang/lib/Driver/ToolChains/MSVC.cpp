@@ -157,7 +157,8 @@ void visualstudio::Linker::ConstructJob(Compilation &C, const JobAction &JA,
                             llvm::archToLegacyVCArch(TC.getArch()));
     CmdArgs.push_back(Args.MakeArgString(Twine("-libpath:") + DIAPath));
   }
-  if (!llvm::sys::Process::GetEnv("LIB") ||
+  // BIN-RELATIVE-LOOKUP: layout libs/SDK even with an empty %LIB%.
+  if (TC.usesBinRelativeLayout() || !llvm::sys::Process::GetEnv("LIB") ||
       Args.hasArg(options::OPT__SLASH_vctoolsdir,
                   options::OPT__SLASH_vctoolsversion,
                   options::OPT__SLASH_winsysroot)) {
@@ -168,7 +169,7 @@ void visualstudio::Linker::ConstructJob(Compilation &C, const JobAction &JA,
         Twine("-libpath:") +
         TC.getSubDirectoryPath(llvm::SubDirectoryType::Lib, "atlmfc")));
   }
-  if (!llvm::sys::Process::GetEnv("LIB") ||
+  if (TC.usesBinRelativeLayout() || !llvm::sys::Process::GetEnv("LIB") ||
       Args.hasArg(options::OPT__SLASH_winsdkdir,
                   options::OPT__SLASH_winsdkversion,
                   options::OPT__SLASH_winsysroot)) {
@@ -543,17 +544,42 @@ MSVCToolChain::MSVCToolChain(const Driver &D, const llvm::Triple &Triple,
   if (Arg *A = Args.getLastArg(options::OPT__SLASH_winsysroot))
     WinSysRoot = A->getValue();
 
+  // BIN-RELATIVE-LOOKUP: an openrt-<ver> layout around the driver
+  // (<Dir>\..\manifest.json) acts as /vctoolsdir:<root> and wins over env,
+  // setup config and registry, unless /vctoolsdir, /winsysroot or a non-empty
+  // %INCLUDE%/%EXTERNAL_INCLUDE%/%LIB% already describe a toolchain.
+  // manifest.json sdk.root/sdk.version stand in for missing /winsdkdir and
+  // /winsdkversion.
+  auto EnvSet = [](StringRef Var) {
+    std::optional<std::string> V = llvm::sys::Process::GetEnv(Var);
+    return V && !V->empty();
+  };
+  if (!VCToolsDir && !WinSysRoot && !EnvSet("INCLUDE") &&
+      !EnvSet("EXTERNAL_INCLUDE") && !EnvSet("LIB") &&
+      llvm::findVCToolChainViaBinRelativeLayout(
+          getVFS(), getDriver().Dir, VCToolChainPath, VSLayout, LayoutSdkDir,
+          LayoutSdkVersion)) {
+    BinRelativeLayout = true;
+    if (!WinSdkDir && !LayoutSdkDir.empty()) {
+      WinSdkDir = LayoutSdkDir;
+      if (!WinSdkVersion && !LayoutSdkVersion.empty())
+        WinSdkVersion = LayoutSdkVersion;
+    }
+  }
+
   // Check the command line first, that's the user explicitly telling us what to
   // use. Check the environment next, in case we're being invoked from a VS
   // command prompt. Failing that, just try to find the newest Visual Studio
   // version we can and use its default VC toolchain.
-  llvm::findVCToolChainViaCommandLine(getVFS(), VCToolsDir, VCToolsVersion,
-                                      WinSysRoot, VCToolChainPath, VSLayout) ||
-      llvm::findVCToolChainViaEnvironment(getVFS(), VCToolChainPath,
-                                          VSLayout) ||
-      llvm::findVCToolChainViaSetupConfig(getVFS(), VCToolsVersion,
-                                          VCToolChainPath, VSLayout) ||
-      llvm::findVCToolChainViaRegistry(VCToolChainPath, VSLayout);
+  if (!BinRelativeLayout)
+    llvm::findVCToolChainViaCommandLine(getVFS(), VCToolsDir, VCToolsVersion,
+                                        WinSysRoot, VCToolChainPath,
+                                        VSLayout) ||
+        llvm::findVCToolChainViaEnvironment(getVFS(), VCToolChainPath,
+                                            VSLayout) ||
+        llvm::findVCToolChainViaSetupConfig(getVFS(), VCToolsVersion,
+                                            VCToolChainPath, VSLayout) ||
+        llvm::findVCToolChainViaRegistry(VCToolChainPath, VSLayout);
 
   loadMultilibsFromYAML(Args, D);
 }

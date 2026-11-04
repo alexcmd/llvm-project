@@ -136,6 +136,8 @@ public:
   void printVerboseInfo(raw_ostream &OS) const override;
 
   bool FoundMSVCInstall() const { return !VCToolChainPath.empty(); }
+  // BIN-RELATIVE-LOOKUP: toolchain taken from the openrt-<ver> layout.
+  bool usesBinRelativeLayout() const { return BinRelativeLayout; }
 
   void
   addClangTargetOptions(const llvm::opt::ArgList &DriverArgs,
@@ -155,6 +157,9 @@ protected:
   Tool *buildAssembler() const override;
 
 private:
+  // Storage for WinSdkDir/WinSdkVersion taken from manifest.json.
+  std::string LayoutSdkDir, LayoutSdkVersion;
+  bool BinRelativeLayout = false;
   std::optional<llvm::StringRef> WinSdkDir, WinSdkVersion, WinSysRoot;
   std::string VCToolChainPath;
   llvm::ToolsetLayout VSLayout = llvm::ToolsetLayout::OlderVS;

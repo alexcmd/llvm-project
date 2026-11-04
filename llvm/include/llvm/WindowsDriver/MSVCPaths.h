@@ -91,6 +91,18 @@ findVCToolChainViaCommandLine(vfs::FileSystem &VFS,
                               std::optional<llvm::StringRef> WinSysRoot,
                               std::string &Path, ToolsetLayout &VSLayout);
 
+// BIN-RELATIVE-LOOKUP: openrt-<ver> layout around the tool's own bin dir:
+//   <root>\bin\clang-cl.exe, lld-link.exe   (BinDir)
+//   <root>\include, <root>\lib\<arch>       (x64/x86/arm64/arm, as VS2017+)
+//   <root>\manifest.json                    marker; must be a regular file
+// On a hit Path = <root>, VSLayout = VS2017OrNewer (as /vctoolsdir:<root>).
+// manifest.json "sdk": {"root": ..., "version": ...} -> SDKRoot/SDKVersion
+// (empty if absent; relative root is taken against <root>). Malformed json
+// keeps the layout and yields no SDK info. Callers decide precedence.
+LLVM_ABI bool findVCToolChainViaBinRelativeLayout(
+    vfs::FileSystem &VFS, llvm::StringRef BinDir, std::string &Path,
+    ToolsetLayout &VSLayout, std::string &SDKRoot, std::string &SDKVersion);
+
 // Check various environment variables to try and find a toolchain.
 LLVM_ABI bool findVCToolChainViaEnvironment(vfs::FileSystem &VFS,
                                             std::string &Path,

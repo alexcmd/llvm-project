@@ -5884,6 +5884,11 @@ def note_marked_here : Note<"marked %0 here">;
 // C++ class template specializations and out-of-line definitions
 def err_template_spec_needs_header : Error<
   "template specialization requires 'template<>'">;
+// cl accepts an out-of-class definition of a member of an implicit or partial
+// specialization without 'template<>' (C5259, /Wall only).
+def ext_ms_template_spec_needs_header : Warning<
+  "explicit specialization requires 'template<>'">,
+  InGroup<MicrosoftTemplate>;
 def err_template_spec_needs_template_parameters : Error<
   "template specialization or definition requires a template parameter list "
   "corresponding to the nested type %0">;

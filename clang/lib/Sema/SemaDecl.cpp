@@ -7889,7 +7889,8 @@ NamedDecl *Sema::ActOnVariableDeclarator(
             ? D.getName().TemplateId
             : nullptr,
         TemplateParamLists,
-        /*never a friend*/ false, IsMemberSpecialization, Invalid);
+        /*never a friend*/ false, IsMemberSpecialization, Invalid,
+        /*SuppressDiagnostic=*/false, /*MSAllowMissingHeader=*/true);
 
     if (TemplateParams) {
       if (DC->isDependentContext()) {
@@ -10229,7 +10230,8 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
         MatchTemplateParametersToScopeSpecifier(
             D.getDeclSpec().getBeginLoc(), D.getIdentifierLoc(),
             D.getCXXScopeSpec(), TemplateId, TemplateParamLists, isFriend,
-            isMemberSpecialization, Invalid);
+            isMemberSpecialization, Invalid, /*SuppressDiagnostic=*/false,
+            /*MSAllowMissingHeader=*/true);
     if (TemplateParams) {
       // Check that we can declare a template here.
       if (CheckTemplateDeclScope(S, TemplateParams))

@@ -11798,7 +11798,7 @@ public:
       const CXXScopeSpec &SS, TemplateIdAnnotation *TemplateId,
       ArrayRef<TemplateParameterList *> ParamLists, bool IsFriend,
       bool &IsMemberSpecialization, bool &Invalid,
-      bool SuppressDiagnostic = false);
+      bool SuppressDiagnostic = false, bool MSAllowMissingHeader = false);
 
   /// Returns the template parameter list with all default template argument
   /// information.

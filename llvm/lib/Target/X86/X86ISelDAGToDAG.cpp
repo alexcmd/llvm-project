@@ -148,6 +148,10 @@ static bool removeFH4DirectCleanupFunclets(MachineFunction &MF) {
     MF.erase(Cleanup);
     Changed = true;
   }
+  if (Changed && llvm::none_of(MF, [](const MachineBasicBlock &MBB) {
+        return MBB.isEHFuncletEntry();
+      }))
+    MF.getInfo<X86MachineFunctionInfo>()->setNoEHFuncletCode(true);
   return Changed;
 }
 

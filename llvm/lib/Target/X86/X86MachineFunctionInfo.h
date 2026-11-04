@@ -124,6 +124,11 @@ class X86MachineFunctionInfo : public MachineFunctionInfo {
   /// to spill and restore the frame pointer.
   bool HasSEHFramePtrSave = false;
 
+  /// FH4: every EH funclet became a direct unwind action and was removed after
+  /// ISel; the function keeps its EH states but has no funclet code (openrt
+  /// FH4-NOEXCEPT-TERMINATE: cl's plain frame, no frame pointer/UnwindHelp).
+  bool NoEHFuncletCode = false;
+
   /// The frame index of a stack object containing the original frame pointer
   /// used to address arguments in a function using a base pointer.
   int SEHFramePtrSaveIndex = 0;
@@ -249,6 +254,9 @@ public:
 
   bool getHasSEHFramePtrSave() const { return HasSEHFramePtrSave; }
   void setHasSEHFramePtrSave(bool V) { HasSEHFramePtrSave = V; }
+
+  bool getNoEHFuncletCode() const { return NoEHFuncletCode; }
+  void setNoEHFuncletCode(bool V) { NoEHFuncletCode = V; }
 
   int getSEHFramePtrSaveIndex() const { return SEHFramePtrSaveIndex; }
   void setSEHFramePtrSaveIndex(int Index) { SEHFramePtrSaveIndex = Index; }

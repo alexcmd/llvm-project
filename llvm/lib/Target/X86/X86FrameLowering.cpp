@@ -122,6 +122,13 @@ bool X86FrameLowering::needsFrameIndexResolution(
 /// hasFPImpl - Return true if the specified function should have a dedicated
 /// frame pointer register.  This is true if the function has variable sized
 /// allocas or if frame pointer elimination is disabled.
+/// EH funclets that are still emitted as code (not all removed as FH4 direct
+/// actions): they need the frame pointer, UnwindHelp and the frame-pointer save.
+static bool hasEHFuncletCode(const MachineFunction &MF) {
+  return MF.hasEHFunclets() &&
+         !MF.getInfo<X86MachineFunctionInfo>()->getNoEHFuncletCode();
+}
+
 bool X86FrameLowering::hasFPImpl(const MachineFunction &MF) const {
   const MachineFrameInfo &MFI = MF.getFrameInfo();
   return (MF.getTarget().Options.DisableFramePointerElim(MF) ||
@@ -129,7 +136,7 @@ bool X86FrameLowering::hasFPImpl(const MachineFunction &MF) const {
           MFI.isFrameAddressTaken() || MFI.hasOpaqueSPAdjustment() ||
           MF.getInfo<X86MachineFunctionInfo>()->getForceFramePointer() ||
           MF.getInfo<X86MachineFunctionInfo>()->hasPreallocatedCall() ||
-          MF.callsUnwindInit() || MF.hasEHFunclets() || MF.callsEHReturn() ||
+          MF.callsUnwindInit() || hasEHFuncletCode(MF) || MF.callsEHReturn() ||
           MFI.hasStackMap() || MFI.hasPatchPoint() ||
           (isWin64Prologue(MF) && MFI.hasCopyImplyingStackAdjustment()));
 }
@@ -3046,7 +3053,7 @@ bool X86FrameLowering::assignCalleeSavedSpillSlots(
   // Spill the BasePtr if it's used.
   if (this->TRI->hasBasePointer(MF)) {
     // Allocate a spill slot for EBP if we have a base pointer and EH funclets.
-    if (MF.hasEHFunclets()) {
+    if (hasEHFuncletCode(MF)) {
       int FI = MFI.CreateSpillStackObject(SlotSize, Align(SlotSize));
       X86FI->setHasSEHFramePtrSave(true);
       X86FI->setSEHFramePtrSaveIndex(FI);
@@ -4443,7 +4450,7 @@ void X86FrameLowering::processFunctionBeforeFrameFinalized(
 
   // If this function isn't doing Win64-style C++ EH, we don't need to do
   // anything.
-  if (STI.is64Bit() && MF.hasEHFunclets() &&
+  if (STI.is64Bit() && hasEHFuncletCode(MF) &&
       classifyEHPersonality(MF.getFunction().getPersonalityFn()) ==
           EHPersonality::MSVC_CXX) {
     adjustFrameForMsvcCxxEh(MF);

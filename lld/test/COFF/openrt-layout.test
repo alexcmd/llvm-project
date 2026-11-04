@@ -1,0 +1,70 @@
+BIN-RELATIVE-LOOKUP: an openrt-<ver> layout around lld-link
+(<bin>\..\manifest.json) puts <root>\lib\<arch> on the search path as if
+/vctoolsdir:<root> were given; manifest.json sdk.root/sdk.version supply the
+Windows SDK when /winsdkdir is absent. lld-link locates itself, so it is copied
+into fake layouts.
+
+# RUN: rm -rf %t.dir
+# RUN: mkdir -p %t.dir/openrt-1.0/bin %t.dir/openrt-1.0/include %t.dir/openrt-1.0/lib/x64
+# RUN: cp lld-link %t.dir/openrt-1.0/bin/lld-link.exe
+# RUN: cp %p/Inputs/std64.lib %t.dir/openrt-1.0/lib/x64
+# RUN: echo '{"version": "1.0"}' > %t.dir/openrt-1.0/manifest.json
+# RUN: mkdir -p %t.dir/openrt-0.9/bin %t.dir/openrt-0.9/lib/x64 %t.dir/empty
+# RUN: cp lld-link %t.dir/openrt-0.9/bin/lld-link.exe
+# RUN: cp %p/Inputs/std64.lib %t.dir/openrt-0.9/lib/x64
+# RUN: mkdir -p %t.dir/openrt-2.0/bin %t.dir/openrt-2.0/include %t.dir/openrt-2.0/lib/x64
+# RUN: mkdir -p %t.dir/kits/Lib/10.0.11111.0/um/x64 %t.dir/kits/Lib/10.0.22222.0/um/x64
+# RUN: cp lld-link %t.dir/openrt-2.0/bin/lld-link.exe
+# RUN: cp %p/Inputs/std64.lib %t.dir/kits/Lib/10.0.11111.0/um/x64
+# RUN: echo '{"sdk": {"root": "../kits", "version": "10.0.11111.0"}}' > %t.dir/openrt-2.0/manifest.json
+
+Layout found: std64.lib comes from <root>\lib\x64.
+# RUN: env -u LIB -u VCToolsInstallDir -u VCINSTALLDIR \
+# RUN:   %t.dir/openrt-1.0/bin/lld-link.exe %p/Inputs/hello64.obj \
+# RUN:   /defaultlib:std64 /entry:main /out:%t.exe
+
+Empty %LIB% counts as unset.
+# RUN: env -u VCToolsInstallDir -u VCINSTALLDIR LIB= \
+# RUN:   %t.dir/openrt-1.0/bin/lld-link.exe %p/Inputs/hello64.obj \
+# RUN:   /defaultlib:std64 /entry:main /out:%t.exe
+
+%LIB% set: the layout is not used...
+# RUN: env -u VCToolsInstallDir -u VCINSTALLDIR LIB=%t.dir/empty \
+# RUN:   not %t.dir/openrt-1.0/bin/lld-link.exe %p/Inputs/hello64.obj \
+# RUN:   /defaultlib:std64 /entry:main /out:%t.exe 2>&1 \
+# RUN:   | FileCheck --check-prefix=NOTFOUND %s
+
+...unless /lldignoreenv is given.
+# RUN: env -u VCToolsInstallDir -u VCINSTALLDIR LIB=%t.dir/empty \
+# RUN:   %t.dir/openrt-1.0/bin/lld-link.exe %p/Inputs/hello64.obj /lldignoreenv \
+# RUN:   /defaultlib:std64 /entry:main /out:%t.exe
+
+/vctoolsdir wins over the layout.
+# RUN: env -u LIB -u VCToolsInstallDir -u VCINSTALLDIR \
+# RUN:   not %t.dir/openrt-1.0/bin/lld-link.exe %p/Inputs/hello64.obj \
+# RUN:   /vctoolsdir:%t.dir/empty /defaultlib:std64 /entry:main /out:%t.exe 2>&1 \
+# RUN:   | FileCheck --check-prefix=NOTFOUND %s
+
+No manifest.json: no layout.
+# RUN: env -u LIB -u VCToolsInstallDir -u VCINSTALLDIR \
+# RUN:   not %t.dir/openrt-0.9/bin/lld-link.exe %p/Inputs/hello64.obj \
+# RUN:   /defaultlib:std64 /entry:main /out:%t.exe 2>&1 \
+# RUN:   | FileCheck --check-prefix=NOTFOUND %s
+
+manifest.json sdk.root (relative to the layout root) and sdk.version select
+the Windows SDK: std64.lib comes from <sdk>\Lib\10.0.11111.0\um\x64.
+# RUN: env -u LIB -u VCToolsInstallDir -u VCINSTALLDIR \
+# RUN:   %t.dir/openrt-2.0/bin/lld-link.exe %p/Inputs/hello64.obj \
+# RUN:   /defaultlib:std64 /entry:main /out:%t.exe
+
+/winsdkversion overrides sdk.version; /winsdkdir overrides sdk.* entirely.
+# RUN: env -u LIB -u VCToolsInstallDir -u VCINSTALLDIR \
+# RUN:   not %t.dir/openrt-2.0/bin/lld-link.exe %p/Inputs/hello64.obj \
+# RUN:   /winsdkversion:10.0.22222.0 /defaultlib:std64 /entry:main /out:%t.exe 2>&1 \
+# RUN:   | FileCheck --check-prefix=NOTFOUND %s
+# RUN: env -u LIB -u VCToolsInstallDir -u VCINSTALLDIR \
+# RUN:   not %t.dir/openrt-2.0/bin/lld-link.exe %p/Inputs/hello64.obj \
+# RUN:   /winsdkdir:%t.dir/empty /defaultlib:std64 /entry:main /out:%t.exe 2>&1 \
+# RUN:   | FileCheck --check-prefix=NOTFOUND %s
+
+NOTFOUND: could not open 'std64.lib'

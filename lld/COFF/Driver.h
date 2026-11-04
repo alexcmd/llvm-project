@@ -112,7 +112,9 @@ private:
   StringRef findLibMinGW(StringRef filename);
 
   // Determines the location of the sysroot based on `args`, environment, etc.
-  void detectWinSysRoot(const llvm::opt::InputArgList &args);
+  // argv0 locates the openrt-<ver> layout (BIN-RELATIVE-LOOKUP).
+  void detectWinSysRoot(const llvm::opt::InputArgList &args,
+                        const std::string &argv0);
 
   // Adds various search paths based on the sysroot.  Must only be called once
   // config.machine has been set.

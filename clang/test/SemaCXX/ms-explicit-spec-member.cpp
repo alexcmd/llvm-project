@@ -24,7 +24,7 @@ void S<int>::f() {} // warn-warning {{explicit specialization requires 'template
 S<int>::S() {} // warn-warning {{explicit specialization requires 'template<>'}} nonms-error {{template specialization requires 'template<>'}}
 int S<char>::pid = 2; // warn-warning {{explicit specialization requires 'template<>'}} nonms-error {{template specialization requires 'template<>'}}
 
-struct S<int>::N { int x; }; // expected-error {{template specialization requires 'template<>'}} nonms-error {{template specialization requires 'template<>'}}
+struct S<int>::N { int x; }; // expected-error {{template specialization requires 'template<>'}} warn-error {{template specialization requires 'template<>'}} nonms-error {{template specialization requires 'template<>'}}
 
 // Real explicit specialization: no diagnostic in any mode.
 template <> struct S<long> {

@@ -12,6 +12,8 @@
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
+#include "llvm/Support/JSON.h"
+#include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/Process.h"
 #include "llvm/Support/Program.h"
@@ -519,6 +521,62 @@ bool llvm::findVCToolChainViaCommandLine(
     return true;
   }
   return false;
+}
+
+// BIN-RELATIVE-LOOKUP: <BinDir>\..\manifest.json marks an openrt-<ver> root.
+// Purely lexical ".." (no symlink resolution), one stat plus one read.
+bool llvm::findVCToolChainViaBinRelativeLayout(vfs::FileSystem &VFS,
+                                               StringRef BinDir,
+                                               std::string &Path,
+                                               ToolsetLayout &VSLayout,
+                                               std::string &SDKRoot,
+                                               std::string &SDKVersion) {
+  SmallString<256> Root(BinDir);
+  if (Root.empty())
+    return false;
+  VFS.makeAbsolute(Root);
+  while (Root.size() > 1 && sys::path::is_separator(Root.back()))
+    Root.pop_back();
+  sys::path::remove_filename(Root); // drop "bin"
+  if (Root.empty())
+    return false;
+
+  SmallString<256> Manifest(Root);
+  sys::path::append(Manifest, "manifest.json");
+  ErrorOr<vfs::Status> St = VFS.status(Manifest);
+  if (!St || !St->isRegularFile())
+    return false;
+
+  Path = std::string(Root);
+  VSLayout = ToolsetLayout::VS2017OrNewer;
+  SDKRoot.clear();
+  SDKVersion.clear();
+
+  // Optional "sdk": {"root": "...", "version": "..."}; anything else ignored.
+  ErrorOr<std::unique_ptr<MemoryBuffer>> Buf = VFS.getBufferForFile(Manifest);
+  if (!Buf)
+    return true;
+  Expected<json::Value> V = json::parse((*Buf)->getBuffer());
+  if (!V) {
+    consumeError(V.takeError());
+    return true;
+  }
+  const json::Object *O = V->getAsObject();
+  const json::Object *SDK = O ? O->getObject("sdk") : nullptr;
+  if (!SDK)
+    return true;
+  if (std::optional<StringRef> R = SDK->getString("root"); R && !R->empty()) {
+    SmallString<256> P(*R);
+    if (sys::path::is_relative(P)) {
+      P = Root;
+      sys::path::append(P, *R);
+      sys::path::remove_dots(P, /*remove_dot_dot=*/true);
+    }
+    SDKRoot = std::string(P);
+  }
+  if (std::optional<StringRef> Ver = SDK->getString("version"))
+    SDKVersion = Ver->str();
+  return true;
 }
 
 bool llvm::findVCToolChainViaEnvironment(vfs::FileSystem &VFS,

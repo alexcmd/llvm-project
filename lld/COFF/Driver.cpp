@@ -819,7 +819,8 @@ void LinkerDriver::setMachine(MachineTypes machine) {
   addWinSysRootLibSearchPaths();
 }
 
-void LinkerDriver::detectWinSysRoot(const opt::InputArgList &Args) {
+void LinkerDriver::detectWinSysRoot(const opt::InputArgList &Args,
+                                    const std::string &argv0) {
   IntrusiveRefCntPtr<vfs::FileSystem> VFS = vfs::getRealFileSystem();
 
   // Check the command line first, that's the user explicitly telling us what to
@@ -827,6 +828,26 @@ void LinkerDriver::detectWinSysRoot(const opt::InputArgList &Args) {
   // command prompt. Failing that, just try to find the newest Visual Studio
   // version we can and use its default VC toolchain.
   std::optional<StringRef> VCToolsDir, VCToolsVersion, WinSysRoot;
+  // BIN-RELATIVE-LOOKUP: an openrt-<ver> layout around lld-link
+  // (<bin>\..\manifest.json) acts as /vctoolsdir:<root>, ahead of env, setup
+  // config and registry. It is not autodetection: /novcautodetect keeps it.
+  // Skipped with /vctoolsdir or /winsysroot, or a non-empty %LIB% without
+  // /lldignoreenv. manifest.json sdk.* stand in for a missing /winsdkdir.
+  std::string layoutRoot, layoutSdkDir, layoutSdkVersion;
+  bool binRelative = false;
+  if (!Args.hasArg(OPT_vctoolsdir, OPT_winsysroot)) {
+    std::optional<std::string> lib = Process::GetEnv("LIB");
+    SmallString<128> binDir(
+        sys::fs::getMainExecutable(argv0.c_str(), nullptr));
+    path::remove_filename(binDir);
+    if ((!lib || lib->empty() || Args.hasArg(OPT_lldignoreenv)) &&
+        findVCToolChainViaBinRelativeLayout(*VFS, binDir, layoutRoot, vsLayout,
+                                            layoutSdkDir, layoutSdkVersion)) {
+      binRelative = true;
+      VCToolsDir = layoutRoot;
+      Log(ctx) << "openrt layout: " << layoutRoot;
+    }
+  }
   if (auto *A = Args.getLastArg(OPT_vctoolsdir))
     VCToolsDir = A->getValue();
   if (auto *A = Args.getLastArg(OPT_vctoolsversion))
@@ -859,13 +880,18 @@ void LinkerDriver::detectWinSysRoot(const opt::InputArgList &Args) {
     if (A->getOption().getID() == OPT_winsysroot)
       path::append(diaPath, "DIA SDK");
   }
-  useWinSysRootLibPath = !Process::GetEnv("LIB") ||
+  useWinSysRootLibPath = binRelative || !Process::GetEnv("LIB") ||
                          Args.hasArg(OPT_lldignoreenv, OPT_vctoolsdir,
                                      OPT_vctoolsversion, OPT_winsysroot);
-  if (!Process::GetEnv("LIB") ||
+  if (binRelative || !Process::GetEnv("LIB") ||
       Args.hasArg(OPT_lldignoreenv, OPT_winsdkdir, OPT_winsdkversion,
                   OPT_winsysroot)) {
     std::optional<StringRef> WinSdkDir, WinSdkVersion;
+    if (!layoutSdkDir.empty() && !Args.hasArg(OPT_winsdkdir)) {
+      WinSdkDir = layoutSdkDir;
+      if (!layoutSdkVersion.empty())
+        WinSdkVersion = layoutSdkVersion;
+    }
     if (auto *A = Args.getLastArg(OPT_winsdkdir))
       WinSdkDir = A->getValue();
     if (auto *A = Args.getLastArg(OPT_winsdkversion))
@@ -1795,7 +1821,7 @@ void LinkerDriver::linkerMain(ArrayRef<const char *> argsArr) {
       // Don't automatically deduce the lib path from the environment or MSVC
       // installations when operating in mingw mode. (This also makes LLD ignore
       // winsysroot and vctoolsdir arguments.)
-      detectWinSysRoot(args);
+      detectWinSysRoot(args, argsArr[0]);
       if (!args.hasArg(OPT_lldignoreenv, OPT_winsysroot, OPT_vctoolsdir,
                        OPT_vctoolsversion, OPT_winsdkdir, OPT_winsdkversion))
         addLibSearchPaths();

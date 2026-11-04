@@ -2856,7 +2856,8 @@ TemplateParameterList *Sema::MatchTemplateParametersToScopeSpecifier(
     SourceLocation DeclStartLoc, SourceLocation DeclLoc, const CXXScopeSpec &SS,
     TemplateIdAnnotation *TemplateId,
     ArrayRef<TemplateParameterList *> ParamLists, bool IsFriend,
-    bool &IsMemberSpecialization, bool &Invalid, bool SuppressDiagnostic) {
+    bool &IsMemberSpecialization, bool &Invalid, bool SuppressDiagnostic,
+    bool MSAllowMissingHeader) {
   IsMemberSpecialization = false;
   Invalid = false;
 
@@ -2977,10 +2978,19 @@ TemplateParameterList *Sema::MatchTemplateParametersToScopeSpecifier(
     return false;
   };
 
-  auto DiagnoseMissingExplicitSpecialization = [&] (SourceRange Range) {
+  auto DiagnoseMissingExplicitSpecialization = [&] (SourceRange Range,
+                                                    bool MSAccept) {
     // Check that we can have an explicit specialization here.
     if (CheckExplicitSpecialization(Range, true))
       return true;
+
+    // MSVC accepts the header-less out-of-class member definition as an
+    // explicit specialization; warn only where cl does (C5259).
+    if (MSAccept) {
+      if (!SuppressDiagnostic)
+        Diag(DeclLoc, diag::ext_ms_template_spec_needs_header) << Range;
+      return false;
+    }
 
     // We don't have a template header, but we should.
     SourceLocation ExpectedTemplateLoc;
@@ -3100,7 +3110,8 @@ TemplateParameterList *Sema::MatchTemplateParametersToScopeSpecifier(
 
       if (!IsFriend)
         if (DiagnoseMissingExplicitSpecialization(
-                getRangeOfTypeInNestedNameSpecifier(Context, T, SS)))
+                getRangeOfTypeInNestedNameSpecifier(Context, T, SS),
+                MSAllowMissingHeader && getLangOpts().MSVCCompat))
           return nullptr;
 
       continue;
@@ -3153,7 +3164,8 @@ TemplateParameterList *Sema::MatchTemplateParametersToScopeSpecifier(
       // We don't have a template header for the declaration itself, but we
       // should.
       DiagnoseMissingExplicitSpecialization(SourceRange(TemplateId->LAngleLoc,
-                                                        TemplateId->RAngleLoc));
+                                                        TemplateId->RAngleLoc),
+                                            /*MSAccept=*/false);
 
       // Fabricate an empty template parameter list for the invented header.
       return TemplateParameterList::Create(Context, SourceLocation(),

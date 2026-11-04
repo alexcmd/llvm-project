@@ -150,8 +150,17 @@ static bool removeFH4DirectCleanupFunclets(MachineFunction &MF) {
   }
   if (Changed && llvm::none_of(MF, [](const MachineBasicBlock &MBB) {
         return MBB.isEHFuncletEntry();
-      }))
+      })) {
     MF.getInfo<X86MachineFunctionInfo>()->setNoEHFuncletCode(true);
+    // FunctionLoweringInfo set this for the EH pads; inline asm that clobbers
+    // SP is the other source, keep it then.
+    bool HasInlineAsm = llvm::any_of(MF, [](const MachineBasicBlock &MBB) {
+      return llvm::any_of(
+          MBB, [](const MachineInstr &MI) { return MI.isInlineAsm(); });
+    });
+    if (!HasInlineAsm)
+      MF.getFrameInfo().setHasOpaqueSPAdjustment(false);
+  }
   return Changed;
 }
 

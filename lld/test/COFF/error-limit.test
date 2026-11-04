@@ -1,37 +1,67 @@
-RUN: not lld-link 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15 16 17 18 19 20 \
-RUN:   21 22 2>&1 | FileCheck -check-prefix=DEFAULT %s
+# Undefined symbols are the non-fatal errors that count against /errorlimit.
+# (An unknown /option is now LNK4044 and a missing input is fatal LNK1181, so
+# neither can stand in for them.)
+# RUN: split-file %s %t
+# RUN: llvm-mc -filetype=obj -triple=x86_64-windows-msvc %t/undef.s -o %t/undef.obj
 
-DEFAULT:      could not open '01'
-DEFAULT:      could not open '20'
-DEFAULT-NEXT: too many errors emitted, stopping now (use /errorlimit:0 to see all errors)
-DEFAULT-NOT:  could not open '21'
+# RUN: not lld-link /entry:main /subsystem:console %t/undef.obj /out:%t/out.exe 2>&1 | FileCheck -check-prefix=DEFAULT %s
 
-RUN: not lld-link /errorlimit:5 01 02 03 04 05 06 07 08 09 10 2>&1 \
-RUN:   | FileCheck -check-prefix=LIMIT5 %s
+DEFAULT:      lld-link: error: undefined symbol: undefa
+DEFAULT:      lld-link: error: undefined symbol: undeft
+DEFAULT:      too many errors emitted, stopping now (use /errorlimit:0 to see all errors)
+DEFAULT-NOT:  undefined symbol: undefu
 
-LIMIT5:      could not open '01'
-LIMIT5:      could not open '05'
-LIMIT5-NEXT: too many errors emitted, stopping now (use /errorlimit:0 to see all errors)
-LIMIT5-NOT:  could not open '06'
+# RUN: not lld-link /entry:main /subsystem:console /errorlimit:5 %t/undef.obj /out:%t/out.exe 2>&1 \
+# RUN:   | FileCheck -check-prefix=LIMIT5 %s
 
-RUN: not lld-link /errorlimit:0 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15 \
-RUN:   16 17 18 19 20 21 22 2>&1 | FileCheck -check-prefix=UNLIMITED %s
+LIMIT5:      lld-link: error: undefined symbol: undefa
+LIMIT5:      lld-link: error: undefined symbol: undefe
+LIMIT5:      too many errors emitted, stopping now (use /errorlimit:0 to see all errors)
+LIMIT5-NOT:  undefined symbol: undeff
 
-UNLIMITED:     could not open '01'
-UNLIMITED:     could not open '20'
-UNLIMITED:     could not open '21'
-UNLIMITED:     could not open '22'
+# RUN: not lld-link /entry:main /subsystem:console /errorlimit:0 %t/undef.obj /out:%t/out.exe 2>&1 | FileCheck -check-prefix=UNLIMITED %s
+
+UNLIMITED:     lld-link: error: undefined symbol: undefa
+UNLIMITED:     lld-link: error: undefined symbol: undeft
+UNLIMITED:     lld-link: error: undefined symbol: undefv
 UNLIMITED-NOT: too many errors emitted, stopping now (use /errorlimit:0 to see all errors)
 
-RUN: not lld-link /errorlimit:XYZ 01 02 03 04 05 06 07 08 09 10 11 12 13 14 \
-RUN:   15 16 17 18 19 20 21 22 2>&1 | FileCheck -check-prefix=WRONG %s
+# RUN: not lld-link /entry:main /subsystem:console /errorlimit:XYZ %t/undef.obj /out:%t/out.exe 2>&1 | FileCheck -check-prefix=WRONG %s
 
 WRONG:      /errorlimit: number expected, but got XYZ
 
-RUN: not lld-link -lldmingw 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15 16 17 18 19 20 \
-RUN:   21 22 2>&1 | FileCheck -check-prefix=MINGW-DEFAULT %s
+# The mingw driver also reports the default entry (<root>) first, so the
+# window of 20 errors ends one symbol earlier.
+# RUN: not lld-link -lldmingw %t/undef.obj /out:%t/out.exe 2>&1 | FileCheck -check-prefix=MINGW-DEFAULT %s
 
-MINGW-DEFAULT:      could not open '01'
-MINGW-DEFAULT:      could not open '20'
-MINGW-DEFAULT-NEXT: too many errors emitted, stopping now (use --error-limit=0 to see all errors)
-MINGW-DEFAULT-NOT:  could not open '21'
+MINGW-DEFAULT:      undefined symbol: undefa
+MINGW-DEFAULT:      undefined symbol: undefs
+MINGW-DEFAULT:      too many errors emitted, stopping now (use --error-limit=0 to see all errors)
+MINGW-DEFAULT-NOT:  undefined symbol: undeft
+
+#--- undef.s
+.text
+.globl main
+main:
+  call undefa
+  call undefb
+  call undefc
+  call undefd
+  call undefe
+  call undeff
+  call undefg
+  call undefh
+  call undefi
+  call undefj
+  call undefk
+  call undefl
+  call undefm
+  call undefn
+  call undefo
+  call undefp
+  call undefq
+  call undefr
+  call undefs
+  call undeft
+  call undefu
+  call undefv

@@ -1328,7 +1328,10 @@ void WinException::computeIP2StateTableForFunclet(
                     MI.getOperand(0).getMCSymbol() == ResetLabel;
         continue;
       }
-      if (MI.isCall() && !EHStreamer::callToNoUnwindFunction(&MI))
+      // A tail call (call + return) leaves this frame first: its callee
+      // unwinds from the caller's frame (cl: no reset before jmp g).
+      if (MI.isCall() && !MI.isReturn() &&
+          !EHStreamer::callToNoUnwindFunction(&MI))
         return;
     }
   IPToStateTable.pop_back();

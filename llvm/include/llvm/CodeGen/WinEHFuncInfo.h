@@ -52,7 +52,8 @@ struct CxxUnwindMapEntry {
 
   /// Direct destructor action and its parent-frame object slot. These compact
   /// forms coexist with Cleanup so FrameHandler3 can continue using the
-  /// outlined funclet.
+  /// outlined funclet. With Type == Cleanup, a non-null Action is a direct
+  /// RVA action without an object (FH4 terminate state: __std_terminate).
   const Function *Action = nullptr;
   union {
     const AllocaInst *Alloca;

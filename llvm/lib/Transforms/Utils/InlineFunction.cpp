@@ -678,22 +678,26 @@ static void HandleInlinedLandingPad(InvokeInst *II, BasicBlock *FirstNewBlock,
 /// II is the invoke instruction being inlined.  FirstNewBlock is the first
 /// block of the inlined code (the last block is the end of the function),
 /// and InlineCodeInfo is information about the code that got inlined.
-static void HandleInlinedEHPad(InvokeInst *II, BasicBlock *FirstNewBlock,
-                               ClonedCodeInfo &InlinedCodeInfo) {
-  BasicBlock *UnwindDest = II->getUnwindDest();
+/// InvokeBB is the block of the inlined invoke, or null when UnwindDest is a
+/// new pad with no PHIs that the inlined call site did not unwind to.
+static void HandleInlinedEHPadImpl(BasicBlock *UnwindDest, BasicBlock *InvokeBB,
+                                   BasicBlock *FirstNewBlock,
+                                   ClonedCodeInfo &InlinedCodeInfo) {
   Function *Caller = FirstNewBlock->getParent();
 
   assert(UnwindDest->getFirstNonPHIIt()->isEHPad() && "unexpected BasicBlock!");
+  assert((InvokeBB || UnwindDest->phis().empty()) &&
+         "unwind dest PHIs need the inlined invoke's values");
 
   // If there are PHI nodes in the unwind destination block, we need to keep
   // track of which values came into them from the invoke before removing the
   // edge from this block.
   SmallVector<Value *, 8> UnwindDestPHIValues;
-  BasicBlock *InvokeBB = II->getParent();
-  for (PHINode &PHI : UnwindDest->phis()) {
-    // Save the value to use for this edge.
-    UnwindDestPHIValues.push_back(PHI.getIncomingValueForBlock(InvokeBB));
-  }
+  if (InvokeBB)
+    for (PHINode &PHI : UnwindDest->phis()) {
+      // Save the value to use for this edge.
+      UnwindDestPHIValues.push_back(PHI.getIncomingValueForBlock(InvokeBB));
+    }
 
   // Add incoming-PHI values to the unwind destination block for the given basic
   // block, using the values for the original invoke's source block.
@@ -799,7 +803,124 @@ static void HandleInlinedEHPad(InvokeInst *II, BasicBlock *FirstNewBlock,
   // the exception destination block still have entries due to the original
   // invoke instruction. Eliminate these entries (which might even delete the
   // PHI node) now.
-  UnwindDest->removePredecessor(InvokeBB);
+  if (InvokeBB)
+    UnwindDest->removePredecessor(InvokeBB);
+}
+
+static void HandleInlinedEHPad(InvokeInst *II, BasicBlock *FirstNewBlock,
+                               ClonedCodeInfo &InlinedCodeInfo) {
+  HandleInlinedEHPadImpl(II->getUnwindDest(), II->getParent(), FirstNewBlock,
+                         InlinedCodeInfo);
+}
+
+// openrt FH4-NOEXCEPT-TERMINATE: cl /d2FH4 keeps the noexcept boundary of an
+// inlined noexcept callee as a terminate state ($stateUnwindMap RVA action
+// __std_terminate, no object), one per caller, its ToState = the call site's
+// state. The IR form is a terminate pad
+//   %p = cleanuppad within none []
+//   call void @__std_terminate() [ "funclet"(token %p) ]   ; nounwind
+//   cleanupret from %p unwind label %<call site's unwind dest>
+// (call not noreturn, so the cleanupret keeps the parent state); a call site
+// that unwinds to the caller gets clang's terminate funclet (noreturn call +
+// unreachable). WinEHPrepare turns either into the direct action and X86 ISel
+// drops the funclet.
+static constexpr StringLiteral FH4TerminateFn = "__std_terminate";
+
+/// Top-level call sites of an FH4 noexcept callee get the terminate scope.
+/// Call sites inside a funclet keep the generic rules below.
+static bool shouldScopeFH4Noexcept(const CallBase &CB, const Function &Callee) {
+  return Callee.hasFnAttribute(MSVCXXEH4NoexceptAttr) &&
+         Callee.hasPersonalityFn() &&
+         isMSVCXXEH4Personality(Callee.getPersonalityFn()) &&
+         !CB.getOperandBundle(LLVMContext::OB_funclet);
+}
+
+static bool isFH4TerminatePad(const BasicBlock &BB, const BasicBlock *Dest) {
+  const auto *Pad = dyn_cast<CleanupPadInst>(BB.getFirstNonPHIIt());
+  if (!Pad || !isa<ConstantTokenNone>(Pad->getParentPad()) ||
+      Pad->arg_size() != 0)
+    return false;
+  const auto *Call = dyn_cast_or_null<CallInst>(Pad->getNextNode());
+  const Function *Callee = Call ? Call->getCalledFunction() : nullptr;
+  if (!Callee || Callee->getName() != FH4TerminateFn || Call->arg_size())
+    return false;
+  const Instruction *T = Call->getNextNode();
+  if (!Dest)
+    return isa_and_nonnull<UnreachableInst>(T);
+  const auto *CRI = dyn_cast_or_null<CleanupReturnInst>(T);
+  return CRI && CRI->getCleanupPad() == Pad && CRI->getUnwindDest() == Dest;
+}
+
+static bool inlinedCodeMayUnwindToCaller(BasicBlock *FirstNewBlock) {
+  Function *Caller = FirstNewBlock->getParent();
+  for (BasicBlock &BB :
+       make_range(FirstNewBlock->getIterator(), Caller->end())) {
+    Instruction *T = BB.getTerminator();
+    if (auto *CRI = dyn_cast<CleanupReturnInst>(T))
+      if (CRI->unwindsToCaller())
+        return true;
+    if (auto *CSI = dyn_cast<CatchSwitchInst>(T))
+      if (CSI->unwindsToCaller())
+        return true;
+    for (Instruction &I : BB)
+      if (auto *CI = dyn_cast<CallInst>(&I))
+        if (!CI->doesNotThrow())
+          return true;
+  }
+  return false;
+}
+
+/// Route everything in the inlined body that unwinds to the caller through
+/// the caller's terminate pad for UnwindDest (null: unwind to caller).
+static void HandleInlinedFH4Noexcept(CallBase &CB, BasicBlock *UnwindDest,
+                                     BasicBlock *FirstNewBlock,
+                                     ClonedCodeInfo &InlinedCodeInfo) {
+  auto *II = dyn_cast<InvokeInst>(&CB);
+  if (!inlinedCodeMayUnwindToCaller(FirstNewBlock)) {
+    if (II)
+      HandleInlinedEHPad(II, FirstNewBlock, InlinedCodeInfo);
+    return;
+  }
+
+  Function *Caller = FirstNewBlock->getParent();
+  BasicBlock *TermBB = nullptr;
+  if (!UnwindDest || UnwindDest->phis().empty())
+    for (BasicBlock &BB :
+         make_range(Caller->begin(), FirstNewBlock->getIterator()))
+      if (isFH4TerminatePad(BB, UnwindDest)) {
+        TermBB = &BB;
+        break;
+      }
+
+  if (!TermBB) {
+    LLVMContext &Ctx = Caller->getContext();
+    FunctionCallee TermFn = Caller->getParent()->getOrInsertFunction(
+        FH4TerminateFn, FunctionType::get(Type::getVoidTy(Ctx), false));
+    // Before the inlined blocks: HandleInlinedEHPadImpl must not see its
+    // cleanupret as an inlined unwind to caller.
+    TermBB = BasicBlock::Create(Ctx, "fh4.noexcept.terminate", Caller,
+                                FirstNewBlock);
+    auto *Pad = CleanupPadInst::Create(ConstantTokenNone::get(Ctx), {}, "",
+                                       TermBB);
+    CallInst *Call =
+        CallInst::Create(TermFn, {}, OperandBundleDef("funclet", Pad), "",
+                         TermBB);
+    Call->setDoesNotThrow();
+    Call->setDebugLoc(CB.getDebugLoc());
+    if (!UnwindDest) {
+      Call->setDoesNotReturn();
+      new UnreachableInst(Ctx, TermBB);
+    } else {
+      CleanupReturnInst::Create(Pad, UnwindDest, TermBB);
+      for (PHINode &PHI : UnwindDest->phis())
+        PHI.addIncoming(PHI.getIncomingValueForBlock(II->getParent()), TermBB);
+    }
+  }
+
+  HandleInlinedEHPadImpl(TermBB, /*InvokeBB=*/nullptr, FirstNewBlock,
+                         InlinedCodeInfo);
+  if (II)
+    UnwindDest->removePredecessor(II->getParent());
 }
 
 static bool haveCommonPrefix(MDNode *MIBStackContext,
@@ -2650,10 +2771,15 @@ llvm::InlineResult llvm::CanInlineCallSite(const CallBase &CB,
 
   // The FH4 NoExcept flag represents a language noexcept boundary for the
   // entire function. Inlining into an unmarked caller would either lose that
-  // boundary or incorrectly apply it to all of the caller. A scoped IR
-  // representation would be needed to inline this case safely.
+  // boundary or incorrectly apply it to all of the caller. A top-level call
+  // site keeps it as a terminate scope (HandleInlinedFH4Noexcept); elsewhere
+  // a scoped IR representation would be needed to inline this case safely.
+  // A callee without a personality has nothing that can throw (clang installs
+  // it at the first potentially-throwing call).
   if (CalledFunc->hasFnAttribute(MSVCXXEH4NoexceptAttr) &&
-      !Caller->hasFnAttribute(MSVCXXEH4NoexceptAttr))
+      CalledFunc->hasPersonalityFn() &&
+      !Caller->hasFnAttribute(MSVCXXEH4NoexceptAttr) &&
+      !shouldScopeFH4Noexcept(CB, *CalledFunc))
     return InlineResult::failure("incompatible Microsoft C++ EH4 noexcept");
 
   // Get the personality function from the callee if it contains a landing pad.
@@ -3068,7 +3194,9 @@ void llvm::InlineFunctionImpl(CallBase &CB, InlineFunctionInfo &IFI,
 
   // If the call to the callee cannot throw, set the 'nounwind' flag on any
   // calls that we inline.
-  bool MarkNoUnwind = CB.doesNotThrow();
+  // Not through an FH4 noexcept scope: its calls unwind to the terminate pad.
+  bool MarkNoUnwind =
+      CB.doesNotThrow() && !shouldScopeFH4Noexcept(CB, *CalledFunc);
 
   SmallVector<Value*,4> VarArgsToForward;
   SmallVector<AttributeSet, 4> VarArgsAttrs;
@@ -3223,14 +3351,21 @@ void llvm::InlineFunctionImpl(CallBase &CB, InlineFunctionInfo &IFI,
   // any call instructions into invoke instructions.  This is sensitive to which
   // funclet pads were top-level in the inlinee, so must be done before
   // rewriting the "parent pad" links.
+  bool ScopeFH4Noexcept = shouldScopeFH4Noexcept(CB, *CalledFunc);
   if (auto *II = dyn_cast<InvokeInst>(&CB)) {
     BasicBlock *UnwindDest = II->getUnwindDest();
     BasicBlock::iterator FirstNonPHI = UnwindDest->getFirstNonPHIIt();
     if (isa<LandingPadInst>(FirstNonPHI)) {
       HandleInlinedLandingPad(II, &*FirstNewBlock, InlinedFunctionInfo);
+    } else if (ScopeFH4Noexcept) {
+      HandleInlinedFH4Noexcept(CB, UnwindDest, &*FirstNewBlock,
+                               InlinedFunctionInfo);
     } else {
       HandleInlinedEHPad(II, &*FirstNewBlock, InlinedFunctionInfo);
     }
+  } else if (ScopeFH4Noexcept) {
+    HandleInlinedFH4Noexcept(CB, nullptr, &*FirstNewBlock,
+                             InlinedFunctionInfo);
   }
 
   // Update the lexical scopes of the new funclets and callsites.

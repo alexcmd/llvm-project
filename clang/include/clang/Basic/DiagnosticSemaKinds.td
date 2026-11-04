@@ -5888,7 +5888,7 @@ def err_template_spec_needs_header : Error<
 // specialization without 'template<>' (C5259, /Wall only).
 def ext_ms_template_spec_needs_header : Warning<
   "explicit specialization requires 'template<>'">,
-  InGroup<MicrosoftTemplate>;
+  InGroup<MicrosoftTemplate>, DefaultIgnore;
 def err_template_spec_needs_template_parameters : Error<
   "template specialization or definition requires a template parameter list "
   "corresponding to the nested type %0">;

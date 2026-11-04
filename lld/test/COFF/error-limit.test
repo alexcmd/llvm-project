@@ -1,37 +1,67 @@
-RUN: not lld-link /nodefaultliba /nodefaultlibb /nodefaultlibc /nodefaultlibd /nodefaultlibe /nodefaultlibf /nodefaultlibg /nodefaultlibh /nodefaultlibi /nodefaultlibj /nodefaultlibk /nodefaultlibl /nodefaultlibm /nodefaultlibn /nodefaultlibo /nodefaultlibp /nodefaultlibq /nodefaultlibr /nodefaultlibs /nodefaultlibt \
-RUN:   /nodefaultlibu /nodefaultlibv 2>&1 | FileCheck -check-prefix=DEFAULT %s
+# Undefined symbols are the non-fatal errors that count against /errorlimit.
+# (An unknown /option is now LNK4044 and a missing input is fatal LNK1181, so
+# neither can stand in for them.)
+# RUN: split-file %s %t
+# RUN: llvm-mc -filetype=obj -triple=x86_64-windows-msvc %t/undef.s -o %t/undef.obj
 
-DEFAULT:      could not open '/nodefaultliba'
-DEFAULT:      could not open '/nodefaultlibt'
-DEFAULT-NEXT: too many errors emitted, stopping now (use /errorlimit:0 to see all errors)
-DEFAULT-NOT:  could not open '/nodefaultlibu'
+# RUN: not lld-link /entry:main /subsystem:console %t/undef.obj /out:%t/out.exe 2>&1 | FileCheck -check-prefix=DEFAULT %s
 
-RUN: not lld-link /errorlimit:5 /nodefaultliba /nodefaultlibb /nodefaultlibc /nodefaultlibd /nodefaultlibe /nodefaultlibf /nodefaultlibg /nodefaultlibh /nodefaultlibi /nodefaultlibj 2>&1 \
-RUN:   | FileCheck -check-prefix=LIMIT5 %s
+DEFAULT:      lld-link: error: undefined symbol: undefa
+DEFAULT:      lld-link: error: undefined symbol: undeft
+DEFAULT:      too many errors emitted, stopping now (use /errorlimit:0 to see all errors)
+DEFAULT-NOT:  undefined symbol: undefu
 
-LIMIT5:      could not open '/nodefaultliba'
-LIMIT5:      could not open '/nodefaultlibe'
-LIMIT5-NEXT: too many errors emitted, stopping now (use /errorlimit:0 to see all errors)
-LIMIT5-NOT:  could not open '/nodefaultlibf'
+# RUN: not lld-link /entry:main /subsystem:console /errorlimit:5 %t/undef.obj /out:%t/out.exe 2>&1 \
+# RUN:   | FileCheck -check-prefix=LIMIT5 %s
 
-RUN: not lld-link /errorlimit:0 /nodefaultliba /nodefaultlibb /nodefaultlibc /nodefaultlibd /nodefaultlibe /nodefaultlibf /nodefaultlibg /nodefaultlibh /nodefaultlibi /nodefaultlibj /nodefaultlibk /nodefaultlibl /nodefaultlibm /nodefaultlibn /nodefaultlibo \
-RUN:   /nodefaultlibp /nodefaultlibq /nodefaultlibr /nodefaultlibs /nodefaultlibt /nodefaultlibu /nodefaultlibv 2>&1 | FileCheck -check-prefix=UNLIMITED %s
+LIMIT5:      lld-link: error: undefined symbol: undefa
+LIMIT5:      lld-link: error: undefined symbol: undefe
+LIMIT5:      too many errors emitted, stopping now (use /errorlimit:0 to see all errors)
+LIMIT5-NOT:  undefined symbol: undeff
 
-UNLIMITED:     could not open '/nodefaultliba'
-UNLIMITED:     could not open '/nodefaultlibt'
-UNLIMITED:     could not open '/nodefaultlibu'
-UNLIMITED:     could not open '/nodefaultlibv'
+# RUN: not lld-link /entry:main /subsystem:console /errorlimit:0 %t/undef.obj /out:%t/out.exe 2>&1 | FileCheck -check-prefix=UNLIMITED %s
+
+UNLIMITED:     lld-link: error: undefined symbol: undefa
+UNLIMITED:     lld-link: error: undefined symbol: undeft
+UNLIMITED:     lld-link: error: undefined symbol: undefv
 UNLIMITED-NOT: too many errors emitted, stopping now (use /errorlimit:0 to see all errors)
 
-RUN: not lld-link /errorlimit:XYZ /nodefaultliba /nodefaultlibb /nodefaultlibc /nodefaultlibd /nodefaultlibe /nodefaultlibf /nodefaultlibg /nodefaultlibh /nodefaultlibi /nodefaultlibj /nodefaultlibk /nodefaultlibl /nodefaultlibm /nodefaultlibn \
-RUN:   /nodefaultlibo /nodefaultlibp /nodefaultlibq /nodefaultlibr /nodefaultlibs /nodefaultlibt /nodefaultlibu /nodefaultlibv 2>&1 | FileCheck -check-prefix=WRONG %s
+# RUN: not lld-link /entry:main /subsystem:console /errorlimit:XYZ %t/undef.obj /out:%t/out.exe 2>&1 | FileCheck -check-prefix=WRONG %s
 
 WRONG:      /errorlimit: number expected, but got XYZ
 
-RUN: not lld-link -lldmingw /nodefaultliba /nodefaultlibb /nodefaultlibc /nodefaultlibd /nodefaultlibe /nodefaultlibf /nodefaultlibg /nodefaultlibh /nodefaultlibi /nodefaultlibj /nodefaultlibk /nodefaultlibl /nodefaultlibm /nodefaultlibn /nodefaultlibo /nodefaultlibp /nodefaultlibq /nodefaultlibr /nodefaultlibs /nodefaultlibt \
-RUN:   /nodefaultlibu /nodefaultlibv 2>&1 | FileCheck -check-prefix=MINGW-DEFAULT %s
+# The mingw driver also reports the default entry (<root>) first, so the
+# window of 20 errors ends one symbol earlier.
+# RUN: not lld-link -lldmingw %t/undef.obj /out:%t/out.exe 2>&1 | FileCheck -check-prefix=MINGW-DEFAULT %s
 
-MINGW-DEFAULT:      could not open '/nodefaultliba'
-MINGW-DEFAULT:      could not open '/nodefaultlibt'
-MINGW-DEFAULT-NEXT: too many errors emitted, stopping now (use --error-limit=0 to see all errors)
-MINGW-DEFAULT-NOT:  could not open '/nodefaultlibu'
+MINGW-DEFAULT:      undefined symbol: undefa
+MINGW-DEFAULT:      undefined symbol: undefs
+MINGW-DEFAULT:      too many errors emitted, stopping now (use --error-limit=0 to see all errors)
+MINGW-DEFAULT-NOT:  undefined symbol: undeft
+
+#--- undef.s
+.text
+.globl main
+main:
+  call undefa
+  call undefb
+  call undefc
+  call undefd
+  call undefe
+  call undeff
+  call undefg
+  call undefh
+  call undefi
+  call undefj
+  call undefk
+  call undefl
+  call undefm
+  call undefn
+  call undefo
+  call undefp
+  call undefq
+  call undefr
+  call undefs
+  call undeft
+  call undefu
+  call undefv

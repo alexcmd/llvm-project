@@ -299,6 +299,11 @@ static void beginNoexceptScope(CodeGenFunction &CGF,
     return;
   }
   CGF.MSVCXXEH4Noexcept = true;
+  // openrt FH4-NOEXCEPT-TERMINATE: the attribute marks every source noexcept
+  // function (the personality stays lazy), so FuncInfo4 keeps the NoExcept bit
+  // when the inliner later brings potentially-throwing calls into a leaf one
+  // (cl: tlsdyn __dyn_tls_on_demand_init, comraise ??_G).
+  CGF.CurFn->addFnAttr(llvm::MSVCXXEH4NoexceptAttr);
 }
 
 void CodeGenFunction::activateMSVCXXEH4Noexcept() {

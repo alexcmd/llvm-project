@@ -1237,7 +1237,12 @@ void WinException::emitCXXFrameHandler4Table(const MachineFunction *MF) {
         OS.emitWinEH4Value(Packed);
         if (Type != unsigned(CxxUnwindMapEntry::ActionType::NoUW)) {
           AddComment("UnwindAction");
-          if (Type == unsigned(CxxUnwindMapEntry::ActionType::Cleanup)) {
+          if (Type == unsigned(CxxUnwindMapEntry::ActionType::Cleanup) &&
+              UME.Action) {
+            // Direct RVA action, no object (terminate state).
+            OS.emitValue(create32bitRef(UME.Action), 4);
+          } else if (Type ==
+                     unsigned(CxxUnwindMapEntry::ActionType::Cleanup)) {
             MCSymbol *Cleanup =
                 getMCSymbolForMBB(Asm, cast<MachineBasicBlock *>(UME.Cleanup));
             OS.emitValue(create32bitRef(Cleanup), 4);

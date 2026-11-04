@@ -217,6 +217,28 @@ static void recognizeFH4DirectCleanup(const CleanupPadInst *CleanupPad,
   UME.Object.Alloca = Object;
 }
 
+// openrt FH4-NOEXCEPT-TERMINATE: a terminate pad (cleanuppad; call
+// __std_terminate; unreachable or cleanupret) is cl's terminate state: an RVA
+// action __std_terminate with no object and no funclet code.
+static void recognizeFH4TerminateCleanup(const CleanupPadInst *CleanupPad,
+                                         CxxUnwindMapEntry &UME) {
+  if (CleanupPad->arg_size() != 0)
+    return;
+  const auto *Call = dyn_cast_or_null<CallInst>(CleanupPad->getNextNode());
+  const Function *Callee = Call ? Call->getCalledFunction() : nullptr;
+  if (!Callee || Callee->getName() != "__std_terminate" || Call->arg_size() ||
+      !Call->doesNotThrow())
+    return;
+  const Instruction *T = Call->getNextNode();
+  const auto *CRI = dyn_cast_or_null<CleanupReturnInst>(T);
+  if (!isa_and_nonnull<UnreachableInst>(T) &&
+      !(CRI && CRI->getCleanupPad() == CleanupPad))
+    return;
+  UME.Type = CxxUnwindMapEntry::ActionType::Cleanup;
+  UME.Action = Callee;
+  UME.Object.Alloca = nullptr;
+}
+
 static CxxUnwindMapEntry *claimFH4CatchBaseState(WinEHFuncInfo &FuncInfo,
                                                  int ParentState,
                                                  const BasicBlock *Owner,
@@ -582,8 +604,10 @@ static void calculateCXXStateNumbers(WinEHFuncInfo &FuncInfo,
                    : addUnwindMapEntry(FuncInfo, ParentState, BB, Owner);
     CxxUnwindMapEntry &CleanupEntry =
         ReusedBase ? *ReusedBase : FuncInfo.CxxUnwindMap[CleanupState];
-    if (IsFH4)
+    if (IsFH4) {
       recognizeFH4DirectCleanup(CleanupPad, CleanupEntry);
+      recognizeFH4TerminateCleanup(CleanupPad, CleanupEntry);
+    }
     It->second = CleanupState;
     LLVM_DEBUG(dbgs() << "Assigning state #" << CleanupState << " to BB "
                       << BB->getName() << '\n');

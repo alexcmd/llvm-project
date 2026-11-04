@@ -59,9 +59,15 @@ static bool removeFH4DirectCleanupFunclets(MachineFunction &MF) {
 
   WinEHFuncInfo *EHInfo = MF.getWinEHFuncInfo();
   SmallVector<MachineBasicBlock *, 2> DirectCleanups;
+  // Direct actions: destructor with object, or the terminate state (Cleanup
+  // with an Action, FH4-NOEXCEPT-TERMINATE).
+  auto IsDirect = [](const CxxUnwindMapEntry &UME) {
+    return UME.Type == CxxUnwindMapEntry::ActionType::DtorWithObj ||
+           UME.Type == CxxUnwindMapEntry::ActionType::DtorWithPtrToObj ||
+           (UME.Type == CxxUnwindMapEntry::ActionType::Cleanup && UME.Action);
+  };
   for (CxxUnwindMapEntry &UME : EHInfo->CxxUnwindMap) {
-    if (UME.Type != CxxUnwindMapEntry::ActionType::DtorWithObj &&
-        UME.Type != CxxUnwindMapEntry::ActionType::DtorWithPtrToObj)
+    if (!IsDirect(UME))
       continue;
     MachineBasicBlock *Cleanup = cast<MachineBasicBlock *>(UME.Cleanup);
     if (!llvm::is_contained(DirectCleanups, Cleanup))
@@ -69,8 +75,7 @@ static bool removeFH4DirectCleanupFunclets(MachineFunction &MF) {
   }
   for (CxxUnwindMapEntry4Override &Override : EHInfo->CxxUnwindMap4Overrides) {
     CxxUnwindMapEntry &UME = Override.Entry;
-    if (UME.Type != CxxUnwindMapEntry::ActionType::DtorWithObj &&
-        UME.Type != CxxUnwindMapEntry::ActionType::DtorWithPtrToObj)
+    if (!IsDirect(UME))
       continue;
     MachineBasicBlock *Cleanup = cast<MachineBasicBlock *>(UME.Cleanup);
     if (!llvm::is_contained(DirectCleanups, Cleanup))
@@ -83,7 +88,8 @@ static bool removeFH4DirectCleanupFunclets(MachineFunction &MF) {
         llvm::any_of(EHInfo->CxxUnwindMap, [&](const CxxUnwindMapEntry &UME) {
           return UME.Cleanup &&
                  cast<MachineBasicBlock *>(UME.Cleanup) == Cleanup &&
-                 UME.Type == CxxUnwindMapEntry::ActionType::Cleanup;
+                 UME.Type == CxxUnwindMapEntry::ActionType::Cleanup &&
+                 !UME.Action;
         });
     HasFallbackReference |= llvm::any_of(
         EHInfo->CxxUnwindMap4Overrides,
@@ -91,7 +97,8 @@ static bool removeFH4DirectCleanupFunclets(MachineFunction &MF) {
           const CxxUnwindMapEntry &UME = Override.Entry;
           return UME.Cleanup &&
                  cast<MachineBasicBlock *>(UME.Cleanup) == Cleanup &&
-                 UME.Type == CxxUnwindMapEntry::ActionType::Cleanup;
+                 UME.Type == CxxUnwindMapEntry::ActionType::Cleanup &&
+                 !UME.Action;
         });
     if (HasFallbackReference)
       continue;

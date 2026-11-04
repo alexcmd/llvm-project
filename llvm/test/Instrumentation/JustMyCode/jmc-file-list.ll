@@ -4,12 +4,12 @@
 ; RUN: opt -passes=jmc-instrumenter -S < %s | FileCheck %s
 
 ; CHECK: @"_{{[0-9A-F]+}}_hdr@h" = internal unnamed_addr global i8 1, section ".msvcjmc", align 1, !dbg !{{[0-9]+}}
-; CHECK: @"_A8764FDD_x@c" = internal unnamed_addr global i8 1, section ".msvcjmc", align 1, !dbg !{{[0-9]+}}
-; CHECK: @llvm.used = appending global [2 x ptr] [ptr @"_{{[0-9A-F]+}}_hdr@h", ptr @"_A8764FDD_x@c"], section "llvm.metadata"
+; CHECK: @"_7DE10BAA_x@c" = internal unnamed_addr global i8 1, section ".msvcjmc", align 1, !dbg !{{[0-9]+}}
+; CHECK: @llvm.used = appending global [2 x ptr] [ptr @"_{{[0-9A-F]+}}_hdr@h", ptr @"_7DE10BAA_x@c"], section "llvm.metadata"
 ; CHECK-NOT: @__JustMyCode_Default
 ; CHECK-NOT: /INCLUDE
 ; CHECK: define void @w1() #0 !dbg !{{[0-9]+}} {
-; CHECK:   call x86_fastcallcc void @__CheckForDebuggerJustMyCode(ptr inreg noundef @"_A8764FDD_x@c")
+; CHECK:   call x86_fastcallcc void @__CheckForDebuggerJustMyCode(ptr inreg noundef @"_7DE10BAA_x@c")
 ; CHECK: !llvm.msvc.jmc.files = !{!{{[0-9]+}}, !{{[0-9]+}}}
 
 target datalayout = "e-m:x-p:32:32-p270:32:32-p271:32:32-p272:64:64-i64:64-f80:128-n8:16:32-a:0:32-S32"

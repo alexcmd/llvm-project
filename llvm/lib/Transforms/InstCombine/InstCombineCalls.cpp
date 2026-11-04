@@ -38,6 +38,7 @@
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DebugInfo.h"
 #include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/EHPersonalities.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/InlineAsm.h"
@@ -1932,7 +1933,11 @@ Instruction *InstCombinerImpl::visitCallInst(CallInst &CI) {
 
   // If the caller function (i.e. us, the function that contains this CallInst)
   // is nounwind, mark the call as nounwind, even if the callee isn't.
-  if (CI.getFunction()->doesNotThrow() && !CI.doesNotThrow()) {
+  // Not in an FH4 noexcept function: there the call may unwind to the frame
+  // handler, which terminates; the inliner keeps that as a terminate scope
+  // (openrt FH4-NOEXCEPT-TERMINATE, as cl /d2FH4).
+  if (CI.getFunction()->doesNotThrow() && !CI.doesNotThrow() &&
+      !CI.getFunction()->hasFnAttribute(MSVCXXEH4NoexceptAttr)) {
     CI.setDoesNotThrow();
     return &CI;
   }

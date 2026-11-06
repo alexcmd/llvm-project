@@ -392,6 +392,8 @@ Error PDBFileBuilder::commit(StringRef Filename, codeview::GUID *Guid) {
     H->Guid = Info->getGuid();
     std::optional<uint32_t> Sig = Info->getSignature();
     H->Signature = Sig ? *Sig : time(nullptr);
+    // Return GUID to caller.
+    memcpy(Guid, H->Guid.Guid, 16);
   }
 
   return Buffer.commit();

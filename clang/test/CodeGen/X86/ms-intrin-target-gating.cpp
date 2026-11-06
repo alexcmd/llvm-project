@@ -24,7 +24,7 @@ __m512i f_avx512_add(__m512i a, __m512i b) { return _mm512_add_epi32(a, b); }
 int f_sse42_cmpestri(__m128i a, __m128i b) { return _mm_cmpestri(a, 3, b, 3, 0x0c); }
 
 // CHECK-LABEL: define {{.*}}f_avx2_shuffle
-// CHECK: call {{.*}}__ms_mm256_shuffle_epi32
+// CHECK: call {{.*}}__ms__mm256_shuffle_epi32
 __m256i f_avx2_shuffle(__m256i a) { return _mm256_shuffle_epi32(a, 0x1b); }
 #endif
 

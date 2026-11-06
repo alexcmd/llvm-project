@@ -26,7 +26,7 @@
 // RUN:   | FileCheck --check-prefix=OFF %s
 // RUN: %clang --target=x86_64-pc-windows-msvc -x c++ -### -c %s 2>&1 \
 // RUN:   | FileCheck --check-prefix=OFF %s
-// OFF-NOT: predeclare-eh-types
+// OFF-NOT: "-fms-predeclare-eh-types"
 // OFF-NOT: argument unused
 
 // A preprocessed C++ file gets the types when it is compiled.

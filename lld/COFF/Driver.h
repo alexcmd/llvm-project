@@ -111,6 +111,13 @@ private:
   StringRef findLib(StringRef filename);
   StringRef findLibMinGW(StringRef filename);
 
+  // LIBMAP: library name data of the openrt layout (manifest.json "libmap").
+  void loadLibMap(const llvm::opt::InputArgList &args,
+                  const std::string &argv0);
+  StringRef mapLibName(StringRef filename);
+  llvm::StringMap<std::string> libMap; // canonical name -> file name
+  llvm::StringSet<> libMapLogged;
+
   // Determines the location of the sysroot based on `args`, environment, etc.
   // argv0 locates the openrt-<ver> layout (BIN-RELATIVE-LOOKUP).
   void detectWinSysRoot(const llvm::opt::InputArgList &args,

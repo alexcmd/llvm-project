@@ -701,9 +701,82 @@ void LinkerDriver::parseDirectives(InputFile *file) {
   }
 }
 
+// LIBMAP: canonical form of a library name: lower case, ".lib" dropped.
+static std::string canonicalLibName(StringRef name) {
+  std::string s = name.lower();
+  if (StringRef(s).ends_with(".lib"))
+    s.resize(s.size() - 4);
+  return s;
+}
+
+// LIBMAP: an openrt install ships its libraries under its own file names;
+// the name data next to it ("<from> <to>" per line, TAB or blanks between,
+// '#' comment lines) maps the names objects and command lines ask for onto
+// those files. <from> is a bare library name, matched without regard to case
+// and with ".lib" optional on both sides; <to> gets ".lib" when it has no
+// extension. The map is applied to the name before any search (see findFile),
+// so /defaultlib, .drectve of objects and archive members, plain inputs and
+// /nodefaultlib:<name> all resolve an original name and its mapped name to
+// the same file: /nodefaultlib matches either spelling. Unknown names pass
+// through. Independent of %LIB%, /lldignoreenv, /vctoolsdir and the layout's
+// role as toolchain; /noopenrtlibmap turns it off.
+void LinkerDriver::loadLibMap(const opt::InputArgList &args,
+                              const std::string &argv0) {
+  if (args.hasArg(OPT_noopenrtlibmap))
+    return;
+  SmallString<128> binDir(sys::fs::getMainExecutable(argv0.c_str(), nullptr));
+  path::remove_filename(binDir);
+  std::optional<OpenRTLayout> layout =
+      findOpenRTLayout(*vfs::getRealFileSystem(), binDir);
+  if (!layout || layout->LibMap.empty())
+    return;
+  ErrorOr<std::unique_ptr<MemoryBuffer>> mb =
+      MemoryBuffer::getFile(layout->LibMap, /*IsText=*/true);
+  if (!mb) {
+    Warn(ctx) << "cannot read openrt libmap " << layout->LibMap << ": "
+              << mb.getError().message();
+    return;
+  }
+  SmallVector<StringRef, 0> lines;
+  (*mb)->getBuffer().split(lines, '\n');
+  for (StringRef line : lines) {
+    line = line.trim();
+    if (line.empty() || line.starts_with("#"))
+      continue;
+    size_t sep = line.find_first_of(" \t");
+    StringRef from = line.substr(0, sep);
+    StringRef to =
+        sep == StringRef::npos ? StringRef() : line.substr(sep).trim();
+    if (from.empty() || to.empty()) {
+      Warn(ctx) << layout->LibMap << ": ignoring malformed line: " << line;
+      continue;
+    }
+    std::string file = to.str();
+    if (path::extension(file).empty())
+      file += ".lib";
+    libMap[canonicalLibName(from)] = std::move(file);
+  }
+  Log(ctx) << "openrt libmap: " << layout->LibMap << " (" << libMap.size()
+           << " names)";
+}
+
+// LIBMAP: the file name to search for a library or input name.
+StringRef LinkerDriver::mapLibName(StringRef filename) {
+  if (libMap.empty() || filename.find_first_of("/\\:") != StringRef::npos)
+    return filename;
+  auto it = libMap.find(canonicalLibName(filename));
+  if (it == libMap.end())
+    return filename;
+  if (libMapLogged.insert(filename.lower()).second)
+    Log(ctx) << "openrt libmap: " << filename << " -> " << it->second;
+  return it->second;
+}
+
 // Find file from search paths. You can omit ".obj", this function takes
 // care of that. Note that the returned path is not guaranteed to exist.
 StringRef LinkerDriver::findFile(StringRef filename) {
+  if (!ctx.config.mingw)
+    filename = mapLibName(filename);
   auto getFilename = [this](StringRef filename) -> StringRef {
     if (ctx.config.vfs)
       if (auto statOrErr = ctx.config.vfs->status(filename))
@@ -1813,6 +1886,7 @@ void LinkerDriver::linkerMain(ArrayRef<const char *> argsArr) {
     for (auto *arg : args.filtered(OPT_libpath))
       searchPaths.push_back(arg->getValue());
     if (!config->mingw) {
+      loadLibMap(args, argsArr[0]);
       // Prefer the Clang provided builtins over the ones bundled with MSVC.
       // In MinGW mode, the compiler driver passes the necessary libpath
       // options explicitly.

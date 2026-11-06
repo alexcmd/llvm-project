@@ -1,0 +1,118 @@
+REQUIRES: x86
+LIBMAP: manifest.json "libmap" of the openrt layout around lld-link names a
+file of "<from> <to>" library name pairs. The name is mapped before any search,
+for /defaultlib (command line, .drectve of objects and of archive members),
+plain inputs and /nodefaultlib:<name>, so /nodefaultlib matches the original
+and the mapped spelling (any case, ".lib" optional). /verbose logs each
+mapping. Works with %LIB% set and without /lldignoreenv; /noopenrtlibmap turns
+it off. lld-link locates itself, so it is copied into the fake layout.
+
+# RUN: rm -rf %t.dir && split-file %s %t.dir && cd %t.dir
+# RUN: mkdir -p root/bin root/lib/x64 nomap/bin nomap/lib/x64 empty
+# RUN: cp lld-link root/bin/lld-link.exe
+# RUN: cp lld-link nomap/bin/lld-link.exe
+# RUN: cp root.json root/manifest.json
+# RUN: cp nomap.json nomap/manifest.json
+# RUN: cp libmap.txt root/lib/openrt-libmap.txt
+# RUN: llvm-mc -triple=x86_64-windows-msvc -filetype=obj fake.s -o fake.obj
+# RUN: llvm-mc -triple=x86_64-windows-msvc -filetype=obj main.s -o main.obj
+# RUN: llvm-mc -triple=x86_64-windows-msvc -filetype=obj plain.s -o plain.obj
+# RUN: llvm-mc -triple=x86_64-windows-msvc -filetype=obj usehelper.s -o usehelper.obj
+# RUN: llvm-mc -triple=x86_64-windows-msvc -filetype=obj helper.s -o helper.obj
+# RUN: llvm-lib /out:root/lib/x64/openfake_md.lib fake.obj
+# RUN: cp root/lib/x64/openfake_md.lib nomap/lib/x64/fakecrt.lib
+# RUN: llvm-lib /out:helper.lib helper.obj
+
+.drectve /defaultlib:fakecrt of an object: mapped, found in <root>\lib\x64.
+# RUN: env -u LIB -u VCToolsInstallDir -u VCINSTALLDIR \
+# RUN:   %t.dir/root/bin/lld-link.exe main.obj /entry:main /out:a.exe /verbose 2>&1 \
+# RUN:   | FileCheck --check-prefix=VERBOSE %s
+VERBOSE: openrt libmap: {{.*}}openrt-libmap.txt (4 names)
+VERBOSE: openrt libmap: fakecrt.lib -> openfake_md.lib
+VERBOSE: Reading {{.*}}openfake_md.lib
+
+.drectve of an archive member, /defaultlib and a plain input on the command
+line, any case, with or without ".lib".
+# RUN: env -u LIB -u VCToolsInstallDir -u VCINSTALLDIR \
+# RUN:   %t.dir/root/bin/lld-link.exe usehelper.obj helper.lib /entry:main /out:a.exe
+# RUN: env -u LIB -u VCToolsInstallDir -u VCINSTALLDIR \
+# RUN:   %t.dir/root/bin/lld-link.exe plain.obj /defaultlib:FAKECRT.LIB /entry:main /out:a.exe
+# RUN: env -u LIB -u VCToolsInstallDir -u VCINSTALLDIR \
+# RUN:   %t.dir/root/bin/lld-link.exe plain.obj /defaultlib:FakeCrt /entry:main /out:a.exe
+# RUN: env -u LIB -u VCToolsInstallDir -u VCINSTALLDIR \
+# RUN:   %t.dir/root/bin/lld-link.exe plain.obj fakecrt.lib /entry:main /out:a.exe
+
+/nodefaultlib:<original> and /nodefaultlib:<mapped> both drop the library,
+also from a response file.
+# RUN: env -u LIB -u VCToolsInstallDir -u VCINSTALLDIR \
+# RUN:   not %t.dir/root/bin/lld-link.exe main.obj /nodefaultlib:fakecrt /entry:main /out:a.exe 2>&1 \
+# RUN:   | FileCheck --check-prefix=UNDEF %s
+# RUN: env -u LIB -u VCToolsInstallDir -u VCINSTALLDIR \
+# RUN:   not %t.dir/root/bin/lld-link.exe main.obj /nodefaultlib:FAKECRT.lib /entry:main /out:a.exe 2>&1 \
+# RUN:   | FileCheck --check-prefix=UNDEF %s
+# RUN: env -u LIB -u VCToolsInstallDir -u VCINSTALLDIR \
+# RUN:   not %t.dir/root/bin/lld-link.exe main.obj /nodefaultlib:openfake_md /entry:main /out:a.exe 2>&1 \
+# RUN:   | FileCheck --check-prefix=UNDEF %s
+# RUN: env -u LIB -u VCToolsInstallDir -u VCINSTALLDIR \
+# RUN:   not %t.dir/root/bin/lld-link.exe plain.obj /defaultlib:openfake_md /nodefaultlib:fakecrt.lib /entry:main /out:a.exe 2>&1 \
+# RUN:   | FileCheck --check-prefix=UNDEF %s
+# RUN: echo /nodefaultlib:fakecrt > nodef.rsp
+# RUN: env -u LIB -u VCToolsInstallDir -u VCINSTALLDIR \
+# RUN:   not %t.dir/root/bin/lld-link.exe main.obj @nodef.rsp /entry:main /out:a.exe 2>&1 \
+# RUN:   | FileCheck --check-prefix=UNDEF %s
+UNDEF: undefined symbol: fakefn
+
+%LIB% set, no /lldignoreenv: the layout is not the toolchain, the map still
+applies (the library is found through %LIB%).
+# RUN: env -u VCToolsInstallDir -u VCINSTALLDIR LIB=%t.dir/root/lib/x64 \
+# RUN:   %t.dir/root/bin/lld-link.exe main.obj /entry:main /out:a.exe
+
+/noopenrtlibmap, or a layout without "libmap": names pass through.
+# RUN: env -u LIB -u VCToolsInstallDir -u VCINSTALLDIR \
+# RUN:   not %t.dir/root/bin/lld-link.exe main.obj /noopenrtlibmap /entry:main /out:a.exe 2>&1 \
+# RUN:   | FileCheck --check-prefix=NOTFOUND %s
+# RUN: env -u LIB -u VCToolsInstallDir -u VCINSTALLDIR \
+# RUN:   %t.dir/nomap/bin/lld-link.exe main.obj /entry:main /out:a.exe /verbose 2>&1 \
+# RUN:   | FileCheck --check-prefix=NOMAP %s
+NOTFOUND: input file 'fakecrt.lib' was not found
+NOMAP-NOT: openrt libmap
+NOMAP: Reading {{.*}}fakecrt.lib
+
+#--- root.json
+{"version": "1.0", "libmap": "lib/openrt-libmap.txt"}
+#--- nomap.json
+{"version": "1.0"}
+#--- libmap.txt
+# canonical name <TAB> file name
+fakecrt	openfake_md
+Other.LIB	openother
+  spaced     openspaced.lib
+setfake.obj	opensetfake.obj
+#--- fake.s
+.globl fakefn
+fakefn:
+  ret
+#--- main.s
+.globl main
+main:
+  call fakefn
+  ret
+.section .drectve,"yn"
+.ascii " /DEFAULTLIB:fakecrt"
+#--- plain.s
+.globl main
+main:
+  call fakefn
+  ret
+#--- usehelper.s
+.globl main
+main:
+  call helper
+  ret
+#--- helper.s
+.globl helper
+helper:
+  call fakefn
+  ret
+.section .drectve,"yn"
+.ascii " /DEFAULTLIB:FakeCrt.lib"

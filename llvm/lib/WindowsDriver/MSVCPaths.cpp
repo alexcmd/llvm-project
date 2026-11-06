@@ -525,57 +525,73 @@ bool llvm::findVCToolChainViaCommandLine(
 
 // BIN-RELATIVE-LOOKUP: <BinDir>\..\manifest.json marks an openrt-<ver> root.
 // Purely lexical ".." (no symlink resolution), one stat plus one read.
-bool llvm::findVCToolChainViaBinRelativeLayout(vfs::FileSystem &VFS,
-                                               StringRef BinDir,
-                                               std::string &Path,
-                                               ToolsetLayout &VSLayout,
-                                               std::string &SDKRoot,
-                                               std::string &SDKVersion) {
+std::optional<llvm::OpenRTLayout> llvm::findOpenRTLayout(vfs::FileSystem &VFS,
+                                                         StringRef BinDir) {
   SmallString<256> Root(BinDir);
   if (Root.empty())
-    return false;
+    return std::nullopt;
   VFS.makeAbsolute(Root);
   while (Root.size() > 1 && sys::path::is_separator(Root.back()))
     Root.pop_back();
   sys::path::remove_filename(Root); // drop "bin"
   if (Root.empty())
-    return false;
+    return std::nullopt;
 
   SmallString<256> Manifest(Root);
   sys::path::append(Manifest, "manifest.json");
   ErrorOr<vfs::Status> St = VFS.status(Manifest);
   if (!St || !St->isRegularFile())
-    return false;
+    return std::nullopt;
 
-  Path = std::string(Root);
-  VSLayout = ToolsetLayout::VS2017OrNewer;
-  SDKRoot.clear();
-  SDKVersion.clear();
+  OpenRTLayout L;
+  L.Root = std::string(Root);
 
-  // Optional "sdk": {"root": "...", "version": "..."}; anything else ignored.
+  // Malformed json keeps the layout, without any of the optional data.
   ErrorOr<std::unique_ptr<MemoryBuffer>> Buf = VFS.getBufferForFile(Manifest);
   if (!Buf)
-    return true;
+    return L;
   Expected<json::Value> V = json::parse((*Buf)->getBuffer());
   if (!V) {
     consumeError(V.takeError());
-    return true;
+    return L;
   }
   const json::Object *O = V->getAsObject();
-  const json::Object *SDK = O ? O->getObject("sdk") : nullptr;
-  if (!SDK)
-    return true;
-  if (std::optional<StringRef> R = SDK->getString("root"); R && !R->empty()) {
+  if (!O)
+    return L;
+  auto Resolve = [&](std::optional<StringRef> R) -> std::string {
+    if (!R || R->empty())
+      return {};
     SmallString<256> P(*R);
     if (sys::path::is_relative(P)) {
       P = Root;
       sys::path::append(P, *R);
-      sys::path::remove_dots(P, /*remove_dot_dot=*/true);
     }
-    SDKRoot = std::string(P);
+    sys::path::remove_dots(P, /*remove_dot_dot=*/true);
+    return std::string(P);
+  };
+  if (const json::Object *SDK = O->getObject("sdk")) {
+    L.SDKRoot = Resolve(SDK->getString("root"));
+    if (std::optional<StringRef> Ver = SDK->getString("version"))
+      L.SDKVersion = Ver->str();
   }
-  if (std::optional<StringRef> Ver = SDK->getString("version"))
-    SDKVersion = Ver->str();
+  if (const json::Object *Ov = O->getObject("overlay")) {
+    L.VFSOverlay = Resolve(Ov->getString("file"));
+    L.VFSPrefix = Resolve(Ov->getString("prefix"));
+  }
+  L.LibMap = Resolve(O->getString("libmap"));
+  return L;
+}
+
+bool llvm::findVCToolChainViaBinRelativeLayout(
+    vfs::FileSystem &VFS, StringRef BinDir, std::string &Path,
+    ToolsetLayout &VSLayout, std::string &SDKRoot, std::string &SDKVersion) {
+  std::optional<OpenRTLayout> L = findOpenRTLayout(VFS, BinDir);
+  if (!L)
+    return false;
+  Path = L->Root;
+  VSLayout = ToolsetLayout::VS2017OrNewer;
+  SDKRoot = L->SDKRoot;
+  SDKVersion = L->SDKVersion;
   return true;
 }
 

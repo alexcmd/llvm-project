@@ -3559,6 +3559,12 @@ dll version.}]>;
 def fms_omit_default_lib : Joined<["-"], "fms-omit-default-lib">,
   Group<f_Group>, Flags<[]>,
   Visibility<[ClangOption, CLOption]>;
+defm openrt_overlay : BoolOptionWithoutMarshalling<"f", "openrt-overlay",
+  PosFlag<SetTrue, [], [ClangOption, CLOption],
+          "Use the VFS overlay declared by the openrt layout around the "
+          "driver (<bin>/../manifest.json, default)">,
+  NegFlag<SetFalse, [], [ClangOption, CLOption],
+          "Ignore the VFS overlay declared by the openrt layout">>;
 def fzos_extensions : Flag<["-"], "fzos-extensions">, Group<f_Group>, Visibility<[ClangOption, CC1Option]>,
   HelpText<"Accept some non-standard constructs supported by the z/OS compiler">;
 def fno_zos_extensions : Flag<["-"], "fno-zos-extensions">, Group<f_Group>, Visibility<[ClangOption, CC1Option]>,

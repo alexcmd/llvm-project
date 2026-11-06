@@ -581,6 +581,21 @@ MSVCToolChain::MSVCToolChain(const Driver &D, const llvm::Triple &Triple,
                                             VCToolChainPath, VSLayout) ||
         llvm::findVCToolChainViaRegistry(VCToolChainPath, VSLayout);
 
+  // VFS-OVERLAY-AUTOLOAD: manifest.json "overlay" names a VFS overlay that
+  // maps API header names onto the files the install ships, and the virtual
+  // include dir it is rooted at. Applied whenever the marker declares it,
+  // whichever toolchain lookup won above (also with /vctoolsdir, %INCLUDE%,
+  // /X); -fno-openrt-overlay opts out. A declared file that is missing is
+  // ignored, so a half-installed tree degrades to "no overlay".
+  if (Args.hasFlag(options::OPT_fopenrt_overlay,
+                   options::OPT_fno_openrt_overlay, true))
+    if (std::optional<llvm::OpenRTLayout> L =
+            llvm::findOpenRTLayout(getVFS(), getDriver().Dir))
+      if (!L->VFSOverlay.empty() && getVFS().exists(L->VFSOverlay)) {
+        OpenRTOverlay = L->VFSOverlay;
+        OpenRTOverlayPrefix = L->VFSPrefix;
+      }
+
   loadMultilibsFromYAML(Args, D);
 }
 
@@ -833,6 +848,11 @@ void MSVCToolChain::AddClangSystemIncludeArgs(const ArgList &DriverArgs,
        DriverArgs.getAllArgValues(options::OPT__SLASH_external_env)) {
     AddSystemIncludesFromEnv(Var);
   }
+
+  // VFS-OVERLAY-AUTOLOAD: the overlay's virtual include dir. Kept with /X
+  // (nostdlibinc): it only renames files of the install itself.
+  if (!OpenRTOverlayPrefix.empty())
+    addSystemInclude(DriverArgs, CC1Args, OpenRTOverlayPrefix);
 
   // Add DIA SDK include if requested.
   if (const Arg *A = DriverArgs.getLastArg(options::OPT__SLASH_diasdkdir,
@@ -1207,4 +1227,14 @@ void MSVCToolChain::addClangTargetOptions(
 
   if (Arg *A = DriverArgs.getLastArgNoClaim(options::OPT_marm64x))
     A->ignoreTargetSpecific();
+
+  // VFS-OVERLAY-AUTOLOAD: load the layout's overlay and list it as an input
+  // of the TU (depfile, /showIncludes, /sourceDependencies), so a changed
+  // name map rebuilds what used it.
+  if (!OpenRTOverlay.empty()) {
+    CC1Args.push_back("-ivfsoverlay");
+    CC1Args.push_back(DriverArgs.MakeArgString(OpenRTOverlay));
+    CC1Args.push_back(
+        DriverArgs.MakeArgString("-fdepfile-entry=" + OpenRTOverlay));
+  }
 }

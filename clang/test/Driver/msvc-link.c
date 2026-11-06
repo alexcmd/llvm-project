@@ -1,7 +1,7 @@
 // RUN: %clang --target=i686-pc-windows-msvc -fuse-ld=link -L/var/empty -L/usr/lib -### %s 2>&1 | FileCheck --check-prefix=BASIC %s
 // BASIC:      link.exe"
 // BASIC-SAME: "-out:a.exe"
-// BASIC-SAME: "-defaultlib:libcmt" "-defaultlib:oldnames"
+// BASIC-SAME: "-defaultlib:openruntime_mt" "-defaultlib:openoldnames"
 // BASIC-SAME: "-libpath:/var/empty" "-libpath:/usr/lib"
 // BASIC-SAME: "-nologo"
 // BASIC-NOT:  "-Brepro"
@@ -11,7 +11,7 @@
 // RUN: %clang --target=i686-pc-windows-msvc -shared -o a.dll -fuse-ld=link -### %s 2>&1 | FileCheck --check-prefix=DLL %s
 // DLL:      link.exe"
 // DLL-SAME: "-out:a.dll"
-// DLL-SAME: "-defaultlib:libcmt" "-defaultlib:oldnames"
+// DLL-SAME: "-defaultlib:openruntime_mt" "-defaultlib:openoldnames"
 // DLL-SAME: "-nologo" "-dll"
 
 // RUN: %clang_cl /Brepro -fuse-ld=link -### -- %s 2>&1 | FileCheck --check-prefix=REPRO %s

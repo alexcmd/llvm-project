@@ -793,15 +793,15 @@
 // it's being turned off by the /clang:-fno-slp-vectorize flag.
 
 // RUN: %clang_cl -O2 -### -- %s 2>&1 | FileCheck -check-prefix=NOCLANG %s
-// NOCLANG: "--dependent-lib=libcmt"
+// NOCLANG: "--dependent-lib=openruntime_mt"
 // NOCLANG-SAME: "-vectorize-slp"
-// NOCLANG-NOT: "--dependent-lib=msvcrt"
+// NOCLANG-NOT: "--dependent-lib=openruntime_md"
 
 // RUN: %clang_cl -O2 -MD /clang:-fno-slp-vectorize /clang:-MD /clang:-MF /clang:my_dependency_file.dep /c /Fo%/t/cl-options.obj -### -- %s 2>&1 | FileCheck -DPREFIX=%/t -check-prefix=CLANG %s
-// CLANG: "--dependent-lib=msvcrt"
+// CLANG: "--dependent-lib=openruntime_md"
 // CLANG-SAME: "-dependency-file" "my_dependency_file.dep"
 // CLANG-SAME: "-MT" "[[PREFIX]]/cl-options.obj"
-// CLANG-NOT: "--dependent-lib=libcmt"
+// CLANG-NOT: "--dependent-lib=openruntime_mt"
 // CLANG-NOT: "-vectorize-slp"
 
 // Cover PR42501: clang-cl /clang: pass-through causes read-after-free with aliased options.

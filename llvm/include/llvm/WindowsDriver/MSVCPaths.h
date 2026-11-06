@@ -10,6 +10,7 @@
 #define LLVM_WINDOWSDRIVER_MSVCPATHS_H
 
 #include "llvm/ADT/SmallString.h"
+#include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/TargetParser/Triple.h"
@@ -112,15 +113,28 @@ LLVM_ABI bool findVCToolChainViaBinRelativeLayout(
 //              overlay's root names (absolute, need not exist on disk).
 //   "libmap":  <file>                              -> LibMap
 //              library name data for the linker (one "<name>\t<name>" line
-//              per mapping; see lld COFF LinkerDriver::loadLibMap).
+//              per mapping; see lld COFF LinkerDriver::loadLibMap) and for
+//              the compiler's own default-lib names (readOpenRTLibMap).
+//   "toolchain": false                             -> IsToolchain = false
+//              the root carries data only (libmap, overlay) and is not a
+//              toolchain root: findVCToolChainViaBinRelativeLayout ignores
+//              it (e.g. an LLVM install used with another toolchain's libs).
 struct OpenRTLayout {
   std::string Root;
   std::string SDKRoot, SDKVersion;
   std::string VFSOverlay, VFSPrefix;
   std::string LibMap;
+  bool IsToolchain = true;
 };
 LLVM_ABI std::optional<OpenRTLayout> findOpenRTLayout(vfs::FileSystem &VFS,
                                                       llvm::StringRef BinDir);
+
+// LIBNAME-OPENRT: reads a libmap file ("<from> <to>" per line, TAB or blanks
+// between, '#' comment lines, malformed lines skipped) into Map, keyed by the
+// canonical <from> (lower case, ".lib" dropped); the value is <to> as written.
+// False if the file cannot be read.
+LLVM_ABI bool readOpenRTLibMap(vfs::FileSystem &VFS, llvm::StringRef Path,
+                               llvm::StringMap<std::string> &Map);
 
 // Check various environment variables to try and find a toolchain.
 LLVM_ABI bool findVCToolChainViaEnvironment(vfs::FileSystem &VFS,

@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "Flang.h"
+#include "OpenRTLibNames.h"
 #include "Arch/RISCV.h"
 #include "Cuda.h"
 
@@ -506,26 +507,34 @@ static void processVSRuntimeLibrary(const ToolChain &TC, const ArgList &Args,
   switch (RTOptionID) {
   case options::OPT__SLASH_MT:
     CmdArgs.push_back("-D_MT");
-    CmdArgs.push_back("--dependent-lib=libcmt");
+    CmdArgs.push_back(Args.MakeArgString(
+        "--dependent-lib=" +
+        openrt::defaultLibName(TC, openrt::DefaultLib::RuntimeMT)));
     CmdArgs.push_back("--dependent-lib=flang_rt.runtime.static.lib");
     break;
   case options::OPT__SLASH_MTd:
     CmdArgs.push_back("-D_MT");
     CmdArgs.push_back("-D_DEBUG");
-    CmdArgs.push_back("--dependent-lib=libcmtd");
+    CmdArgs.push_back(Args.MakeArgString(
+        "--dependent-lib=" +
+        openrt::defaultLibName(TC, openrt::DefaultLib::RuntimeMTd)));
     CmdArgs.push_back("--dependent-lib=flang_rt.runtime.static_dbg.lib");
     break;
   case options::OPT__SLASH_MD:
     CmdArgs.push_back("-D_MT");
     CmdArgs.push_back("-D_DLL");
-    CmdArgs.push_back("--dependent-lib=msvcrt");
+    CmdArgs.push_back(Args.MakeArgString(
+        "--dependent-lib=" +
+        openrt::defaultLibName(TC, openrt::DefaultLib::RuntimeMD)));
     CmdArgs.push_back("--dependent-lib=flang_rt.runtime.dynamic.lib");
     break;
   case options::OPT__SLASH_MDd:
     CmdArgs.push_back("-D_MT");
     CmdArgs.push_back("-D_DEBUG");
     CmdArgs.push_back("-D_DLL");
-    CmdArgs.push_back("--dependent-lib=msvcrtd");
+    CmdArgs.push_back(Args.MakeArgString(
+        "--dependent-lib=" +
+        openrt::defaultLibName(TC, openrt::DefaultLib::RuntimeMDd)));
     CmdArgs.push_back("--dependent-lib=flang_rt.runtime.dynamic_dbg.lib");
     break;
   }

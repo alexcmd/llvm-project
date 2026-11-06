@@ -85,8 +85,7 @@
 // RUN:     -fopenmp=libomp -target x86_64-msvc-win32 -rtlib=platform --unwindlib=platform \
 // RUN:   | FileCheck --check-prefix=CHECK-MSVC-LINK-64 %s
 // CHECK-MSVC-LINK-64: link.exe
-// CHECK-MSVC-LINK-64-SAME: -nodefaultlib:vcomp.lib
-// CHECK-MSVC-LINK-64-SAME: -nodefaultlib:vcompd.lib
+// CHECK-MSVC-LINK-64-NOT: -nodefaultlib:vcomp
 // CHECK-MSVC-LINK-64-SAME: -libpath:{{.+}}/../lib
 // CHECK-MSVC-LINK-64-SAME: -defaultlib:libomp.lib
 
@@ -104,8 +103,7 @@
 // SIMD-ONLY11-NOT: libomp
 // SIMD-ONLY11-NOT: libgomp
 // CHECK-MSVC-ILINK-64: link.exe
-// CHECK-MSVC-ILINK-64-SAME: -nodefaultlib:vcomp.lib
-// CHECK-MSVC-ILINK-64-SAME: -nodefaultlib:vcompd.lib
+// CHECK-MSVC-ILINK-64-NOT: -nodefaultlib:vcomp
 // CHECK-MSVC-ILINK-64-SAME: -libpath:{{.+}}/../lib
 // CHECK-MSVC-ILINK-64-SAME: -defaultlib:libiomp5md.lib
 //

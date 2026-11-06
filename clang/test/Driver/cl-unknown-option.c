@@ -4,9 +4,9 @@
 // RUN: %clang_cl /c /bogusopt %s -### 2>&1 | FileCheck %s
 // RUN: %clang_cl /c /ACf %s -### 2>&1 | FileCheck --check-prefix=ACF %s
 
-// CHECK: warning: D9002 : ignoring unknown option '/bogusopt'
+// CHECK: warning: D9002 : skipping unrecognized option '/bogusopt'
 // CHECK-NOT: no such file or directory
 // CHECK: "-cc1"{{.*}}cl-unknown-option.c
 
-// ACF: warning: D9002 : ignoring unknown option '/ACf'
+// ACF: warning: D9002 : skipping unrecognized option '/ACf'
 // ACF-NOT: no such file or directory

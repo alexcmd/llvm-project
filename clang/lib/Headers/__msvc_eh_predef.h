@@ -1,4 +1,4 @@
-/*===---- __msvc_eh_predef.h - C++ EH types pre-injected by cl.exe ---------===
+/*===---- __msvc_eh_predef.h - C++ EH ABI types predeclared for MSVC mode --===
  *
  * Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
  * See https://llvm.org/LICENSE.txt for license information.
@@ -9,16 +9,19 @@
 
 /* Force-included by the driver with -fms-predeclare-eh-types.
  *
- * cl.exe declares the following types in every C++ translation unit before
- * any source is read. MSVC's <ehdata_forceinclude.h> uses them (e.g. the
- * _CxxThrowException prototype takes a _ThrowInfo *) and maps only the
- * unprefixed names (ThrowInfo, CatchableType, ...) to its own definitions.
+ * Predeclares the C++ exception-handling record types of the Microsoft C++
+ * ABI in every C++ translation unit, before any source is read, so that a
+ * forced-include header can name them by their ABI tags.
  *
- * Unlike the unprefixed runtime records, the pre-injected types use pointer
- * fields on every target, including x64/ARM64 where the emitted EH data holds
- * 32-bit image-relative offsets. Sizes, offsets, field types and the mangled
- * tag names below match cl.exe (19.44, x86 and x64). They are not declared in
- * C, as with cl.exe. */
+ * ABI layout facts encoded below:
+ *  - Field order and sizes follow the ABI. _TypeDescriptor is packed to 8
+ *    bytes; the other records are packed to 4 (the #pragma pack regions).
+ *  - Pointer fields are pointers on every target, including x64 and ARM64,
+ *    where the EH tables emitted for those targets hold 32-bit image-relative
+ *    offsets instead of pointers.
+ *  - Struct tags use the ABI names (for example _s__ThrowInfo).
+ *  - C++ only; the types are not declared in C.
+ */
 
 #ifndef __MSVC_EH_PREDEF_H
 #define __MSVC_EH_PREDEF_H

@@ -46,7 +46,7 @@
 // CL: warning: unknown argument ignored in clang-cl: '-print-stats'
 // CL: warning: unknown argument ignored in clang-cl: '-funknown-to-clang-option'
 // CL-DID-YOU-MEAN: warning: unknown argument ignored in clang-cl '-Brepo'; did you mean '-Brepro'?
-// CL-DID-YOU-MEAN-SLASH: warning: D9002 : ignoring unknown option '/Brepo'
+// CL-DID-YOU-MEAN-SLASH: warning: D9002 : skipping unrecognized option '/Brepo'
 // CL-ERROR: error: unknown argument ignored in clang-cl: '-cake-is-lie'
 // CL-ERROR: error: unknown argument ignored in clang-cl: '-%0'
 // CL-ERROR: error: unknown argument ignored in clang-cl: '-%d'

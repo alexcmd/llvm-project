@@ -60,7 +60,7 @@
 // LIBINPUT2: "cl-test2.lib"
 
 // RUN: %clang_cl -fuse-ld=link -### -- %s /nonexisting.lib 2>&1 | FileCheck -check-prefix=LIBINPUT3 %s
-// LIBINPUT3: warning: D9002 : ignoring unknown option '/nonexisting.lib'
+// LIBINPUT3: warning: D9002 : skipping unrecognized option '/nonexisting.lib'
 // LIBINPUT3: link.exe"
 // LIBINPUT3-NOT: "/nonexisting.lib"
 

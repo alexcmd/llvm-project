@@ -19,11 +19,11 @@
 // RUN:   -fms-compatibility -ffreestanding -emit-llvm -o - \
 // RUN:   -include __msvc_eh_predef.h %s | FileCheck --check-prefix=X86 %s
 
-// Layouts, field types and tag names of the C++ EH types cl.exe pre-injects,
-// as observed with cl.exe 19.44 (x86 and x64): pointer fields on every target.
+// Layouts, field types and tag names of the predeclared C++ EH ABI types:
+// pointer fields on every target (x86, x64).
 
 #ifndef __cplusplus
-// cl.exe does not pre-inject them in C.
+// The types are declared for C++ only.
 _ThrowInfo *p; // c-error {{unknown type name '_ThrowInfo'}}
 #else
 // expected-no-diagnostics
@@ -73,11 +73,11 @@ SAME(_CatchableTypeArray, const struct _s__CatchableTypeArray);
 SAME(_PMD, struct _PMD);
 SAME(_TypeDescriptor, struct _TypeDescriptor);
 
-// MSVC's <ehdata_forceinclude.h> declares this with the pre-injected type.
+// The prototype takes the predeclared _ThrowInfo type.
 extern "C" __declspec(noreturn) void __stdcall _CxxThrowException(
     void *pExceptionObject, _ThrowInfo *pThrowInfo) noexcept(false);
 
-// Mangled names match cl.exe.
+// Mangled names follow the ABI.
 void f1(_ThrowInfo *) {}
 void f2(_CatchableType *) {}
 void f3(_CatchableTypeArray *) {}

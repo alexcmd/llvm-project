@@ -12,36 +12,36 @@ def err_drv_no_such_file : Error<"no such file or directory: '%0'">;
 def err_drv_no_such_file_with_suggestion : Error<
   "no such file or directory: '%0'; did you mean '%1'?">;
 def warn_drv_ignoring_unknown_option : Warning<
-  "D9002 : ignoring unknown option '%0'">;
-// MSVC text, verbatim (tasks/compat/03: rewritten clean-room before release).
+  "D9002 : skipping unrecognized option '%0'">;
+// Codes follow the cl numbering; the wording is project-authored.
 def warn_drv_cl_pd_requires_zc : Warning<
-  "D9007 : '/PD' requires '/Zc:preprocessor'; option ignored">;
-// cl.exe 14.51 (probes_cl_decisions.md section 1): verbatim, exit codes differ (GAP).
-def err_drv_cl_requires_argument : Error<"D8004 : '%0' requires an argument">;
+  "D9007 : '/PD' has no effect without '/Zc:preprocessor'">;
+// Exit codes differ from cl (GAP).
+def err_drv_cl_requires_argument : Error<"D8004 : '%0' is missing its value">;
 def err_drv_cl_invalid_numeric_argument : Error<
-  "D8021 : invalid numeric argument '%0'">;
+  "D8021 : '%0' does not hold a valid numeric value">;
 def err_drv_cl_c1xx_unknown_flag : Error<
-  "fatal error C1007: unrecognized flag '-%0' in 'c1xx'">;
+  "fatal error C1007: switch '-%0' is not known to 'c1xx'">;
 def err_drv_cl_p2_unknown_flag : Error<
-  "fatal error C1007: unrecognized flag '-%0' in 'p2'">;
-// cl.exe 14.51 texts (probes_cl_decisions.md, tasks/compat/10 status); exit codes in Clang.cpp/driver.cpp.
+  "fatal error C1007: switch '-%0' is not known to 'p2'">;
+// Exit codes are set in Clang.cpp/driver.cpp.
 def warn_drv_cl_deprecated_option : Warning<
-  "D9035 : option '%0' has been deprecated and will be removed in a future release">;
+  "D9035 : option '%0' is deprecated and may be dropped in a later release">;
 def warn_drv_cl_invalid_warning_level : Warning<
-  "D9014 : invalid value '%0' for '/W'; assuming '1'">;
+  "D9014 : level '%0' is out of range for '/W'; using level '1'">;
 def err_drv_cl_c1_unknown_flag : Error<
-  "c1: fatal error C1007: unrecognized flag '-%0' in 'c1'">;
-def err_drv_cl_c_no_zw : Error<"D8048 : cannot compile C file '%0' with the /ZW option">;
-def err_drv_cl_c_no_clr : Error<"D8045 : cannot compile C file '%0' with the /clr option">;
+  "c1: fatal error C1007: switch '-%0' is not known to 'c1'">;
+def err_drv_cl_c_no_zw : Error<"D8048 : C source '%0' cannot be built with the /ZW option">;
+def err_drv_cl_c_no_clr : Error<"D8045 : C source '%0' cannot be built with the /clr option">;
 def err_drv_cl_guard_no_include : Error<
-  "%0: C1034: guardcfw.h: no include path set">;
+  "%0: C1034: cannot locate guardcfw.h; no include directory is set">;
 def err_drv_cl_guard_include : Error<
-  "%0: fatal error C1083: Cannot open include file: 'guardcfw.h': No such file or directory">;
+  "%0: fatal error C1083: include file 'guardcfw.h' was not found">;
 def err_drv_cl_enc_file : Error<
-  "%0 : fatal error C1083: Cannot open compiler generated file: '%1': No such file or directory">;
+  "%0 : fatal error C1083: compiler-generated file '%1' was not found">;
 // cl.exe: unknown /option is D9002 (warning, ignored); under /options:strict D8043.
 def err_drv_cl_unknown_option_strict : Error<
-  "D8043 : unknown option '%0'">;
+  "D8043 : option '%0' is not recognized under strict option checking">;
 def err_drv_unsupported_opt : Error<"unsupported option '%0'">;
 def err_drv_unsupported_opt_with_suggestion : Error<
   "unsupported option '%0'; did you mean '%1'?">;
@@ -894,7 +894,7 @@ def err_drv_cuda_offload_only_emit_bc : Error<
   "CUDA offload target is supported only along with --emit-llvm">;
 
 def warn_drv_cl_jmc_requires_zi : Warning<
-  "D9007 : '/JMC' requires '/Zi, /ZI or /Z7'; option ignored">;
+  "D9007 : '/JMC' has no effect without '/Zi', '/ZI' or '/Z7'">;
 def warn_drv_jmc_requires_debuginfo : Warning<
   "%0 requires debug info. Use %1 or debug options that enable debugger's "
   "stepping function; option ignored">,

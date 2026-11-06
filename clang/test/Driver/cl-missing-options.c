@@ -11,7 +11,7 @@
 // NOOP: "-ftemplate-depth=1000"
 
 // RUN: %clang_cl /c /PD -### -- %s 2>&1 | FileCheck %s --check-prefix=PD
-// PD: warning: D9007 : '/PD' requires '/Zc:preprocessor'; option ignored
+// PD: warning: D9007 : '/PD' has no effect without '/Zc:preprocessor'
 
 // RUN: %clang_cl /c /PD /Zc:preprocessor -### -- %s 2>&1 | FileCheck %s --check-prefix=PDZC
 // PDZC-NOT: D9007
@@ -25,4 +25,4 @@
 
 // Other spellings are not cl switches: unknown /options stay D9002 (ignored).
 // RUN: %clang_cl /c /feature:FOO -### -- %s 2>&1 | FileCheck %s --check-prefix=UNK
-// UNK: warning: D9002 : ignoring unknown option '/feature:FOO'
+// UNK: warning: D9002 : skipping unrecognized option '/feature:FOO'

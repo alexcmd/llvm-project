@@ -32,7 +32,7 @@ SDK path is detected at all.
 # RUN:     --implicit-check-not="SDK lib path:" \
 # RUN:     --implicit-check-not="UCRT lib path:" %s
 
-NONE: LINK : fatal error LNK1181: cannot open input file 'std64.lib'
+NONE: LINK : fatal error LNK1181: input file 'std64.lib' was not found
 
 /libpath still works with /novcautodetect.
 # RUN: lld-link %p/Inputs/hello64.obj /novcautodetect \

@@ -10,10 +10,10 @@
 
 // SILENT-NOT: error:
 // SILENT-NOT: warning:
-// C1007-C1XX: fatal error C1007: unrecognized flag '-foo' in 'c1xx'
-// C1007-P2: fatal error C1007: unrecognized flag '-ZO-' in 'p2'
-// D8004-D1: D8004 : '/d1' requires an argument
-// D8004-W1: D8004 : '/w1' requires an argument
-// D8021-W1: D8021 : invalid numeric argument '/w1wtest.cpp'
+// C1007-C1XX: fatal error C1007: switch '-foo' is not known to 'c1xx'
+// C1007-P2: fatal error C1007: switch '-ZO-' is not known to 'p2'
+// D8004-D1: D8004 : '/d1' is missing its value
+// D8004-W1: D8004 : '/w1' is missing its value
+// D8021-W1: D8021 : '/w1wtest.cpp' does not hold a valid numeric value
 // LINK: "/STACK:0x1000"
 // LINK-SAME: "/KERNEL"

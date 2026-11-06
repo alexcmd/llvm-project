@@ -1,6 +1,6 @@
 # RUN: not lld-link nosuchfile.obj >& %t.log
 # RUN: FileCheck -check-prefix=MISSING %s < %t.log
-MISSING: LINK : fatal error LNK1181: cannot open input file 'nosuchfile.obj'
+MISSING: LINK : fatal error LNK1181: input file 'nosuchfile.obj' was not found
 
 # RUN: lld-link --version | FileCheck -check-prefix=VERSION %s
 VERSION: {{LLD [0-9]+\.[0-9]+}}
@@ -33,7 +33,7 @@ SPELLNODEFAULTLIB: ignoring unknown argument '-nodefaultlibs', did you mean '-no
 SPELLNODEFAULTLIB: no input files
 
 # RUN: not lld-link /nodefaultlibs 2>&1 | FileCheck -check-prefix=SPELLNODEFAULTLIB_SLASH %s
-SPELLNODEFAULTLIB_SLASH: LINK : warning LNK4044: unrecognized option '/nodefaultlibs'; ignored
+SPELLNODEFAULTLIB_SLASH: LINK : warning LNK4044: skipping unknown option '/nodefaultlibs'
 SPELLNODEFAULTLIB_SLASH-NOT: no input files
 
 # Getting flags as typo corrections for normal input files is a side effect

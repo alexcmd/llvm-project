@@ -1738,10 +1738,19 @@ _mm_minpos_epu16(__m128i __V) {
 ///         repeating each bit 8 or 16 times). \n
 /// \returns Returns a 128-bit integer vector representing the result mask of
 ///    the comparison.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+template <int __M>
+static __inline__ __m128i __DEFAULT_FN_ATTRS __ms__mm_cmpestrm(__m128i __A, int __LA, __m128i __B, int __LB) {
+  return (__m128i)__builtin_ia32_pcmpestrm128((__v16qi)__A, __LA, (__v16qi)__B, __LB, __M);
+}
+#define _mm_cmpestrm(A, LA, B, LB, M) (__ms__mm_cmpestrm<(M)>(A, LA, B, LB))
+#else
 #define _mm_cmpestrm(A, LA, B, LB, M)                                          \
   ((__m128i)__builtin_ia32_pcmpestrm128((__v16qi)(__m128i)(A), (int)(LA),      \
                                         (__v16qi)(__m128i)(B), (int)(LB),      \
                                         (int)(M)))
+#endif
 
 /// Uses the immediate operand \a M to perform a comparison of string
 ///    data with explicitly defined lengths that is contained in source operands
@@ -1797,10 +1806,19 @@ _mm_minpos_epu16(__m128i __V) {
 ///      0: The index of the least significant set bit. \n
 ///      1: The index of the most significant set bit. \n
 /// \returns Returns an integer representing the result index of the comparison.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+template <int __M>
+static __inline__ int __DEFAULT_FN_ATTRS __ms__mm_cmpestri(__m128i __A, int __LA, __m128i __B, int __LB) {
+  return (int)__builtin_ia32_pcmpestri128((__v16qi)__A, __LA, (__v16qi)__B, __LB, __M);
+}
+#define _mm_cmpestri(A, LA, B, LB, M) (__ms__mm_cmpestri<(M)>(A, LA, B, LB))
+#else
 #define _mm_cmpestri(A, LA, B, LB, M)                                          \
   ((int)__builtin_ia32_pcmpestri128((__v16qi)(__m128i)(A), (int)(LA),          \
                                     (__v16qi)(__m128i)(B), (int)(LB),          \
                                     (int)(M)))
+#endif
 
 /* SSE4.2 Packed Comparison Intrinsics and EFlag Reading.  */
 /// Uses the immediate operand \a M to perform a comparison of string
@@ -2100,10 +2118,19 @@ _mm_minpos_epu16(__m128i __V) {
 ///          to the size of \a A or \a B.
 /// \returns Returns 1 if the bit mask is zero and the length of the string in
 ///    \a B is the maximum, otherwise, returns 0.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+template <int __M>
+static __inline__ int __DEFAULT_FN_ATTRS __ms__mm_cmpestra(__m128i __A, int __LA, __m128i __B, int __LB) {
+  return (int)__builtin_ia32_pcmpestria128((__v16qi)__A, __LA, (__v16qi)__B, __LB, __M);
+}
+#define _mm_cmpestra(A, LA, B, LB, M) (__ms__mm_cmpestra<(M)>(A, LA, B, LB))
+#else
 #define _mm_cmpestra(A, LA, B, LB, M)                                          \
   ((int)__builtin_ia32_pcmpestria128((__v16qi)(__m128i)(A), (int)(LA),         \
                                      (__v16qi)(__m128i)(B), (int)(LB),         \
                                      (int)(M)))
+#endif
 
 /// Uses the immediate operand \a M to perform a comparison of string
 ///    data with explicitly defined lengths that is contained in source operands
@@ -2154,10 +2181,19 @@ _mm_minpos_epu16(__m128i __V) {
 ///      11: Negate the bit mask only for bits with an index less than or equal
 ///          to the size of \a A or \a B. \n
 /// \returns Returns 1 if the resulting mask is non-zero, otherwise, returns 0.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+template <int __M>
+static __inline__ int __DEFAULT_FN_ATTRS __ms__mm_cmpestrc(__m128i __A, int __LA, __m128i __B, int __LB) {
+  return (int)__builtin_ia32_pcmpestric128((__v16qi)__A, __LA, (__v16qi)__B, __LB, __M);
+}
+#define _mm_cmpestrc(A, LA, B, LB, M) (__ms__mm_cmpestrc<(M)>(A, LA, B, LB))
+#else
 #define _mm_cmpestrc(A, LA, B, LB, M)                                          \
   ((int)__builtin_ia32_pcmpestric128((__v16qi)(__m128i)(A), (int)(LA),         \
                                      (__v16qi)(__m128i)(B), (int)(LB),         \
                                      (int)(M)))
+#endif
 
 /// Uses the immediate operand \a M to perform a comparison of string
 ///    data with explicitly defined lengths that is contained in source operands
@@ -2207,10 +2243,19 @@ _mm_minpos_epu16(__m128i __V) {
 ///      11: Negate the bit mask only for bits with an index less than or equal
 ///          to the size of \a A or \a B.
 /// \returns Returns bit 0 of the resulting bit mask.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+template <int __M>
+static __inline__ int __DEFAULT_FN_ATTRS __ms__mm_cmpestro(__m128i __A, int __LA, __m128i __B, int __LB) {
+  return (int)__builtin_ia32_pcmpestrio128((__v16qi)__A, __LA, (__v16qi)__B, __LB, __M);
+}
+#define _mm_cmpestro(A, LA, B, LB, M) (__ms__mm_cmpestro<(M)>(A, LA, B, LB))
+#else
 #define _mm_cmpestro(A, LA, B, LB, M)                                          \
   ((int)__builtin_ia32_pcmpestrio128((__v16qi)(__m128i)(A), (int)(LA),         \
                                      (__v16qi)(__m128i)(B), (int)(LB),         \
                                      (int)(M)))
+#endif
 
 /// Uses the immediate operand \a M to perform a comparison of string
 ///    data with explicitly defined lengths that is contained in source operands
@@ -2262,10 +2307,19 @@ _mm_minpos_epu16(__m128i __V) {
 ///          to the size of \a A or \a B. \n
 /// \returns Returns 1 if the length of the string in \a A is less than the
 ///    maximum, otherwise, returns 0.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+template <int __M>
+static __inline__ int __DEFAULT_FN_ATTRS __ms__mm_cmpestrs(__m128i __A, int __LA, __m128i __B, int __LB) {
+  return (int)__builtin_ia32_pcmpestris128((__v16qi)__A, __LA, (__v16qi)__B, __LB, __M);
+}
+#define _mm_cmpestrs(A, LA, B, LB, M) (__ms__mm_cmpestrs<(M)>(A, LA, B, LB))
+#else
 #define _mm_cmpestrs(A, LA, B, LB, M)                                          \
   ((int)__builtin_ia32_pcmpestris128((__v16qi)(__m128i)(A), (int)(LA),         \
                                      (__v16qi)(__m128i)(B), (int)(LB),         \
                                      (int)(M)))
+#endif
 
 /// Uses the immediate operand \a M to perform a comparison of string
 ///    data with explicitly defined lengths that is contained in source operands
@@ -2316,10 +2370,19 @@ _mm_minpos_epu16(__m128i __V) {
 ///          to the size of \a A or \a B.
 /// \returns Returns 1 if the length of the string in \a B is less than the
 ///    maximum, otherwise, returns 0.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+template <int __M>
+static __inline__ int __DEFAULT_FN_ATTRS __ms__mm_cmpestrz(__m128i __A, int __LA, __m128i __B, int __LB) {
+  return (int)__builtin_ia32_pcmpestriz128((__v16qi)__A, __LA, (__v16qi)__B, __LB, __M);
+}
+#define _mm_cmpestrz(A, LA, B, LB, M) (__ms__mm_cmpestrz<(M)>(A, LA, B, LB))
+#else
 #define _mm_cmpestrz(A, LA, B, LB, M)                                          \
   ((int)__builtin_ia32_pcmpestriz128((__v16qi)(__m128i)(A), (int)(LA),         \
                                      (__v16qi)(__m128i)(B), (int)(LB),         \
                                      (int)(M)))
+#endif
 
 /* SSE4.2 Compare Packed Data -- Greater Than.  */
 /// Compares each of the corresponding 64-bit values of the 128-bit

@@ -1262,9 +1262,18 @@ _mm256_permutevar_ps(__m256 __a, __m256i __c) {
 ///    11: Bits [255:128] of operand \a V2 are copied to bits [255:128] of the
 ///    destination.
 /// \returns A 256-bit vector of [8 x float] containing the copied values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+template <int __M>
+static __inline__ __m256 __DEFAULT_FN_ATTRS __ms__mm256_permute2f128_ps(__m256 __V1, __m256 __V2) {
+  return (__m256)__builtin_ia32_vperm2f128_ps256((__v8sf)__V1, (__v8sf)__V2, __M);
+}
+#define _mm256_permute2f128_ps(V1, V2, M) (__ms__mm256_permute2f128_ps<(M)>(V1, V2))
+#else
 #define _mm256_permute2f128_ps(V1, V2, M) \
   ((__m256)__builtin_ia32_vperm2f128_ps256((__v8sf)(__m256)(V1), \
                                            (__v8sf)(__m256)(V2), (int)(M)))
+#endif
 
 /// Permutes 128-bit data values stored in two 256-bit integer vectors,
 ///    as specified by the immediate integer operand.
@@ -1512,9 +1521,18 @@ _mm256_blendv_ps(__m256 __a, __m256 __b, __m256 __c) {
 ///    <c>_MM_SHUFFLE(b6, b4, b2, b0)</c> can create an 8-bit mask of the form
 ///    <c>[b6, b4, b2, b0]</c>.
 /// \returns A 256-bit vector of [8 x float] containing the shuffled values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+template <int __M>
+static __inline__ __m256 __DEFAULT_FN_ATTRS __ms__mm256_shuffle_ps(__m256 __a, __m256 __b) {
+  return (__m256)__builtin_ia32_shufps256((__v8sf)__a, (__v8sf)__b, __M);
+}
+#define _mm256_shuffle_ps(a, b, mask) (__ms__mm256_shuffle_ps<(mask)>(a, b))
+#else
 #define _mm256_shuffle_ps(a, b, mask) \
   ((__m256)__builtin_ia32_shufps256((__v8sf)(__m256)(a), \
                                     (__v8sf)(__m256)(b), (int)(mask)))
+#endif
 
 /// Selects four double-precision values from the 256-bit operands of
 ///    [4 x double], as specified by the immediate value operand.
@@ -1558,9 +1576,18 @@ _mm256_blendv_ps(__m256 __a, __m256 __b, __m256 __c) {
 ///    Bit [3]=1: Bits [255:192] are copied from \a b to bits [255:192] of the
 ///    destination.
 /// \returns A 256-bit vector of [4 x double] containing the shuffled values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+template <int __M>
+static __inline__ __m256d __DEFAULT_FN_ATTRS __ms__mm256_shuffle_pd(__m256d __a, __m256d __b) {
+  return (__m256d)__builtin_ia32_shufpd256((__v4df)__a, (__v4df)__b, __M);
+}
+#define _mm256_shuffle_pd(a, b, mask) (__ms__mm256_shuffle_pd<(mask)>(a, b))
+#else
 #define _mm256_shuffle_pd(a, b, mask) \
   ((__m256d)__builtin_ia32_shufpd256((__v4df)(__m256d)(a), \
                                      (__v4df)(__m256d)(b), (int)(mask)))
+#endif
 
 /* Compare */
 #define _CMP_EQ_UQ    0x08 /* Equal (unordered, non-signaling)  */
@@ -1762,9 +1789,18 @@ _mm256_blendv_ps(__m256 __a, __m256 __b, __m256 __c) {
 ///    0x1E: Greater-than (ordered, non-signaling) \n
 ///    0x1F: True (unordered, signaling)
 /// \returns A 256-bit vector of [4 x double] containing the comparison results.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+template <int __M>
+static __inline__ __m256d __DEFAULT_FN_ATTRS __ms__mm256_cmp_pd(__m256d __a, __m256d __b) {
+  return (__m256d)__builtin_ia32_cmppd256((__v4df)__a, (__v4df)__b, __M);
+}
+#define _mm256_cmp_pd(a, b, c) (__ms__mm256_cmp_pd<(c)>(a, b))
+#else
 #define _mm256_cmp_pd(a, b, c) \
   ((__m256d)__builtin_ia32_cmppd256((__v4df)(__m256d)(a), \
                                     (__v4df)(__m256d)(b), (c)))
+#endif
 
 /// Compares each of the corresponding values of two 256-bit vectors of
 ///    [8 x float], using the operation specified by the immediate integer
@@ -1822,9 +1858,18 @@ _mm256_blendv_ps(__m256 __a, __m256 __b, __m256 __c) {
 ///    0x1E: Greater-than (ordered, non-signaling) \n
 ///    0x1F: True (unordered, signaling)
 /// \returns A 256-bit vector of [8 x float] containing the comparison results.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+template <int __M>
+static __inline__ __m256 __DEFAULT_FN_ATTRS __ms__mm256_cmp_ps(__m256 __a, __m256 __b) {
+  return (__m256)__builtin_ia32_cmpps256((__v8sf)__a, (__v8sf)__b, __M);
+}
+#define _mm256_cmp_ps(a, b, c) (__ms__mm256_cmp_ps<(c)>(a, b))
+#else
 #define _mm256_cmp_ps(a, b, c) \
   ((__m256)__builtin_ia32_cmpps256((__v8sf)(__m256)(a), \
                                    (__v8sf)(__m256)(b), (c)))
+#endif
 
 /* Below intrinsic defined in emmintrin.h can be used for AVX */
 /// Compares each of the corresponding scalar double-precision values of

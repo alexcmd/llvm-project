@@ -540,7 +540,7 @@ __arch_avx10ver(void) {
   return 0;
 }
 #ifdef __cplusplus
-static __inline__ _Bool __attribute__((__always_inline__, __nodebug__))
+static __inline__ bool __attribute__((__always_inline__, __nodebug__))
 __check_arch_support(unsigned __x, unsigned __v = 0) {
   return ((__x & __arch_inverted()) == 0) && (__arch_avx10ver() >= __v);
 }

@@ -47,7 +47,7 @@
 
 // Don't pass through /libpath: if it's not after a /link flag:
 // RUN: %clang_cl /Tc%s /libpath:foo -fuse-ld=link -### /link /libpath:bar 2>&1 | FileCheck --check-prefix=LIBPATH %s
-// LIBPATH: warning: D9002 : ignoring unknown option '/libpath:foo'
+// LIBPATH: warning: D9002 : skipping unrecognized option '/libpath:foo'
 // LIBPATH: libpath:bar
 
 // PR27234

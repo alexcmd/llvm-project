@@ -434,7 +434,7 @@
 
 // Support ignoring warnings about unused arguments.
 // RUN: %clang_cl /Abracadabra -Qunused-arguments -### -- %s 2>&1 | FileCheck -check-prefix=UNUSED %s
-// UNUSED: warning: D9002 : ignoring unknown option '/Abracadabra'
+// UNUSED: warning: D9002 : skipping unrecognized option '/Abracadabra'
 // UNUSED-NOT: argument unused during compilation
 
 // Unsupported but parsed options. Check that we don't error on them.
@@ -832,7 +832,7 @@
 // TARGET: "-triple" "i686-pc-windows-msvc19.14.0"
 
 // RUN: %clang_cl /JMC /c -### -- %s 2>&1 | FileCheck %s --check-prefix JMCWARN
-// JMCWARN: D9007 : '/JMC' requires '/Zi, /ZI or /Z7'; option ignored
+// JMCWARN: D9007 : '/JMC' has no effect without '/Zi', '/ZI' or '/Z7'
 
 // RUN: %clang_cl /JMC /c -### -- %s 2>&1 | FileCheck %s --check-prefix NOJMC
 // RUN: %clang_cl /JMC /Z7 /JMC- /c -### -- %s 2>&1 | FileCheck %s --check-prefix NOJMC

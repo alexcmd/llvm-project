@@ -12,14 +12,14 @@ INVRSP: invalid response file quoting: foobar
 # RUN: echo "blah\foo" > %t.rsp
 # RUN: not lld-link @%t.rsp 2>&1 | \
 # RUN:     FileCheck --check-prefix=DEFRSP %s
-DEFRSP: LINK : fatal error LNK1181: cannot open input file 'blah\foo'
+DEFRSP: LINK : fatal error LNK1181: input file 'blah\foo' was not found
 
 # RUN: echo "blah\foo" > %t.rsp
 # RUN: not lld-link --rsp-quoting=windows @%t.rsp 2>&1 | \
 # RUN:     FileCheck --check-prefix=WINRSP %s
-WINRSP: LINK : fatal error LNK1181: cannot open input file 'blah\foo'
+WINRSP: LINK : fatal error LNK1181: input file 'blah\foo' was not found
 
 # RUN: echo "blah\foo" > %t.rsp
 # RUN: not lld-link --rsp-quoting=posix @%t.rsp 2>&1 | \
 # RUN:     FileCheck --check-prefix=POSRSP %s
-POSRSP: LINK : fatal error LNK1181: cannot open input file 'blahfoo'
+POSRSP: LINK : fatal error LNK1181: input file 'blahfoo' was not found

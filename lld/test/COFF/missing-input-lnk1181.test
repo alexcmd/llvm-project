@@ -4,4 +4,4 @@
 # RUN: yaml2obj %p/Inputs/ret42.yaml -o %t.obj
 # RUN: not lld-link /out:%t.exe /entry:main %t.obj nosuch-lnk1181.obj 2>&1 | FileCheck %s
 
-# CHECK: LINK : fatal error LNK1181: cannot open input file 'nosuch-lnk1181.obj'
+# CHECK: LINK : fatal error LNK1181: input file 'nosuch-lnk1181.obj' was not found

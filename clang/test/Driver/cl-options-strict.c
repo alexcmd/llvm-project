@@ -3,21 +3,21 @@
 // Probed with cl 14.51.36231: /options:strict /bogus /EBUG gives D8043 for each.
 
 // RUN: not %clang_cl /options:strict /bogusopt /EBUG -c -- %s 2>&1 | FileCheck --check-prefix=STRICT %s
-// STRICT: error: D8043 : unknown option '/bogusopt'
-// STRICT: error: D8043 : unknown option '/EBUG'
+// STRICT: error: D8043 : option '/bogusopt' is not recognized under strict option checking
+// STRICT: error: D8043 : option '/EBUG' is not recognized under strict option checking
 // STRICT-NOT: did you mean
 
 // /options:strict counts wherever it appears on the command line.
 // RUN: not %clang_cl /bogusopt /options:strict -c -- %s 2>&1 | FileCheck --check-prefix=STRICT1 %s
-// STRICT1: error: D8043 : unknown option '/bogusopt'
+// STRICT1: error: D8043 : option '/bogusopt' is not recognized under strict option checking
 
 // RUN: %clang_cl /options:strict -c -### -- %s 2>&1 | FileCheck --check-prefix=OK %s
 // OK-NOT: D8043
 // OK: "-cc1"
 
 // RUN: %clang_cl /bogusopt /EBUG -c -### -- %s 2>&1 | FileCheck --check-prefix=LAX %s
-// LAX: warning: D9002 : ignoring unknown option '/bogusopt'
-// LAX: warning: D9002 : ignoring unknown option '/EBUG'
+// LAX: warning: D9002 : skipping unrecognized option '/bogusopt'
+// LAX: warning: D9002 : skipping unrecognized option '/EBUG'
 // LAX-NOT: did you mean
 // LAX-NOT: argument unused
 // LAX-NOT: no such file

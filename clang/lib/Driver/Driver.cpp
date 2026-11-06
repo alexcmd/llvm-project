@@ -7671,7 +7671,7 @@ llvm::Error driver::checkCLResponseFilesExist(ArrayRef<const char *> Args) {
     if (Arg && Arg[0] == '@')
       return llvm::createStringError(
           llvm::inconvertibleErrorCode(),
-          "clang-cl: error: D8022 : cannot open '%s'", Arg + 1);
+          "clang-cl: error: D8022 : response file '%s' could not be opened", Arg + 1);
   return llvm::Error::success();
 }
 

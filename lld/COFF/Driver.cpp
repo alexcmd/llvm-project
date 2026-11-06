@@ -165,16 +165,15 @@ static bool handleSlashArgAsOption(COFFLinkerContext &ctx, StringRef arg) {
       ctx.optTable.ParseArgs(argv, missingIndex, missingCount);
   for (const opt::Arg *a : parsed)
     if (a->getOption().getID() != OPT_INPUT) {
-      llvm::errs() << "LINK : fatal error LNK1146: no argument specified with "
-                      "option '"
-                   << arg << "'\n";
+      llvm::errs() << "LINK : fatal error LNK1146: option '" << arg
+                   << "' is missing its value\n";
       exitLld(1146);
     }
-  llvm::errs() << "LINK : warning LNK4044: unrecognized option '" << arg
-               << "'; ignored\n";
+  llvm::errs() << "LINK : warning LNK4044: skipping unknown option '" << arg
+               << "'\n";
   if (ctx.e.fatalWarnings) {
-    llvm::errs() << "LINK : error LNK1218: warning treated as error; no output "
-                    "file generated\n";
+    llvm::errs() << "LINK : error LNK1218: a warning was promoted to an error; no output "
+                    "file was generated\n";
     exitLld(4044);
   }
   return true;
@@ -476,8 +475,8 @@ void LinkerDriver::enqueuePath(StringRef path, bool lazy, InputOpt inputOpt) {
       std::string nearest;
       if (ctx.optTable.findNearest(pathStr, nearest) > 1) {
         // link.exe: LNK1181 is fatal and exits 1181 (probed 14.51.36231).
-        llvm::errs() << "LINK : fatal error LNK1181: cannot open input file '"
-                     << pathStr << "'\n";
+        llvm::errs() << "LINK : fatal error LNK1181: input file '"
+                     << pathStr << "' was not found\n";
         exitLld(1181);
       }
       else

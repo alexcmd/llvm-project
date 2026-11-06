@@ -15,7 +15,7 @@
 
 // RUN: not env CL="@%t.missing" %clang_cl -### -c %s 2>&1 | FileCheck %s --check-prefix=MISSING
 // RUN: not env _CL_="@%t.missing" %clang_cl -### -c %s 2>&1 | FileCheck %s --check-prefix=MISSING
-// MISSING: clang-cl: error: D8022 : cannot open '{{.*}}missing'
+// MISSING: clang-cl: error: D8022 : response file '{{.*}}missing' could not be opened
 
 // RUN: not %clang_cl -### -c @%t.missing %s 2>&1 | FileCheck %s --check-prefix=CMDMISSING
-// CMDMISSING: clang-cl: error: D8022 : cannot open '{{.*}}missing'
+// CMDMISSING: clang-cl: error: D8022 : response file '{{.*}}missing' could not be opened

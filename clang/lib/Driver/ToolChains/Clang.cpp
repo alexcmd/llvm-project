@@ -6686,6 +6686,16 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
       D.Diag(diag::err_drv_cl_requires_argument) << A->getSpelling();
   }
 
+  // CLANG-CL-GAP(Qspectre): cl accepts these; no mitigation is implemented
+  // here yet (tasks/compat/25). Say so in a remark, which /WX leaves alone,
+  // instead of the unused-argument warning /WX would make fatal.
+  for (const Arg *A : Args.filtered(options::OPT__SLASH_Qspectre,
+                                    options::OPT__SLASH_Qspectre_load,
+                                    options::OPT__SLASH_Qspectre_load_cf)) {
+    A->claim();
+    D.Diag(diag::remark_drv_cl_spectre_not_implemented) << A->getSpelling();
+  }
+
   // cl.exe: an unknown /d1 name is C1007 from c1xx, an unknown /d2 name C1007
   // from p2; a bare name is D8004 (probes_cl_decisions.md section 1). Known
   // spellings have their own defs in Options.td and never reach here.
@@ -8957,6 +8967,16 @@ void Clang::AddClangCLArgs(const ArgList &Args, types::ID InputType,
     CmdArgs.push_back("--show-includes");
     if (ShowIncludes->getOption().matches(options::OPT__SLASH_showIncludes))
       CmdArgs.push_back("-sys-header-deps");
+  }
+
+  // ZC-PREPROCESSOR: cl /Zc:preprocessor switches to its conforming
+  // preprocessor and reports that with _MSVC_TRADITIONAL 0. clang's
+  // preprocessor is conforming already, apart from the MS-compat quirks
+  // (CLANG-CL-GAP(Zc-preprocessor)), so only the macro follows the switch.
+  if (Args.hasFlag(options::OPT__SLASH_Zc_preprocessor,
+                   options::OPT__SLASH_Zc_preprocessor_, false)) {
+    CmdArgs.push_back("-U_MSVC_TRADITIONAL");
+    CmdArgs.push_back("-D_MSVC_TRADITIONAL=0");
   }
 
   // cl.exe /sourceDependencies <file>: JSON written by the frontend.

@@ -9837,6 +9837,9 @@ def _SLASH_Qpar : CLFlag<"Qpar">;
 def _SLASH_Qpar_report : CLJoined<"Qpar-report">;
 def _SLASH_Qsafe_fp_loads : CLFlag<"Qsafe_fp_loads">;
 def _SLASH_Qspectre : CLFlag<"Qspectre">;
+// cl /Zc:preprocessor: conforming preprocessor, _MSVC_TRADITIONAL is 0.
+def _SLASH_Zc_preprocessor : CLFlag<"Zc:preprocessor">;
+def _SLASH_Zc_preprocessor_ : CLFlag<"Zc:preprocessor-">;
 def _SLASH_Qspectre_load : CLFlag<"Qspectre-load">;
 def _SLASH_Qspectre_load_cf : CLFlag<"Qspectre-load-cf">;
 def _SLASH_Qvec_report : CLJoined<"Qvec-report">;

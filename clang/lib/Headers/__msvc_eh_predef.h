@@ -7,10 +7,11 @@
  *===-----------------------------------------------------------------------===
  */
 
-/* Force-included by the driver with -fms-predeclare-eh-types.
+/* Force-included by the driver for C++ inputs: by default in cl mode, else
+ * with -fms-predeclare-eh-types; -fno-ms-predeclare-eh-types turns it off.
  *
- * Predeclares the C++ exception-handling record types of the Microsoft C++
- * ABI in every C++ translation unit, before any source is read, so that a
+ * Predeclares the C++ exception-handling and RTTI record types of the
+ * Microsoft C++ ABI in every C++ translation unit, before any source is read, so that a
  * forced-include header can name them by their ABI tags.
  *
  * ABI layout facts encoded below:
@@ -65,6 +66,52 @@ typedef const struct _s__ThrowInfo {
   int(__cdecl *pForwardCompat)(...);
   _CatchableTypeArray *pCatchableTypeArray;
 } _ThrowInfo;
+
+/* RTTI records, also predeclared: struct tags _s__RTTI... with const
+ * typedefs __RTTI... . Integer fields are unsigned long. The complete object
+ * locator tag is _s__RTTICompleteObjectLocator2 on 64-bit targets (it ends
+ * with a pointer to itself) and _s__RTTICompleteObjectLocator on 32-bit x86;
+ * the typedef is __RTTICompleteObjectLocator on both. */
+typedef const struct _s__RTTIClassHierarchyDescriptor
+    __RTTIClassHierarchyDescriptor;
+
+typedef const struct _s__RTTIBaseClassDescriptor {
+  _TypeDescriptor *pTypeDescriptor;
+  unsigned long numContainedBases; /* bases that follow in the array */
+  _PMD where;                      /* position of the base in the class */
+  unsigned long attributes;
+  __RTTIClassHierarchyDescriptor *pClassDescriptor;
+} __RTTIBaseClassDescriptor;
+
+typedef const struct _s__RTTIBaseClassArray {
+  __RTTIBaseClassDescriptor *arrayOfBaseClassDescriptors[];
+} __RTTIBaseClassArray;
+
+struct _s__RTTIClassHierarchyDescriptor {
+  unsigned long signature;
+  unsigned long attributes;
+  unsigned long numBaseClasses;
+  __RTTIBaseClassArray *pBaseClassArray;
+};
+
+#if defined(_WIN64)
+typedef const struct _s__RTTICompleteObjectLocator2 {
+  unsigned long signature;
+  unsigned long offset;   /* vfptr offset in the complete object */
+  unsigned long cdOffset; /* constructor displacement offset */
+  _TypeDescriptor *pTypeDescriptor;
+  __RTTIClassHierarchyDescriptor *pClassDescriptor;
+  const struct _s__RTTICompleteObjectLocator2 *pSelf;
+} __RTTICompleteObjectLocator;
+#else
+typedef const struct _s__RTTICompleteObjectLocator {
+  unsigned long signature;
+  unsigned long offset;   /* vfptr offset in the complete object */
+  unsigned long cdOffset; /* constructor displacement offset */
+  _TypeDescriptor *pTypeDescriptor;
+  __RTTIClassHierarchyDescriptor *pClassDescriptor;
+} __RTTICompleteObjectLocator;
+#endif
 
 #pragma pack(pop)
 

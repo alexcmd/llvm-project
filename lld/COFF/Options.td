@@ -82,6 +82,9 @@ def linkreprofullpathrsp : Joined<["/", "-", "/?", "-?"], "linkreprofullpathrsp:
     HelpText<"Write .rsp file containing inputs used to link with full paths">;
 def lldignoreenv : F<"lldignoreenv">,
     HelpText<"Ignore environment variables like %LIB%">;
+def noopenrtlibmap : F<"noopenrtlibmap">,
+    HelpText<"Ignore the library name map declared by the openrt layout "
+             "around lld-link (<bin>/../manifest.json \"libmap\")">;
 def novcautodetect : F<"novcautodetect">,
     HelpText<"Do not search for Visual Studio or the Windows SDK (environment, "
              "setup configuration, registry); use only /vctoolsdir, "

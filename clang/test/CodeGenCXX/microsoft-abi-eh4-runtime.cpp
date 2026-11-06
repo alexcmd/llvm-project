@@ -1,12 +1,17 @@
 // REQUIRES: system-windows, ms-sdk
 // REQUIRES: target=x86_64-{{.*}}-windows-msvc
-// RUN: %clang_cl /nologo /EHsc /std:c++17 /O2 /d2FH4 /MD \
+// The SDK libraries keep their own names: a data-only openrt layout maps the
+// driver's default-lib names onto them (LIBNAME-OPENRT).
+// RUN: rm -rf %t-dev && mkdir -p %t-dev/bin %t-dev/lib
+// RUN: echo '{"toolchain": false, "libmap": "lib/names.txt"}' > %t-dev/manifest.json
+// RUN: printf 'openruntime_md msvcrt\nopenruntime_mt libcmt\nopenoldnames oldnames\n' > %t-dev/lib/names.txt
+// RUN: %clang_cl -ccc-install-dir %t-dev/bin /nologo /EHsc /std:c++17 /O2 /d2FH4 /MD \
 // RUN:   /Fe%t-md.exe -- %s
 // RUN: %t-md.exe
 // RUN: %t-md.exe terminate
 // RUN: llvm-readobj --coff-imports %t-md.exe \
 // RUN:   | FileCheck %s --check-prefix=MD
-// RUN: %clang_cl /nologo /EHsc /std:c++17 /O2 /d2FH4 /MT \
+// RUN: %clang_cl -ccc-install-dir %t-dev/bin /nologo /EHsc /std:c++17 /O2 /d2FH4 /MT \
 // RUN:   /Fe%t-mt.exe -- %s
 // RUN: %t-mt.exe
 // RUN: %t-mt.exe terminate

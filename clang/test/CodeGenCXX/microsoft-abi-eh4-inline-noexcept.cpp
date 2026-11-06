@@ -1,11 +1,16 @@
 // REQUIRES: system-windows, ms-sdk
 // REQUIRES: target=x86_64-{{.*}}-windows-msvc
+// The SDK libraries keep their own names: a data-only openrt layout maps the
+// driver's default-lib names onto them (LIBNAME-OPENRT).
+// RUN: rm -rf %t-dev && mkdir -p %t-dev/bin %t-dev/lib
+// RUN: echo '{"toolchain": false, "libmap": "lib/names.txt"}' > %t-dev/manifest.json
+// RUN: printf 'openruntime_md msvcrt\nopenruntime_mt libcmt\nopenoldnames oldnames\n' > %t-dev/lib/names.txt
 // RUN: split-file %s %t
-// RUN: %clang_cl /nologo /EHsc /O2 /d2FH4 /MT /c /Fo%t/callee.obj \
+// RUN: %clang_cl -ccc-install-dir %t-dev/bin /nologo /EHsc /O2 /d2FH4 /MT /c /Fo%t/callee.obj \
 // RUN:   -- %t/callee.cpp
-// RUN: %clang_cl /nologo /EHsc /O2 /d2FH4 /MT /c /Fo%t/caller.obj \
+// RUN: %clang_cl -ccc-install-dir %t-dev/bin /nologo /EHsc /O2 /d2FH4 /MT /c /Fo%t/caller.obj \
 // RUN:   -- %t/caller.cpp
-// RUN: %clang_cl /nologo /MT /Fe%t/test.exe \
+// RUN: %clang_cl -ccc-install-dir %t-dev/bin /nologo /MT /Fe%t/test.exe \
 // RUN:   -- %t/callee.obj %t/caller.obj
 // RUN: %t/test.exe
 

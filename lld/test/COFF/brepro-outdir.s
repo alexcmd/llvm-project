@@ -27,10 +27,10 @@
 # CHECK:      PDBGUID: [[GUID:\{[0-9A-F-]+\}]]
 # CHECK-NEXT: PDBAge: 1
 # CHECK-NEXT: PDBFileName: app.pdb
-# CHECK:      Guid: [[GUID]]
-# CHECK-NEXT: Age: 1
-# CHECK:      Guid: [[GUID]]
-# CHECK-NEXT: Age: 1
+# CHECK:      Age: 1
+# CHECK-NEXT: GUID: [[GUID]]
+# CHECK:      Age: 1
+# CHECK-NEXT: GUID: [[GUID]]
 
   .text
   .globl main

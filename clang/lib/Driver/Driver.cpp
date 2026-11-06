@@ -1502,8 +1502,8 @@ Compilation *Driver::BuildCompilation(ArrayRef<const char *> ArgList) {
   if (IsCLMode())
     if (Arg *PD = Args.getLastArg(options::OPT__SLASH_PD)) {
       PD->claim();
-      if (!llvm::is_contained(Args.getAllArgValues(options::OPT__SLASH_Zc),
-                              "preprocessor"))
+      if (!Args.hasFlag(options::OPT__SLASH_Zc_preprocessor,
+                        options::OPT__SLASH_Zc_preprocessor_, false))
         Diag(diag::warn_drv_cl_pd_requires_zc);
     }
 

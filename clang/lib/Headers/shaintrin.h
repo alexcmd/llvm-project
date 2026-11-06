@@ -47,9 +47,20 @@
 ///    An immediate value where bits [1:0] select among four possible
 ///    combining functions and rounding constants (not specified here).
 /// \returns A 128-bit vector of [4 x i32] containing the updated SHA-1 state.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_M>
+static __inline__ __m128i __DEFAULT_FN_ATTRS __ms__mm_sha1rnds4_epu32(__m128i __p_V1, __m128i __p_V2) {
+  return ((__m128i)__builtin_ia32_sha1rnds4((__v4si)(__m128i)(__p_V1), (__v4si)(__m128i)(__p_V2), (__I_M)));
+}
+}
+#define _mm_sha1rnds4_epu32(V1, V2, M) (__ms__mm_sha1rnds4_epu32<(M)>((V1), (V2)))
+#else
 #define _mm_sha1rnds4_epu32(V1, V2, M)                                         \
   ((__m128i)__builtin_ia32_sha1rnds4((__v4si)(__m128i)(V1),                    \
                                      (__v4si)(__m128i)(V2), (M)))
+#endif
 
 /// Calculates the SHA-1 state variable E from the SHA-1 state variables in
 ///    the 128-bit vector of [4 x i32] in \a __X, adds that to the next set of

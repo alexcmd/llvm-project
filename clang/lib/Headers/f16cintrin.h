@@ -101,8 +101,19 @@ _cvtsh_ss(unsigned short __a)
 /// \returns A 128-bit vector containing converted 16-bit half-precision float
 ///    values. The lower 64 bits are used to store the converted 16-bit
 ///    half-precision floating-point values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_imm>
+static __inline__ __m128i __DEFAULT_FN_ATTRS128 __ms__mm_cvtps_ph(__m128 __p_a) {
+  return ((__m128i)__builtin_ia32_vcvtps2ph((__v4sf)(__m128)(__p_a), (__I_imm)));
+}
+}
+#define _mm_cvtps_ph(a, imm) (__ms__mm_cvtps_ph<(imm)>((a)))
+#else
 #define _mm_cvtps_ph(a, imm) \
   ((__m128i)__builtin_ia32_vcvtps2ph((__v4sf)(__m128)(a), (imm)))
+#endif
 
 /// Converts a 128-bit vector containing 16-bit half-precision float
 ///    values into a 128-bit vector containing 32-bit float values.
@@ -147,8 +158,19 @@ _mm_cvtph_ps(__m128i __a)
 ///    1XX: Use MXCSR.RC for rounding
 /// \returns A 128-bit vector containing the converted 16-bit half-precision
 ///    float values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_imm>
+static __inline__ __m128i __DEFAULT_FN_ATTRS256 __ms__mm256_cvtps_ph(__m256 __p_a) {
+  return ((__m128i)__builtin_ia32_vcvtps2ph256((__v8sf)(__m256)(__p_a), (__I_imm)));
+}
+}
+#define _mm256_cvtps_ph(a, imm) (__ms__mm256_cvtps_ph<(imm)>((a)))
+#else
 #define _mm256_cvtps_ph(a, imm) \
  ((__m128i)__builtin_ia32_vcvtps2ph256((__v8sf)(__m256)(a), (imm)))
+#endif
 
 /// Converts a 128-bit vector containing 16-bit half-precision float
 ///    values into a 256-bit vector of [8 x float].

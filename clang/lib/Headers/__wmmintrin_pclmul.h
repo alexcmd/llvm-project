@@ -41,8 +41,19 @@
 ///    Bit[4]=1 indicates that bits[127:64] of operand \a Y are used.
 /// \returns The 128-bit integer vector containing the result of the carry-less
 ///    multiplication of the selected 64-bit values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_I>
+static __inline__ __m128i __attribute__((__always_inline__, __nodebug__, __target__("pclmul"), __min_vector_width__(128))) __ms__mm_clmulepi64_si128(__m128i __p_X, __m128i __p_Y) {
+  return ((__m128i)__builtin_ia32_pclmulqdq128((__v2di)(__m128i)(__p_X), (__v2di)(__m128i)(__p_Y), (char)(__I_I)));
+}
+}
+#define _mm_clmulepi64_si128(X, Y, I) (__ms__mm_clmulepi64_si128<(I)>((X), (Y)))
+#else
 #define _mm_clmulepi64_si128(X, Y, I) \
   ((__m128i)__builtin_ia32_pclmulqdq128((__v2di)(__m128i)(X), \
                                         (__v2di)(__m128i)(Y), (char)(I)))
+#endif
 
 #endif /* __WMMINTRIN_PCLMUL_H */

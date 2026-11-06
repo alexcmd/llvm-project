@@ -132,8 +132,19 @@ _mm_aesimc_si128(__m128i __V)
 /// \param R
 ///    An 8-bit round constant used to generate the AES encryption key.
 /// \returns A 128-bit round key for AES encryption.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_R>
+static __inline__ __m128i __DEFAULT_FN_ATTRS __ms__mm_aeskeygenassist_si128(__m128i __p_C) {
+  return ((__m128i)__builtin_ia32_aeskeygenassist128((__v2di)(__m128i)(__p_C), (int)(__I_R)));
+}
+}
+#define _mm_aeskeygenassist_si128(C, R) (__ms__mm_aeskeygenassist_si128<(R)>((C)))
+#else
 #define _mm_aeskeygenassist_si128(C, R) \
   ((__m128i)__builtin_ia32_aeskeygenassist128((__v2di)(__m128i)(C), (int)(R)))
+#endif
 
 #undef __DEFAULT_FN_ATTRS
 

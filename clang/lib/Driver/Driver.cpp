@@ -7652,6 +7652,30 @@ llvm::Error driver::expandResponseFiles(SmallVectorImpl<const char *> &Args,
     if (llvm::Error Err = checkCLResponseFilesExist(Args))
       return Err;
 
+  // RSP-SEPARATE-ARG: EOL sentinels only matter after /link (its arguments
+  // end with the line). Anywhere else cl.exe reads a line break in a response
+  // file as plain white space, so "/sourceDependencies" and its file on two
+  // lines are one option. Left in place, the sentinel stood for the missing
+  // value and the option parser asserted (or reported a missing argument).
+  if (MarkEOLs && ClangCLMode) {
+    bool InLink = false;
+    auto Keep = [&](const char *A) {
+      if (!A) {
+        bool WasLink = InLink;
+        InLink = false;
+        return WasLink;
+      }
+      StringRef S(A);
+      if (S.size() == 5 && (S[0] == '/' || S[0] == '-') &&
+          S.substr(1).equals_insensitive("link"))
+        InLink = true;
+      return true;
+    };
+    Args.erase(std::remove_if(Args.begin(), Args.end(),
+                              [&](const char *A) { return !Keep(A); }),
+               Args.end());
+  }
+
   // If -cc1 came from a response file, remove the EOL sentinels.
   auto FirstArg = llvm::find_if(llvm::drop_begin(Args),
                                 [](const char *A) { return A != nullptr; });

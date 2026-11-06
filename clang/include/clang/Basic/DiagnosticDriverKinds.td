@@ -18,6 +18,11 @@ def warn_drv_cl_pd_requires_zc : Warning<
   "D9007 : '/PD' has no effect without '/Zc:preprocessor'">;
 // Exit codes differ from cl (GAP).
 def err_drv_cl_requires_argument : Error<"D8004 : '%0' is missing its value">;
+// CLANG-CL-GAP(Qspectre): accepted, no mitigation yet (tasks/compat/25). A
+// remark shown by default, so /WX does not turn it into an error.
+def remark_drv_cl_spectre_not_implemented : Remark<
+  "'%0' accepted without effect: Spectre mitigations are not implemented">,
+  InGroup<DiagGroup<"cl-spectre-gap">>, DefaultRemark;
 def err_drv_cl_invalid_numeric_argument : Error<
   "D8021 : '%0' does not hold a valid numeric value">;
 def err_drv_cl_c1xx_unknown_flag : Error<

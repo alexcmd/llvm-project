@@ -29,5 +29,5 @@ __m256i f_avx2_shuffle(__m256i a) { return _mm256_shuffle_epi32(a, 0x1b); }
 #endif
 
 #ifdef NOMS
-void f_nomsE(const __m256i *a, __m256i *o) { *o = _mm256_cmpeq_epi8(*a, *a); } // expected-error {{always_inline function '_mm256_cmpeq_epi8' requires target feature 'avx2'}}
+void f_nomsE(const void *a, void *o) { *(__m256i *)o = _mm256_cmpeq_epi8(*(const __m256i *)a, *(const __m256i *)a); } // expected-error {{always_inline function '_mm256_cmpeq_epi8' requires target feature 'avx2'}}
 #endif

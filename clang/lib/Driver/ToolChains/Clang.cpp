@@ -8961,6 +8961,12 @@ void Clang::AddClangCLArgs(const ArgList &Args, types::ID InputType,
 
   ProcessVSRuntimeLibrary(getToolChain(), Args, CmdArgs);
 
+  // OPENRT-PREDEF: tells sources they are built by the openrt clang-cl;
+  // value = major*100+minor of the openrt release (CMake CLANG_OPENRT_RELEASE).
+  // clang-cl only; _MSC_VER and friends are unchanged.
+  CmdArgs.push_back(
+      Args.MakeArgString("-D__OPENRT__=" + Twine(CLANG_OPENRT_RELEASE_VALUE)));
+
   if (Arg *ShowIncludes =
           Args.getLastArg(options::OPT__SLASH_showIncludes,
                           options::OPT__SLASH_showIncludes_user)) {

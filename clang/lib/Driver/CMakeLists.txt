@@ -22,6 +22,18 @@ if(LLVM_PTHREAD_LIB)
   list(APPEND system_libs ${LLVM_PTHREAD_LIB})
 endif()
 
+# OPENRT-PREDEF: clang-cl predefines __OPENRT__ as major*100+minor of the
+# openrt release this compiler belongs to (0.1 -> 1, 1.2 -> 102).
+set(CLANG_OPENRT_RELEASE "0.1" CACHE STRING
+  "openrt release (major.minor) behind the clang-cl __OPENRT__ predefine")
+if(NOT CLANG_OPENRT_RELEASE MATCHES "^([0-9]+)\\.([0-9]+)$")
+  message(FATAL_ERROR "CLANG_OPENRT_RELEASE must be <major>.<minor>")
+endif()
+math(EXPR CLANG_OPENRT_RELEASE_VALUE
+  "${CMAKE_MATCH_1} * 100 + ${CMAKE_MATCH_2}")
+set_property(SOURCE ToolChains/Clang.cpp APPEND PROPERTY COMPILE_DEFINITIONS
+  CLANG_OPENRT_RELEASE_VALUE=${CLANG_OPENRT_RELEASE_VALUE})
+
 add_clang_library(clangDriver
   Action.cpp
   Compilation.cpp

@@ -19,6 +19,7 @@
 #include "PS4CPU.h"
 #include "ToolChains/Cuda.h"
 #include "clang/Basic/CLWarnings.h"
+#include "llvm/ADT/StringSet.h"
 #include "clang/Basic/CodeGenOptions.h"
 #include "clang/Basic/HeaderInclude.h"
 #include "clang/Basic/LangOptions.h"
@@ -6747,11 +6748,94 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     else
       D.Diag(diag::err_drv_cl_c_no_clr) << Inputs[0].getBaseInput();
   }
+  // CL-WARNING-DEFAULTS: clang-only warnings that clang-cl would report at the
+  // effective /W level although cl.exe does not (clWarningLevels) are turned
+  // off right after the last /W0../W4 (before the first W option when there is
+  // none: cl.exe default /W1). Nothing for /Wall, -Weverything, -w, the clang
+  // driver, or a group the command line names itself (-W<g>, -Wno-<g>,
+  // -Werror=<g>, /clang:..., or through a mapped /wd /we /wo /w<l><n>), so
+  // later and explicit options keep their effect.
+  const Arg *CLLevelArg = nullptr;
+  unsigned CLLevel = 1;
+  bool CLLevelsOff = !D.IsCLMode() || Args.hasArg(options::OPT_w);
+  llvm::StringSet<> CLNamed;
+  if (!CLLevelsOff) {
+    for (const Arg *A : Args.filtered(options::OPT_W_Group, options::OPT__SLASH_wd,
+                                      options::OPT__SLASH_we,
+                                      options::OPT__SLASH_wo,
+                                      options::OPT__SLASH_w)) {
+      const Arg *Orig = A->getAlias() ? A->getAlias() : A;
+      const Option &O = Orig->getOption();
+      unsigned L = 0;
+      if (O.matches(options::OPT__SLASH_W1))
+        L = 1;
+      else if (O.matches(options::OPT__SLASH_W2))
+        L = 2;
+      else if (O.matches(options::OPT__SLASH_W3))
+        L = 3;
+      else if (O.matches(options::OPT__SLASH_W4) ||
+               A->getOption().matches(options::OPT_WCL4))
+        L = 4;
+      else if (O.matches(options::OPT__SLASH_Wall) ||
+               (A->getOption().matches(options::OPT_W_Joined) &&
+                StringRef(A->getValue()) == "everything"))
+        L = 5;
+      if (L) {
+        CLLevelArg = A;
+        CLLevel = L;
+        continue;
+      }
+      if (A->getOption().matches(options::OPT_W_Joined)) {
+        StringRef V = A->getValue();
+        V.consume_front("no-");
+        if (!V.consume_front("error="))
+          V.consume_front("fatal-errors=");
+        CLNamed.insert(V);
+        continue;
+      }
+      if (A->getOption().matches(options::OPT_W_Group))
+        continue;
+      StringRef V = A->getValue();
+      if (A->getOption().matches(options::OPT__SLASH_w) && !V.empty())
+        V = V.drop_front();
+      unsigned N;
+      if (!V.getAsInteger(10, N))
+        if (auto G = diagGroupFromCLWarningID(N))
+          CLNamed.insert(DiagnosticIDs::getWarningOptionForGroup(*G));
+    }
+    CLLevelsOff = CLLevel > 4;
+  }
+  auto RenderCLLevels = [&]() {
+    unsigned Count;
+    const CLWarningLevel *Levels = clWarningLevels(Count);
+    llvm::StringSet<> Off;
+    for (unsigned I = 0; I != Count; ++I) {
+      const CLWarningLevel &E = Levels[I];
+      assert(DiagnosticIDs::getGroupForWarningOption(E.Group) &&
+             "clWarningLevels names an unknown group");
+      if (CLNamed.contains(E.Group) || (E.Also && CLNamed.contains(E.Also)))
+        continue;
+      if (E.Level == 0 || E.Level > CLLevel) {
+        Off.insert(E.Group);
+        CmdArgs.push_back(Args.MakeArgString(Twine("-Wno-") + E.Group));
+      } else if (E.Parent && Off.contains(E.Parent)) {
+        CmdArgs.push_back(Args.MakeArgString(Twine("-W") + E.Group));
+      }
+    }
+  };
+  if (!CLLevelsOff && !CLLevelArg)
+    RenderCLLevels();
+
   for (const Arg *A : Args.filtered(options::OPT_W_Group, options::OPT__SLASH_wd,
                                     options::OPT__SLASH_we,
                                     options::OPT__SLASH_wo,
                                     options::OPT__SLASH_w)) {
     A->claim();
+    if (!CLLevelsOff && A == CLLevelArg) {
+      A->render(Args, CmdArgs);
+      RenderCLLevels();
+      continue;
+    }
     if (A->getOption().matches(options::OPT__SLASH_wd) ||
         A->getOption().matches(options::OPT__SLASH_we) ||
         A->getOption().matches(options::OPT__SLASH_wo) ||

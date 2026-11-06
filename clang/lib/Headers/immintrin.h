@@ -510,6 +510,48 @@ _storebe_i64(void * __P, long long __D) {
 
 #include <tsxldtrkintrin.h>
 
+#if defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
+/* cl's /arch-derived ISA queries (VS immintrin.h contract). Compile-time view:
+   a bit is set (unsupported) unless the target guarantees the feature. Used by
+   STL runtime dispatch, which still checks __isa_available at run time. */
+#if !defined(__IA_SUPPORT_VECTOR128)
+#define __IA_SUPPORT_VECTOR128 0x00000001
+#define __IA_SUPPORT_VECTOR256 0x00000002
+#define __IA_SUPPORT_VECTOR512 0x00000004
+#define __IA_SUPPORT_AVX10 0x00000008
+#define __IA_SUPPORT_SSE42 0x00000010
+#endif
+static __inline__ unsigned __attribute__((__always_inline__, __nodebug__))
+__arch_inverted(void) {
+  unsigned __m = 0xFFFFFFFFu;
+#if defined(__SSE4_2__)
+  __m &= ~__IA_SUPPORT_SSE42;
+#endif
+#if defined(__AVX2__)
+  __m &= ~__IA_SUPPORT_VECTOR256;
+#endif
+#if defined(__AVX512F__)
+  __m &= ~__IA_SUPPORT_VECTOR512;
+#endif
+  return __m;
+}
+static __inline__ unsigned __attribute__((__always_inline__, __nodebug__))
+__arch_avx10ver(void) {
+  return 0;
+}
+#ifdef __cplusplus
+static __inline__ _Bool __attribute__((__always_inline__, __nodebug__))
+__check_arch_support(unsigned __x, unsigned __v = 0) {
+  return ((__x & __arch_inverted()) == 0) && (__arch_avx10ver() >= __v);
+}
+#else
+static __inline__ _Bool __attribute__((__always_inline__, __nodebug__))
+__check_arch_support(unsigned __x, unsigned __v) {
+  return ((__x & __arch_inverted()) == 0) && (__arch_avx10ver() >= __v);
+}
+#endif
+#endif /* defined(_MSC_VER) && (_M_X64 || _M_IX86) */
+
 #if defined(_MSC_VER) && __has_extension(gnu_asm)
 /* Define the default attributes for these intrinsics */
 #define __DEFAULT_FN_ATTRS __attribute__((__always_inline__, __nodebug__))

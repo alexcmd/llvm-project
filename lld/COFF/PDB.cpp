@@ -1637,8 +1637,6 @@ void PDBLinker::initialize(llvm::codeview::DebugInfo *buildId) {
   exitOnErr(builder.initialize(ctx.config.pdbPageSize));
 
   buildId->Signature.CVSignature = OMF::Signature::PDB70;
-  // Signature is set to a hash of the PDB contents when the PDB is done.
-  memset(buildId->PDB70.Signature, 0, 16);
   buildId->PDB70.Age = 1;
 
   // Create streams in MSF for predefined streams, namely
@@ -1649,7 +1647,18 @@ void PDBLinker::initialize(llvm::codeview::DebugInfo *buildId) {
   // Add an Info stream.
   auto &infoBuilder = builder.getInfoBuilder();
   infoBuilder.setVersion(pdb::PdbRaw_ImplVer::PdbImplVC70);
-  infoBuilder.setHashPDBContentsToGUID(true);
+  if (ctx.config.repro) {
+    // /Brepro: the writer already put an image-hash GUID in the record.
+    codeview::GUID guid;
+    memcpy(guid.Guid, buildId->PDB70.Signature, 16);
+    infoBuilder.setGuid(guid);
+    infoBuilder.setSignature(support::endian::read32le(guid.Guid));
+    infoBuilder.setAge(buildId->PDB70.Age);
+  } else {
+    // Signature is set to a hash of the PDB contents when the PDB is done.
+    memset(buildId->PDB70.Signature, 0, 16);
+    infoBuilder.setHashPDBContentsToGUID(true);
+  }
 
   // Add an empty DBI stream.
   pdb::DbiStreamBuilder &dbiBuilder = builder.getDbiBuilder();

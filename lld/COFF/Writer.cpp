@@ -820,6 +820,17 @@ void Writer::run() {
 
   if (!ctx.config.pdbPath.empty() && ctx.config.debug) {
     assert(buildId);
+    // /Brepro: the PDB GUID is a hash of the image (GUID and timestamps still
+    // zero), not of the PDB. The PDB records absolute object, PDB and output
+    // paths, so a PDB-content GUID would make the image depend on the
+    // directory it is linked in; link.exe /Brepro gives the same image in any
+    // directory. createPDB keeps a GUID that is already set.
+    if (ctx.config.repro) {
+      XXH128_hash_t h = xxh3_128bits(
+          {buffer->getBufferStart(), buffer->getBufferSize()});
+      memcpy(buildId->buildId->PDB70.Signature, &h.low64, 8);
+      memcpy(&buildId->buildId->PDB70.Signature[8], &h.high64, 8);
+    }
     createPDB(ctx, sectionTable, buildId->buildId);
   }
   writeBuildId();

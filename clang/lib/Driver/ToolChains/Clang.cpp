@@ -19,6 +19,7 @@
 #include "PS4CPU.h"
 #include "ToolChains/Cuda.h"
 #include "clang/Basic/CLWarnings.h"
+#include "OpenRTLibNames.h"
 #include "llvm/ADT/StringSet.h"
 #include "clang/Basic/CodeGenOptions.h"
 #include "clang/Basic/HeaderInclude.h"
@@ -5073,33 +5074,34 @@ static void ProcessVSRuntimeLibrary(const ToolChain &TC, const ArgList &Args,
                      .Default(options::OPT__SLASH_MT);
   }
 
-  StringRef FlagForCRT;
+  // LIBNAME-OPENRT: runtime library names come from OpenRTLibNames.h.
+  openrt::DefaultLib CRT;
   switch (RTOptionID) {
   case options::OPT__SLASH_MD:
     if (Args.hasArg(options::OPT__SLASH_LDd))
       CmdArgs.push_back("-D_DEBUG");
     CmdArgs.push_back("-D_MT");
     CmdArgs.push_back("-D_DLL");
-    FlagForCRT = "--dependent-lib=msvcrt";
+    CRT = openrt::DefaultLib::RuntimeMD;
     break;
   case options::OPT__SLASH_MDd:
     CmdArgs.push_back("-D_DEBUG");
     CmdArgs.push_back("-D_MT");
     CmdArgs.push_back("-D_DLL");
-    FlagForCRT = "--dependent-lib=msvcrtd";
+    CRT = openrt::DefaultLib::RuntimeMDd;
     break;
   case options::OPT__SLASH_MT:
     if (Args.hasArg(options::OPT__SLASH_LDd))
       CmdArgs.push_back("-D_DEBUG");
     CmdArgs.push_back("-D_MT");
     CmdArgs.push_back("-flto-visibility-public-std");
-    FlagForCRT = "--dependent-lib=libcmt";
+    CRT = openrt::DefaultLib::RuntimeMT;
     break;
   case options::OPT__SLASH_MTd:
     CmdArgs.push_back("-D_DEBUG");
     CmdArgs.push_back("-D_MT");
     CmdArgs.push_back("-flto-visibility-public-std");
-    FlagForCRT = "--dependent-lib=libcmtd";
+    CRT = openrt::DefaultLib::RuntimeMTd;
     break;
   default:
     llvm_unreachable("Unexpected option ID.");
@@ -5108,12 +5110,15 @@ static void ProcessVSRuntimeLibrary(const ToolChain &TC, const ArgList &Args,
   if (Args.hasArg(options::OPT_fms_omit_default_lib)) {
     CmdArgs.push_back("-D_VC_NODEFAULTLIB");
   } else {
-    CmdArgs.push_back(FlagForCRT.data());
+    CmdArgs.push_back(Args.MakeArgString(
+        "--dependent-lib=" + openrt::defaultLibName(TC, CRT)));
 
     // This provides POSIX compatibility (maps 'open' to '_open'), which most
     // users want.  The /Za flag to cl.exe turns this off, but it's not
     // implemented in clang.
-    CmdArgs.push_back("--dependent-lib=oldnames");
+    CmdArgs.push_back(Args.MakeArgString(
+        "--dependent-lib=" +
+        openrt::defaultLibName(TC, openrt::DefaultLib::OldNames)));
   }
 
   // SYCL: Add SYCL runtime library dependency

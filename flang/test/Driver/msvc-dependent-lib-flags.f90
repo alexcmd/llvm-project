@@ -6,21 +6,21 @@
 ! MSVC: -fc1
 ! MSVC-SAME: --dependent-lib=clang_rt.builtins.lib
 ! MSVC-SAME: -D_MT
-! MSVC-SAME: --dependent-lib=libcmt
+! MSVC-SAME: --dependent-lib=openruntime_mt
 ! MSVC-SAME: --dependent-lib=flang_rt.runtime.static.lib
 
 ! MSVC-DEBUG: -fc1
 ! MSVC-DEBUG-SAME: --dependent-lib=clang_rt.builtins.lib
 ! MSVC-DEBUG-SAME: -D_MT
 ! MSVC-DEBUG-SAME: -D_DEBUG
-! MSVC-DEBUG-SAME: --dependent-lib=libcmtd
+! MSVC-DEBUG-SAME: --dependent-lib=openruntime_mtd
 ! MSVC-DEBUG-SAME: --dependent-lib=flang_rt.runtime.static_dbg.lib
 
 ! MSVC-DLL: -fc1
 ! MSVC-DLL-SAME: --dependent-lib=clang_rt.builtins.lib
 ! MSVC-DLL-SAME: -D_MT
 ! MSVC-DLL-SAME: -D_DLL
-! MSVC-DLL-SAME: --dependent-lib=msvcrt
+! MSVC-DLL-SAME: --dependent-lib=openruntime_md
 ! MSVC-DLL-SAME: --dependent-lib=flang_rt.runtime.dynamic.lib
 
 ! MSVC-DLL-DEBUG: -fc1
@@ -28,5 +28,5 @@
 ! MSVC-DLL-DEBUG-SAME: -D_MT
 ! MSVC-DLL-DEBUG-SAME: -D_DEBUG
 ! MSVC-DLL-DEBUG-SAME: -D_DLL
-! MSVC-DLL-DEBUG-SAME: --dependent-lib=msvcrtd
+! MSVC-DLL-DEBUG-SAME: --dependent-lib=openruntime_mdd
 ! MSVC-DLL-DEBUG-SAME: --dependent-lib=flang_rt.runtime.dynamic_dbg.lib

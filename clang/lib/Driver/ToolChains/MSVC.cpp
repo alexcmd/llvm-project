@@ -8,6 +8,7 @@
 
 #include "MSVC.h"
 #include "Darwin.h"
+#include "OpenRTLibNames.h"
 #include "clang/Config/config.h"
 #include "clang/Driver/CommonArgs.h"
 #include "clang/Driver/Compilation.h"
@@ -120,8 +121,13 @@ void visualstudio::Linker::ConstructJob(Compilation &C, const JobAction &JA,
 
   if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles) &&
       !C.getDriver().IsCLMode() && !C.getDriver().IsFlangMode()) {
-    CmdArgs.push_back("-defaultlib:libcmt");
-    CmdArgs.push_back("-defaultlib:oldnames");
+    // LIBNAME-OPENRT: names from OpenRTLibNames.h.
+    CmdArgs.push_back(Args.MakeArgString(
+        "-defaultlib:" +
+        openrt::defaultLibName(TC, openrt::DefaultLib::RuntimeMT)));
+    CmdArgs.push_back(Args.MakeArgString(
+        "-defaultlib:" +
+        openrt::defaultLibName(TC, openrt::DefaultLib::OldNames)));
 
     // SYCL: Add runtime library for clang (non-clang-cl) with MSVC target.
     // For clang-cl, --dependent-lib is used at compiler stage instead.
@@ -326,8 +332,8 @@ void visualstudio::Linker::ConstructJob(Compilation &C, const JobAction &JA,
 
   if (Args.hasFlag(options::OPT_fopenmp, options::OPT_fopenmp_EQ,
                    options::OPT_fno_openmp, false)) {
-    CmdArgs.push_back("-nodefaultlib:vcomp.lib");
-    CmdArgs.push_back("-nodefaultlib:vcompd.lib");
+    // LIBNAME-OPENRT: no other OpenMP runtime is excluded by name; an object
+    // that asks for one gets it mapped through the install's libmap.
     CmdArgs.push_back(Args.MakeArgString(std::string("-libpath:") +
                                          TC.getDriver().Dir + "/../lib"));
     switch (TC.getDriver().getOpenMPRuntime(Args)) {

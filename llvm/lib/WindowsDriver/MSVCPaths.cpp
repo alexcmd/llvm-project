@@ -579,14 +579,41 @@ std::optional<llvm::OpenRTLayout> llvm::findOpenRTLayout(vfs::FileSystem &VFS,
     L.VFSPrefix = Resolve(Ov->getString("prefix"));
   }
   L.LibMap = Resolve(O->getString("libmap"));
+  if (std::optional<bool> T = O->getBoolean("toolchain"))
+    L.IsToolchain = *T;
   return L;
+}
+
+bool llvm::readOpenRTLibMap(vfs::FileSystem &VFS, StringRef Path,
+                            StringMap<std::string> &Map) {
+  ErrorOr<std::unique_ptr<MemoryBuffer>> Buf = VFS.getBufferForFile(Path);
+  if (!Buf)
+    return false;
+  SmallVector<StringRef, 0> Lines;
+  (*Buf)->getBuffer().split(Lines, '\n');
+  for (StringRef Line : Lines) {
+    Line = Line.trim();
+    if (Line.empty() || Line.starts_with("#"))
+      continue;
+    size_t Sep = Line.find_first_of(" \t");
+    if (Sep == StringRef::npos)
+      continue;
+    StringRef To = Line.substr(Sep).trim();
+    if (To.empty())
+      continue;
+    std::string From = Line.substr(0, Sep).lower();
+    if (StringRef(From).ends_with(".lib"))
+      From.resize(From.size() - 4);
+    Map[From] = To.str();
+  }
+  return true;
 }
 
 bool llvm::findVCToolChainViaBinRelativeLayout(
     vfs::FileSystem &VFS, StringRef BinDir, std::string &Path,
     ToolsetLayout &VSLayout, std::string &SDKRoot, std::string &SDKVersion) {
   std::optional<OpenRTLayout> L = findOpenRTLayout(VFS, BinDir);
-  if (!L)
+  if (!L || !L->IsToolchain)
     return false;
   Path = L->Root;
   VSLayout = ToolsetLayout::VS2017OrNewer;

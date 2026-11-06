@@ -3582,6 +3582,12 @@ defm ms_predeclare_eh_types : BoolOptionWithoutMarshalling<"f",
           "Predeclare the C++ exception handling data types that the "
           "Microsoft compiler pre-injects (_ThrowInfo, _CatchableType, ...)">,
   NegFlag<SetFalse, [], [ClangOption, CLOption]>>;
+defm openrt_overlay : BoolOptionWithoutMarshalling<"f", "openrt-overlay",
+  PosFlag<SetTrue, [], [ClangOption, CLOption],
+          "Use the VFS overlay declared by the openrt layout around the "
+          "driver (<bin>/../manifest.json, default)">,
+  NegFlag<SetFalse, [], [ClangOption, CLOption],
+          "Ignore the VFS overlay declared by the openrt layout">>;
 def fzos_extensions : Flag<["-"], "fzos-extensions">, Group<f_Group>, Visibility<[ClangOption, CC1Option]>,
   HelpText<"Accept some non-standard constructs supported by the z/OS compiler">;
 def fno_zos_extensions : Flag<["-"], "fno-zos-extensions">, Group<f_Group>, Visibility<[ClangOption, CC1Option]>,

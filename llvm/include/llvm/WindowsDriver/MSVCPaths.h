@@ -103,6 +103,25 @@ LLVM_ABI bool findVCToolChainViaBinRelativeLayout(
     vfs::FileSystem &VFS, llvm::StringRef BinDir, std::string &Path,
     ToolsetLayout &VSLayout, std::string &SDKRoot, std::string &SDKVersion);
 
+// openrt layout as declared by <root>\manifest.json. Relative paths are taken
+// against Root; a field that is absent (or not a string) stays empty.
+//   "sdk":     {"root": <dir>, "version": <ver>}   -> SDKRoot, SDKVersion
+//   "overlay": {"file": <yaml>, "prefix": <dir>}   -> VFSOverlay, VFSPrefix
+//              file: VFS overlay that maps API header names onto the files
+//              the install ships; prefix: the virtual include directory the
+//              overlay's root names (absolute, need not exist on disk).
+//   "libmap":  <file>                              -> LibMap
+//              library name data for the linker (one "<name>\t<name>" line
+//              per mapping; see lld COFF LinkerDriver::loadLibMap).
+struct OpenRTLayout {
+  std::string Root;
+  std::string SDKRoot, SDKVersion;
+  std::string VFSOverlay, VFSPrefix;
+  std::string LibMap;
+};
+LLVM_ABI std::optional<OpenRTLayout> findOpenRTLayout(vfs::FileSystem &VFS,
+                                                      llvm::StringRef BinDir);
+
 // Check various environment variables to try and find a toolchain.
 LLVM_ABI bool findVCToolChainViaEnvironment(vfs::FileSystem &VFS,
                                             std::string &Path,

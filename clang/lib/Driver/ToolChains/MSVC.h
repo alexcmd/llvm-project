@@ -160,6 +160,9 @@ private:
   // Storage for WinSdkDir/WinSdkVersion taken from manifest.json.
   std::string LayoutSdkDir, LayoutSdkVersion;
   bool BinRelativeLayout = false;
+  // VFS-OVERLAY-AUTOLOAD: overlay file and its virtual include dir from the
+  // openrt layout's manifest.json (empty: none).
+  std::string OpenRTOverlay, OpenRTOverlayPrefix;
   std::optional<llvm::StringRef> WinSdkDir, WinSdkVersion, WinSysRoot;
   std::string VCToolChainPath;
   llvm::ToolsetLayout VSLayout = llvm::ToolsetLayout::OlderVS;

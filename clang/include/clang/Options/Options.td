@@ -3576,11 +3576,12 @@ dll version.}]>;
 def fms_omit_default_lib : Joined<["-"], "fms-omit-default-lib">,
   Group<f_Group>, Flags<[]>,
   Visibility<[ClangOption, CLOption]>;
-defm ms_predeclare_eh_types : BoolOptionWithoutMarshalling<"f",
-  "ms-predeclare-eh-types",
-  PosFlag<SetTrue, [], [ClangOption, CLOption],
-          "Predeclare the C++ exception handling data types that the "
-          "Microsoft compiler pre-injects (_ThrowInfo, _CatchableType, ...)">,
+defm ms_predeclare_eh_types : BoolFOption<"ms-predeclare-eh-types",
+  PreprocessorOpts<"MSPredeclareEHTypes">, DefaultFalse,
+  PosFlag<SetTrue, [], [ClangOption, CLOption, CC1Option],
+          "Predeclare the C++ exception handling and RTTI data types that the "
+          "Microsoft compiler pre-injects (_ThrowInfo, _CatchableType, ...; "
+          "default in cl mode)">,
   NegFlag<SetFalse, [], [ClangOption, CLOption]>>;
 defm openrt_overlay : BoolOptionWithoutMarshalling<"f", "openrt-overlay",
   PosFlag<SetTrue, [], [ClangOption, CLOption],

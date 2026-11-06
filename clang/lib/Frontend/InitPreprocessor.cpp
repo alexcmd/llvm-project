@@ -1572,6 +1572,90 @@ static void InitializePGOProfileMacros(const CodeGenOptions &CodeGenOpts,
     Builder.defineMacro("__LLVM_INSTR_PROFILE_USE");
 }
 
+/// Declare the C++ EH and RTTI record types of the Microsoft C++ ABI that the
+/// Microsoft compiler makes visible in every C++ translation unit without any
+/// header (-fms-predeclare-eh-types). They go into the predefines buffer, not
+/// a header file, so /showIncludes, /sourceDependencies and depfiles do not
+/// list them. Layout facts:
+///  - Field order and sizes follow the ABI records; _TypeDescriptor is packed
+///    to 8, the rest to 4.
+///  - Pointer fields are pointers on every target, also where the emitted EH
+///    and RTTI data hold 32-bit image-relative offsets (x64, ARM64).
+///  - Struct tags are the mangled ABI names (_s__ThrowInfo, ...); the const
+///    typedefs are the names in use (_ThrowInfo, __RTTIBaseClassDescriptor).
+///  - The complete object locator tag is _s__RTTICompleteObjectLocator2 on
+///    64-bit targets (it ends with a pointer to itself) and
+///    _s__RTTICompleteObjectLocator on 32-bit ones.
+///  - The guard macro keeps a PCH that has them from getting them twice.
+static void AddMSPredeclaredEHTypes(MacroBuilder &Builder,
+                                    const TargetInfo &TI) {
+  Builder.append(R"(#ifndef __clang_ms_predeclared_eh_types
+#define __clang_ms_predeclared_eh_types 1
+#pragma pack(push, 4)
+typedef struct _PMD {
+  int mdisp; /* member displacement */
+  int pdisp; /* vbptr displacement, -1 if none */
+  int vdisp; /* displacement within the vbtable */
+} _PMD;
+typedef void(__cdecl *_PMFN)(void *);
+#pragma pack(push, 8)
+typedef struct _TypeDescriptor {
+  const void *pVFTable; /* type_info vftable */
+  void *spare;          /* cached undecorated name */
+  char name[];          /* decorated name */
+} _TypeDescriptor;
+#pragma pack(pop)
+typedef const struct _s__CatchableType {
+  unsigned int properties;
+  _TypeDescriptor *pType;
+  _PMD thisDisplacement;
+  int sizeOrOffset;
+  _PMFN copyFunction;
+} _CatchableType;
+typedef const struct _s__CatchableTypeArray {
+  int nCatchableTypes;
+  _CatchableType *arrayOfCatchableTypes[];
+} _CatchableTypeArray;
+typedef const struct _s__ThrowInfo {
+  unsigned int attributes;
+  _PMFN pmfnUnwind;
+  int(__cdecl *pForwardCompat)(...);
+  _CatchableTypeArray *pCatchableTypeArray;
+} _ThrowInfo;
+typedef const struct _s__RTTIClassHierarchyDescriptor
+    __RTTIClassHierarchyDescriptor;
+typedef const struct _s__RTTIBaseClassDescriptor {
+  _TypeDescriptor *pTypeDescriptor;
+  unsigned long numContainedBases; /* bases that follow in the array */
+  _PMD where;                      /* position of the base in the class */
+  unsigned long attributes;
+  __RTTIClassHierarchyDescriptor *pClassDescriptor;
+} __RTTIBaseClassDescriptor;
+typedef const struct _s__RTTIBaseClassArray {
+  __RTTIBaseClassDescriptor *arrayOfBaseClassDescriptors[];
+} __RTTIBaseClassArray;
+struct _s__RTTIClassHierarchyDescriptor {
+  unsigned long signature;
+  unsigned long attributes;
+  unsigned long numBaseClasses;
+  __RTTIBaseClassArray *pBaseClassArray;
+};)");
+  const char *COL = TI.getPointerWidth(LangAS::Default) == 64
+                        ? "_s__RTTICompleteObjectLocator2"
+                        : "_s__RTTICompleteObjectLocator";
+  Builder.append(Twine("typedef const struct ") + COL + " {");
+  Builder.append(R"(  unsigned long signature;
+  unsigned long offset;   /* vfptr offset in the complete object */
+  unsigned long cdOffset; /* constructor displacement offset */
+  _TypeDescriptor *pTypeDescriptor;
+  __RTTIClassHierarchyDescriptor *pClassDescriptor;)");
+  if (TI.getPointerWidth(LangAS::Default) == 64)
+    Builder.append(Twine("  const struct ") + COL + " *pSelf;");
+  Builder.append(R"(} __RTTICompleteObjectLocator;
+#pragma pack(pop)
+#endif)");
+}
+
 /// InitializePreprocessor - Initialize the preprocessor getting it and the
 /// environment ready to process a single file.
 void clang::InitializePreprocessor(Preprocessor &PP,
@@ -1647,6 +1731,10 @@ void clang::InitializePreprocessor(Preprocessor &PP,
 
   // Exit the command line and go back to <built-in> (2 is LC_LEAVE).
   Builder.append("# 1 \"<built-in>\" 2");
+
+  // The Microsoft C++ EH/RTTI types, ahead of -imacros and -include files.
+  if (InitOpts.MSPredeclareEHTypes && LangOpts.CPlusPlus)
+    AddMSPredeclaredEHTypes(Builder, PP.getTargetInfo());
 
   // If -imacros are specified, include them now.  These are processed before
   // any -include directives.

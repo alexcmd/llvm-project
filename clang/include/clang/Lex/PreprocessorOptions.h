@@ -91,6 +91,10 @@ public:
   /// Indicates whether to predefine target OS macros.
   bool DefineTargetOSMacros = false;
 
+  /// Declare the C++ EH and RTTI record types of the Microsoft C++ ABI ahead
+  /// of the source (-fms-predeclare-eh-types).
+  bool MSPredeclareEHTypes = false;
+
   /// Whether we should maintain a detailed record of all macro
   /// definitions and expansions.
   bool DetailedRecord = false;

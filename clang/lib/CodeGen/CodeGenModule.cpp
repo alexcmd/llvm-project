@@ -53,6 +53,7 @@
 #include "llvm/ABI/TargetInfo.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/ADT/StringSet.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/BinaryFormat/ELF.h"
@@ -1128,6 +1129,146 @@ CodeGenModule::StackProtectorAttribute(const Decl *D) const {
   return std::nullopt;
 }
 
+// MS-INTRIN-ABI-THUNK: positive features of a function's "target-features".
+static void collectEnabledFeatures(const llvm::Function &F,
+                                   llvm::StringSet<> &Out) {
+  llvm::Attribute A = F.getFnAttribute("target-features");
+  if (!A.isValid())
+    return;
+  SmallVector<StringRef, 32> Fs;
+  A.getValueAsString().split(Fs, ',', -1, /*KeepEmpty=*/false);
+  for (StringRef S : Fs)
+    if (S.consume_front("+"))
+      Out.insert(S);
+}
+
+// MS-INTRIN-ABI-THUNK: cl lets any function use any x86 intrinsic; the
+// MS-INTRINSIC-TARGET-GATING change accepts such calls but leaves them as
+// out-of-line calls to the always_inline intrinsic, which keeps its own target
+// features (the inliner refuses the mismatch). Caller and callee then lower
+// vector arguments and results with different register conventions (for a
+// 256-bit value: one YMM register vs. two XMM halves, also after the optimizer
+// turns the callee into fastcc), and the program reads garbage or crashes.
+// Each such call goes through a thunk instead: same features as the
+// intrinsic, not inlinable, every vector argument and the vector result
+// passed through memory (pointers in GPRs are the same in both conventions).
+// The intrinsic is inlined into the thunk, so its instructions run only where
+// the source calls it, as with cl; the caller itself stays without the
+// feature. Only in MSVC-compatible mode on x86, where sema lets such calls
+// through (elsewhere they are an error before codegen).
+void CodeGenModule::emitMSIntrinsicFeatureThunks() {
+  if (!getLangOpts().isCompatibleWithMSVC() || !getTriple().isX86())
+    return;
+  llvm::LLVMContext &Ctx = getLLVMContext();
+  const llvm::DataLayout &DL = TheModule.getDataLayout();
+
+  SmallVector<llvm::Function *, 32> Callees;
+  for (llvm::Function &F : TheModule)
+    if (!F.isDeclaration() && F.hasFnAttribute(llvm::Attribute::AlwaysInline))
+      Callees.push_back(&F);
+
+  for (llvm::Function *F : Callees) {
+    llvm::StringSet<> Need;
+    collectEnabledFeatures(*F, Need);
+    if (Need.empty())
+      continue;
+    SmallVector<llvm::CallInst *, 8> Sites;
+    for (llvm::User *U : F->users()) {
+      auto *CI = dyn_cast<llvm::CallInst>(U);
+      if (!CI || CI->getCalledOperand() != F)
+        continue;
+      llvm::StringSet<> Have;
+      collectEnabledFeatures(*CI->getFunction(), Have);
+      if (llvm::any_of(
+              Need, [&](const auto &E) { return !Have.contains(E.getKey()); }))
+        Sites.push_back(CI);
+    }
+    if (Sites.empty())
+      continue;
+
+    // Thunk type: [ptr result,] then each argument, vectors as pointers.
+    llvm::FunctionType *FTy = F->getFunctionType();
+    llvm::Type *RetTy = FTy->getReturnType();
+    bool RetInMem = RetTy->isVectorTy();
+    llvm::Type *PtrTy = llvm::PointerType::get(Ctx, DL.getAllocaAddrSpace());
+    SmallVector<llvm::Type *, 4> Params;
+    if (RetInMem)
+      Params.push_back(PtrTy);
+    for (llvm::Type *P : FTy->params())
+      Params.push_back(P->isVectorTy() ? PtrTy : P);
+    auto *TTy =
+        llvm::FunctionType::get(RetInMem ? llvm::Type::getVoidTy(Ctx) : RetTy,
+                                Params, /*isVarArg=*/false);
+    auto *T =
+        llvm::Function::Create(TTy, llvm::GlobalValue::InternalLinkage,
+                               F->getName() + ".openrt.xfeat", &TheModule);
+    T->setAttributes(llvm::AttributeList::get(
+        Ctx, llvm::AttributeList::FunctionIndex,
+        llvm::AttrBuilder(Ctx, F->getAttributes().getFnAttrs())));
+    T->removeFnAttr(llvm::Attribute::AlwaysInline);
+    T->addFnAttr(llvm::Attribute::NoInline);
+    T->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
+    {
+      llvm::IRBuilder<> B(llvm::BasicBlock::Create(Ctx, "entry", T));
+      auto AI = T->arg_begin();
+      llvm::Value *RetPtr = RetInMem ? &*AI++ : nullptr;
+      SmallVector<llvm::Value *, 4> Args;
+      for (llvm::Type *P : FTy->params()) {
+        llvm::Value *A = &*AI++;
+        Args.push_back(P->isVectorTy()
+                           ? B.CreateAlignedLoad(P, A, DL.getABITypeAlign(P))
+                           : A);
+      }
+      llvm::CallInst *C = B.CreateCall(F, Args);
+      C->setCallingConv(F->getCallingConv());
+      if (RetInMem) {
+        B.CreateAlignedStore(C, RetPtr, DL.getABITypeAlign(RetTy));
+        B.CreateRetVoid();
+      } else if (RetTy->isVoidTy()) {
+        B.CreateRetVoid();
+      } else {
+        B.CreateRet(C);
+      }
+    }
+
+    for (llvm::CallInst *CI : Sites) {
+      llvm::Function *Caller = CI->getFunction();
+      llvm::BasicBlock &Entry = Caller->getEntryBlock();
+      llvm::IRBuilder<> EB(&Entry, Entry.getFirstInsertionPt());
+      auto Slot = [&](llvm::Type *Ty) {
+        llvm::AllocaInst *S =
+            EB.CreateAlloca(Ty, DL.getAllocaAddrSpace(), nullptr, "xfeat.tmp");
+        S->setAlignment(DL.getABITypeAlign(Ty));
+        return S;
+      };
+      llvm::IRBuilder<> B(CI);
+      SmallVector<llvm::Value *, 4> Args;
+      llvm::AllocaInst *RetSlot = RetInMem ? Slot(RetTy) : nullptr;
+      if (RetSlot)
+        Args.push_back(RetSlot);
+      for (llvm::Value *V : CI->args()) {
+        if (!V->getType()->isVectorTy()) {
+          Args.push_back(V);
+          continue;
+        }
+        llvm::AllocaInst *S = Slot(V->getType());
+        B.CreateAlignedStore(V, S, S->getAlign());
+        Args.push_back(S);
+      }
+      SmallVector<llvm::OperandBundleDef, 1> Bundles;
+      CI->getOperandBundlesAsDefs(Bundles);
+      llvm::CallInst *NC = B.CreateCall(T, Args, Bundles);
+      NC->setDebugLoc(CI->getDebugLoc());
+      llvm::Value *R = NC;
+      if (RetSlot)
+        R = B.CreateAlignedLoad(RetTy, RetSlot, RetSlot->getAlign());
+      if (!CI->getType()->isVoidTy())
+        CI->replaceAllUsesWith(R);
+      CI->eraseFromParent();
+    }
+  }
+}
+
 void CodeGenModule::Release() {
   Module *Primary = getContext().getCurrentNamedModule();
   if (CXX20ModuleInits && Primary && !Primary->isHeaderLikeModule())
@@ -1141,6 +1282,7 @@ void CodeGenModule::Release() {
   emitMultiVersionFunctions();
   emitPFPFieldsWithEvaluatedOffset();
   emitGlobalDeleteForwardingBodies();
+  emitMSIntrinsicFeatureThunks();
 
   if (Context.getLangOpts().IncrementalExtensions &&
       GlobalTopLevelStmtBlockInFlight.first) {

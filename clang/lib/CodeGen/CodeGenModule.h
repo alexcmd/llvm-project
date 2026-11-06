@@ -2207,6 +2207,10 @@ private:
   /// Emit deactivation symbols for any PFP fields whose offset is taken with
   /// offsetof.
   void emitPFPFieldsWithEvaluatedOffset();
+
+  /// MS-INTRIN-ABI-THUNK: route calls to always_inline intrinsics that need
+  /// target features their caller lacks through memory-passing thunks.
+  void emitMSIntrinsicFeatureThunks();
 };
 
 }  // end namespace CodeGen

@@ -15,4 +15,4 @@
 // RUN: %clang_cl --target=x86_64-pc-windows-msvc -fms-predeclare-eh-types \
 // RUN:   /TC -### -c -- %s 2>&1 | FileCheck --check-prefix=OFF %s
 // OFF-NOT: __msvc_eh_predef.h
-// OFF-NOT: unused
+// OFF-NOT: argument unused

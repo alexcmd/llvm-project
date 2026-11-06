@@ -2,10 +2,10 @@
 // command-line option, e.g. on Mac where %s is commonly under /Users.
 
 // RUN: %clang_cl -### -- %s 2>&1 | FileCheck %s --check-prefix=BUILTIN
-// BUILTIN: "-internal-isystem" "{{.*lib.*clang.*include}}"
+// BUILTIN: "-internal-isystem" "{{[^"]*lib[^"]*clang[^"]*include}}"
 
 // RUN: %clang_cl -nobuiltininc -### -- %s 2>&1 | FileCheck %s --check-prefix=NOBUILTIN
-// NOBUILTIN-NOT: "-internal-isystem" "{{.*lib.*clang.*include}}"
+// NOBUILTIN-NOT: "-internal-isystem" "{{[^"]*lib[^"]*clang[^"]*include}}"
 
 // RUN: env INCLUDE=/my/system/inc env EXTERNAL_INCLUDE=/my/system/inc2 %clang_cl -### -- %s 2>&1 | FileCheck %s --check-prefix=STDINC
 // STDINC: "-internal-isystem" "/my/system/inc"
@@ -16,7 +16,7 @@
 // NOSTDINC: argument unused{{.*}}-imsvc
 // NOSTDINC-NOT: "-internal-isystem" "/my/system/inc"
 // NOSTDINC-NOT: "-internal-isystem" "/my/system/inc2"
-// NOSTDINC-NOT: "-internal-isystem" "{{.*lib.*clang.*include}}"
+// NOSTDINC-NOT: "-internal-isystem" "{{[^"]*lib[^"]*clang[^"]*include}}"
 // NOSTDINC-NOT: "-internal-isystem" "/my/other/inc"
 
 // /X suppresses %INCLUDE% and %EXTERNAL_INCLUDE% but not clang resource dirs, -imsvc dirs, or /external: flags.
@@ -24,7 +24,7 @@
 // SLASHX-NOT: "argument unused{{.*}}-imsvc"
 // SLASHX-NOT: "-internal-isystem" "/my/system/inc"
 // SLASHX-NOT: "-internal-isystem" "/my/system/inc2"
-// SLASHX: "-internal-isystem" "{{.*lib.*clang.*include}}"
+// SLASHX: "-internal-isystem" "{{[^"]*lib[^"]*clang[^"]*include}}"
 // SLASHX: "-internal-isystem" "/my/other/inc"
 // SLASHX: "-internal-isystem" "/my/other/inc2"
 

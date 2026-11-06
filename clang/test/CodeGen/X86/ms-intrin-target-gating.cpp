@@ -2,7 +2,7 @@
 // feature (cl accepts them). The call stays a call: the callee keeps its own
 // target attribute. Non-MS keeps the diagnostic (NOMS run).
 // RUN: %clang_cc1 -x c++ -ffreestanding %s -triple=x86_64-pc-windows-msvc -fms-compatibility -fms-compatibility-version=19 -fms-extensions -emit-llvm -o - -Wall -Werror | FileCheck %s
-// RUN: %clang_cc1 -x c++ -ffreestanding %s -DNOMS -triple=x86_64-unknown-linux-gnu -emit-llvm -o - -Wno-psabi -verify
+// RUN: %clang_cc1 -x c++ -ffreestanding %s -DNOMS -triple=x86_64-unknown-linux-gnu -emit-llvm -o - -verify
 
 #include <immintrin.h>
 
@@ -29,5 +29,5 @@ __m256i f_avx2_shuffle(__m256i a) { return _mm256_shuffle_epi32(a, 0x1b); }
 #endif
 
 #ifdef NOMS
-__m256i f_nomsE(__m256i a, __m256i b) { return _mm256_cmpeq_epi8(a, b); } // expected-error {{always_inline function '_mm256_cmpeq_epi8' requires target feature 'avx2'}}
+void f_nomsE(const __m256i *a, __m256i *o) { *o = _mm256_cmpeq_epi8(*a, *a); } // expected-error {{always_inline function '_mm256_cmpeq_epi8' requires target feature 'avx2'}}
 #endif

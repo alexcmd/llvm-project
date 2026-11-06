@@ -833,6 +833,12 @@ static bool gchProbe(const Driver &D, StringRef Path) {
   return false;
 }
 
+// cl.exe's pre-injected EH/RTTI types (__msvc_eh_predef.h): default in cl mode.
+static bool msPredeclareEHTypes(const Driver &D, const ArgList &Args) {
+  return Args.hasFlag(options::OPT_fms_predeclare_eh_types,
+                      options::OPT_fno_ms_predeclare_eh_types, D.IsCLMode());
+}
+
 void Clang::AddPreprocessingOptions(Compilation &C, const JobAction &JA,
                                     const Driver &D, const ArgList &Args,
                                     ArgStringList &CmdArgs,
@@ -1044,9 +1050,8 @@ void Clang::AddPreprocessingOptions(Compilation &C, const JobAction &JA,
   // them before any user -include: on by default in cl mode, opt-in elsewhere.
   // Not for /E, /P: the types are not source text, so preprocessed output
   // leaves them out (as cl.exe does) and gets them when it is compiled.
-  if (Args.hasFlag(options::OPT_fms_predeclare_eh_types,
-                   options::OPT_fno_ms_predeclare_eh_types, D.IsCLMode()) &&
-      types::isCXX(Inputs[0].getType()) && !isa<PreprocessJobAction>(JA)) {
+  if (msPredeclareEHTypes(D, Args) && types::isCXX(Inputs[0].getType()) &&
+      !isa<PreprocessJobAction>(JA)) {
     CmdArgs.push_back("-include");
     CmdArgs.push_back("__msvc_eh_predef.h");
   }
@@ -6657,8 +6662,16 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   // preprocessor.
   //
   // FIXME: Support -fpreprocessed
-  if (types::getPreprocessedType(InputType) != types::TY_INVALID)
+  if (types::getPreprocessedType(InputType) != types::TY_INVALID) {
     AddPreprocessingOptions(C, JA, D, Args, CmdArgs, Output, Inputs);
+  } else if (InputType == types::TY_PP_CXX && msPredeclareEHTypes(D, Args)) {
+    // Preprocessed C++ (/E, /P output) left the pre-injected types out; there
+    // is no include path here, so name the resource header by its path.
+    SmallString<128> P(D.ResourceDir);
+    llvm::sys::path::append(P, "include", "__msvc_eh_predef.h");
+    CmdArgs.push_back("-include");
+    CmdArgs.push_back(Args.MakeArgString(P));
+  }
 
   // Don't warn about "clang -c -DPIC -fPIC test.i" because libtool.m4 assumes
   // that "The compiler can only warn and ignore the option if not recognized".

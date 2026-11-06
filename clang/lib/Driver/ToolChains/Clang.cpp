@@ -1038,12 +1038,15 @@ void Clang::AddPreprocessingOptions(Compilation &C, const JobAction &JA,
     }
   }
 
-  // cl.exe pre-injects the C++ EH data types (_ThrowInfo, _CatchableType, ...)
-  // into every C++ translation unit; MSVC's <ehdata.h> relies on them. Include
-  // the resource header that declares them before any user -include.
+  // cl.exe pre-injects the C++ EH and RTTI data types (_ThrowInfo,
+  // _CatchableType, ...) into every C++ translation unit without any flag;
+  // MSVC's <ehdata.h> relies on them. Include the resource header that declares
+  // them before any user -include: on by default in cl mode, opt-in elsewhere.
+  // Not for /E, /P: the types are not source text, so preprocessed output
+  // leaves them out (as cl.exe does) and gets them when it is compiled.
   if (Args.hasFlag(options::OPT_fms_predeclare_eh_types,
-                   options::OPT_fno_ms_predeclare_eh_types, false) &&
-      types::isCXX(Inputs[0].getType())) {
+                   options::OPT_fno_ms_predeclare_eh_types, D.IsCLMode()) &&
+      types::isCXX(Inputs[0].getType()) && !isa<PreprocessJobAction>(JA)) {
     CmdArgs.push_back("-include");
     CmdArgs.push_back("__msvc_eh_predef.h");
   }

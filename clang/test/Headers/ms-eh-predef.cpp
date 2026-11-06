@@ -79,7 +79,7 @@ SAME(_PMD, struct _PMD);
 SAME(_TypeDescriptor, struct _TypeDescriptor);
 
 // RTTI records (tags _s__RTTI..., const typedefs __RTTI...).
-static_assert(sizeof(__RTTIBaseClassDescriptor) == 24 + 2 * P, "");
+static_assert(sizeof(__RTTIBaseClassDescriptor) == 20 + 2 * P, "");
 static_assert(alignof(__RTTIBaseClassDescriptor) == 4, "");
 static_assert(offsetof(__RTTIBaseClassDescriptor, numContainedBases) == P, "");
 static_assert(offsetof(__RTTIBaseClassDescriptor, where) == 4 + P, "");

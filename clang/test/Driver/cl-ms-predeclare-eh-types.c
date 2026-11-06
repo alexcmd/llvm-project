@@ -33,4 +33,4 @@
 // RUN: rm -rf %t && mkdir %t && echo > %t/a.ii
 // RUN: %clang_cl --target=x86_64-pc-windows-msvc -### -c -- %t/a.ii 2>&1 \
 // RUN:   | FileCheck --check-prefix=ON-PP %s
-// ON-PP: "-include" "__msvc_eh_predef.h"
+// ON-PP: "-include" "{{.*}}include{{/|\\\\}}__msvc_eh_predef.h"

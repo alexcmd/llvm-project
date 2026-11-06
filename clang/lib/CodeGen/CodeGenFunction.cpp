@@ -2912,6 +2912,12 @@ void CodeGenFunction::checkTargetFeatures(SourceLocation Loc,
 
   bool IsAlwaysInline = TargetDecl->hasAttr<AlwaysInlineAttr>();
   bool IsFlatten = FD && FD->hasAttr<FlattenAttr>();
+  // MS-compat: cl accepts always_inline intrinsics (from system headers) in any
+  // function. Emit the call without diagnosing the feature mismatch; the callee
+  // keeps its own target attribute and is not inlined into the caller.
+  bool IsMSIntrinsic =
+      IsAlwaysInline && getLangOpts().isCompatibleWithMSVC() &&
+      CGM.getContext().getSourceManager().isInSystemHeader(TargetDecl->getLocation());
 
   // Grab the required features for the call. For a builtin this is listed in
   // the td file with the default cpu, for an always_inline function this is any
@@ -2964,7 +2970,7 @@ void CodeGenFunction::checkTargetFeatures(SourceLocation Loc,
                         return true;
                       }) &&
         !IsHipStdPar) {
-      if (IsAlwaysInline)
+      if (IsAlwaysInline && !IsMSIntrinsic)
         CGM.getDiags().Report(Loc, diag::err_function_needs_feature)
             << FD->getDeclName() << TargetDecl->getDeclName() << MissingFeature;
       else if (IsFlatten)
@@ -2981,7 +2987,7 @@ void CodeGenFunction::checkTargetFeatures(SourceLocation Loc,
           (!CallerFeatureMap.lookup(F.getKey()) ||
            !CallerFeatureMap.find(F.getKey())->getValue()) &&
           !IsHipStdPar) {
-        if (IsAlwaysInline)
+        if (IsAlwaysInline && !IsMSIntrinsic)
           CGM.getDiags().Report(Loc, diag::err_function_needs_feature)
               << FD->getDeclName() << TargetDecl->getDeclName() << F.getKey();
         else if (IsFlatten)

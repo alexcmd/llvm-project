@@ -1,30 +1,30 @@
 // RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions \
 // RUN:   -fms-compatibility -ffreestanding -fsyntax-only -verify \
-// RUN:   -include __msvc_eh_predef.h %s
+// RUN:   -fms-predeclare-eh-types %s
 // RUN: %clang_cc1 -triple aarch64-pc-windows-msvc -fms-extensions \
 // RUN:   -fms-compatibility -ffreestanding -fsyntax-only -verify \
-// RUN:   -include __msvc_eh_predef.h %s
+// RUN:   -fms-predeclare-eh-types %s
 // RUN: %clang_cc1 -triple i686-pc-windows-msvc -fms-extensions \
 // RUN:   -fms-compatibility -ffreestanding -fsyntax-only -verify \
-// RUN:   -include __msvc_eh_predef.h %s
+// RUN:   -fms-predeclare-eh-types %s
 // RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions \
 // RUN:   -fms-compatibility -ffreestanding -fsyntax-only -verify=c -x c \
-// RUN:   -include __msvc_eh_predef.h %s
+// RUN:   -fms-predeclare-eh-types %s
 // RUN: %clang_cl --target=x86_64-pc-windows-msvc /Zs -Xclang -verify -- %s
 // RUN: %clang_cl --target=i686-pc-windows-msvc /Zs -Xclang -verify -- %s
 // RUN: %clang_cl --target=x86_64-pc-windows-msvc -fno-ms-predeclare-eh-types \
 // RUN:   /Zs -Xclang -verify=off -- %s
 // RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions \
 // RUN:   -fms-compatibility -ffreestanding -emit-llvm -o - \
-// RUN:   -include __msvc_eh_predef.h %s | FileCheck --check-prefix=X64 %s
+// RUN:   -fms-predeclare-eh-types %s | FileCheck --check-prefix=X64 %s
 // RUN: %clang_cc1 -triple i686-pc-windows-msvc -fms-extensions \
 // RUN:   -fms-compatibility -ffreestanding -emit-llvm -o - \
-// RUN:   -include __msvc_eh_predef.h %s | FileCheck --check-prefix=X86 %s
+// RUN:   -fms-predeclare-eh-types %s | FileCheck --check-prefix=X86 %s
 
 // Layouts, field types and tag names of the predeclared C++ EH and RTTI ABI
 // types: pointer fields on every target (x86, x64, ARM64).
 
-#if defined(__cplusplus) && !defined(__MSVC_EH_PREDEF_H)
+#if defined(__cplusplus) && !defined(__clang_ms_predeclared_eh_types)
 // Opted out: nothing is declared.
 _ThrowInfo *q; // off-error {{unknown type name '_ThrowInfo'}}
 #elif !defined(__cplusplus)

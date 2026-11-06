@@ -833,7 +833,7 @@ static bool gchProbe(const Driver &D, StringRef Path) {
   return false;
 }
 
-// cl.exe's pre-injected EH/RTTI types (__msvc_eh_predef.h): default in cl mode.
+// The Microsoft compiler's pre-injected EH/RTTI types: default in cl mode.
 static bool msPredeclareEHTypes(const Driver &D, const ArgList &Args) {
   return Args.hasFlag(options::OPT_fms_predeclare_eh_types,
                       options::OPT_fno_ms_predeclare_eh_types, D.IsCLMode());
@@ -1044,17 +1044,14 @@ void Clang::AddPreprocessingOptions(Compilation &C, const JobAction &JA,
     }
   }
 
-  // cl.exe pre-injects the C++ EH and RTTI data types (_ThrowInfo,
-  // _CatchableType, ...) into every C++ translation unit without any flag;
-  // MSVC's <ehdata.h> relies on them. Include the resource header that declares
-  // them before any user -include: on by default in cl mode, opt-in elsewhere.
-  // Not for /E, /P: the types are not source text, so preprocessed output
-  // leaves them out (as cl.exe does) and gets them when it is compiled.
+  // The Microsoft compiler declares the C++ EH and RTTI data types
+  // (_ThrowInfo, _CatchableType, ...) in every C++ translation unit without
+  // any flag, and its <ehdata.h> relies on them: on by default in cl mode,
+  // opt-in elsewhere. Not for /E, /P: the types are not source text, so
+  // preprocessed output leaves them out and gets them when it is compiled.
   if (msPredeclareEHTypes(D, Args) && types::isCXX(Inputs[0].getType()) &&
-      !isa<PreprocessJobAction>(JA)) {
-    CmdArgs.push_back("-include");
-    CmdArgs.push_back("__msvc_eh_predef.h");
-  }
+      !isa<PreprocessJobAction>(JA))
+    CmdArgs.push_back("-fms-predeclare-eh-types");
 
   bool RenderedImplicitInclude = false;
   for (const Arg *A : Args.filtered(options::OPT_clang_i_Group)) {
@@ -6665,12 +6662,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   if (types::getPreprocessedType(InputType) != types::TY_INVALID) {
     AddPreprocessingOptions(C, JA, D, Args, CmdArgs, Output, Inputs);
   } else if (InputType == types::TY_PP_CXX && msPredeclareEHTypes(D, Args)) {
-    // Preprocessed C++ (/E, /P output) left the pre-injected types out; there
-    // is no include path here, so name the resource header by its path.
-    SmallString<128> P(D.ResourceDir);
-    llvm::sys::path::append(P, "include", "__msvc_eh_predef.h");
-    CmdArgs.push_back("-include");
-    CmdArgs.push_back(Args.MakeArgString(P));
+    // Preprocessed C++ (/E, /P output) left the pre-injected types out.
+    CmdArgs.push_back("-fms-predeclare-eh-types");
   }
 
   // Don't warn about "clang -c -DPIC -fPIC test.i" because libtool.m4 assumes

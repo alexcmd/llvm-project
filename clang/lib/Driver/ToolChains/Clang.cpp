@@ -6769,22 +6769,21 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
                                       options::OPT__SLASH_we,
                                       options::OPT__SLASH_wo,
                                       options::OPT__SLASH_w)) {
-      const Arg *Orig = A->getAlias() ? A->getAlias() : A;
-      const Option &O = Orig->getOption();
+      // /W1../W3 arrive as -Wall and /W4 as -WCL4; the level digit is read
+      // from the spelling on the command line.
       unsigned L = 0;
-      if (O.matches(options::OPT__SLASH_W1))
-        L = 1;
-      else if (O.matches(options::OPT__SLASH_W2))
-        L = 2;
-      else if (O.matches(options::OPT__SLASH_W3))
+      if (A->getOption().matches(options::OPT_Wall)) {
+        StringRef Orig = Args.getArgString(A->getIndex());
         L = 3;
-      else if (O.matches(options::OPT__SLASH_W4) ||
-               A->getOption().matches(options::OPT_WCL4))
+        if (Orig.size() == 3 && Orig[1] == 'W' && Orig[2] >= '1' &&
+            Orig[2] <= '3')
+          L = Orig[2] - '0';
+      } else if (A->getOption().matches(options::OPT_WCL4)) {
         L = 4;
-      else if (O.matches(options::OPT__SLASH_Wall) ||
-               (A->getOption().matches(options::OPT_W_Joined) &&
-                StringRef(A->getValue()) == "everything"))
+      } else if (A->getOption().matches(options::OPT_W_Joined) &&
+                 StringRef(A->getValue()) == "everything") {
         L = 5;
+      }
       if (L) {
         CLLevelArg = A;
         CLLevel = L;

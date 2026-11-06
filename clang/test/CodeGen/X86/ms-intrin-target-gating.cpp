@@ -2,7 +2,7 @@
 // feature (cl accepts them). The call stays a call: the callee keeps its own
 // target attribute. Non-MS keeps the diagnostic (NOMS run).
 // RUN: %clang_cc1 -x c++ -ffreestanding %s -triple=x86_64-pc-windows-msvc -fms-compatibility -fms-compatibility-version=19 -fms-extensions -emit-llvm -o - -Wall -Werror | FileCheck %s
-// RUN: %clang_cc1 -x c++ -ffreestanding %s -DNOMS -triple=x86_64-unknown-linux-gnu -emit-llvm -o - -verify
+// RUN: %clang_cc1 -x c++ -ffreestanding %s -DNOMS -triple=x86_64-unknown-linux-gnu -emit-llvm -o - -Wno-psabi -verify
 
 #include <immintrin.h>
 

@@ -88,9 +88,20 @@
 ///     An unsigned immediate value specifying the starting positions of the
 ///     bytes to operate on.
 /// \returns A 256-bit vector of [16 x i16] containing the result.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_M>
+static __inline__ __m256i __DEFAULT_FN_ATTRS256 __ms__mm256_mpsadbw_epu8(__m256i __p_X, __m256i __p_Y) {
+  return ((__m256i)__builtin_ia32_mpsadbw256((__v32qi)(__m256i)(__p_X), (__v32qi)(__m256i)(__p_Y), (int)(__I_M)));
+}
+}
+#define _mm256_mpsadbw_epu8(X, Y, M) (__ms__mm256_mpsadbw_epu8<(M)>((X), (Y)))
+#else
 #define _mm256_mpsadbw_epu8(X, Y, M) \
   ((__m256i)__builtin_ia32_mpsadbw256((__v32qi)(__m256i)(X), \
                                       (__v32qi)(__m256i)(Y), (int)(M)))
+#endif
 
 /// Computes the absolute value of each signed byte in the 256-bit integer
 ///    vector \a __a and returns each value in the corresponding byte of
@@ -428,9 +439,20 @@ _mm256_adds_epu16(__m256i __a, __m256i __b) {
 /// \param n
 ///    An immediate value specifying the number of bytes to shift.
 /// \returns A 256-bit integer vector containing the result.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_n>
+static __inline__ __m256i __DEFAULT_FN_ATTRS256 __ms__mm256_alignr_epi8(__m256i __p_a, __m256i __p_b) {
+  return ((__m256i)__builtin_ia32_palignr256((__v32qi)(__m256i)(__p_a), (__v32qi)(__m256i)(__p_b), (__I_n)));
+}
+}
+#define _mm256_alignr_epi8(a, b, n) (__ms__mm256_alignr_epi8<(n)>((a), (b)))
+#else
 #define _mm256_alignr_epi8(a, b, n) \
   ((__m256i)__builtin_ia32_palignr256((__v32qi)(__m256i)(a), \
                                       (__v32qi)(__m256i)(b), (n)))
+#endif
 
 /// Computes the bitwise AND of the 256-bit integer vectors in \a __a and
 ///    \a __b.
@@ -590,9 +612,20 @@ _mm256_blendv_epi8(__m256i __V1, __m256i __V2, __m256i __M) {
 ///    \a M[0] determines the source for elements 0 and 8, \a M[1] for
 ///    elements 1 and 9, and so forth.
 /// \returns A 256-bit vector of [16 x i16] containing the result.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_M>
+static __inline__ __m256i __DEFAULT_FN_ATTRS256 __ms__mm256_blend_epi16(__m256i __p_V1, __m256i __p_V2) {
+  return ((__m256i)__builtin_ia32_pblendw256((__v16hi)(__m256i)(__p_V1), (__v16hi)(__m256i)(__p_V2), (int)(__I_M)));
+}
+}
+#define _mm256_blend_epi16(V1, V2, M) (__ms__mm256_blend_epi16<(M)>((V1), (V2)))
+#else
 #define _mm256_blend_epi16(V1, V2, M) \
   ((__m256i)__builtin_ia32_pblendw256((__v16hi)(__m256i)(V1), \
                                       (__v16hi)(__m256i)(V2), (int)(M)))
+#endif
 
 /// Compares corresponding bytes in the 256-bit integer vectors in \a __a and
 ///    \a __b for equality and returns the outcomes in the corresponding
@@ -1928,8 +1961,19 @@ static __inline__ __m256i __DEFAULT_FN_ATTRS256 __ms__mm256_shuffle_epi32(__m256
 ///    result, \a imm[3:2] specifies the index for elements 5 and 9, and so
 ///    forth. Indexes are offset by 4 (so 0 means index 4, and so forth).
 /// \returns A 256-bit vector of [16 x i16] containing the result.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_imm>
+static __inline__ __m256i __DEFAULT_FN_ATTRS256 __ms__mm256_shufflehi_epi16(__m256i __p_a) {
+  return ((__m256i)__builtin_ia32_pshufhw256((__v16hi)(__m256i)(__p_a), (int)(__I_imm)));
+}
+}
+#define _mm256_shufflehi_epi16(a, imm) (__ms__mm256_shufflehi_epi16<(imm)>((a)))
+#else
 #define _mm256_shufflehi_epi16(a, imm) \
   ((__m256i)__builtin_ia32_pshufhw256((__v16hi)(__m256i)(a), (int)(imm)))
+#endif
 
 /// Shuffles 16-bit integers from the 256-bit vector of [16 x i16] \a a
 ///    according to control information in the integer literal \a imm, and
@@ -1965,8 +2009,19 @@ static __inline__ __m256i __DEFAULT_FN_ATTRS256 __ms__mm256_shuffle_epi32(__m256
 ///    result, \a imm[3:2] specifies the index for elements 1 and 9, and so
 ///    forth.
 /// \returns A 256-bit vector of [16 x i16] containing the result.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_imm>
+static __inline__ __m256i __DEFAULT_FN_ATTRS256 __ms__mm256_shufflelo_epi16(__m256i __p_a) {
+  return ((__m256i)__builtin_ia32_pshuflw256((__v16hi)(__m256i)(__p_a), (int)(__I_imm)));
+}
+}
+#define _mm256_shufflelo_epi16(a, imm) (__ms__mm256_shufflelo_epi16<(imm)>((a)))
+#else
 #define _mm256_shufflelo_epi16(a, imm) \
   ((__m256i)__builtin_ia32_pshuflw256((__v16hi)(__m256i)(a), (int)(imm)))
+#endif
 
 /// Sets each byte of the result to the corresponding byte of the 256-bit
 ///    integer vector in \a __a, the negative of that byte, or zero, depending
@@ -2045,9 +2100,20 @@ _mm256_sign_epi32(__m256i __a, __m256i __b) {
 /// \param imm
 ///     An unsigned immediate value specifying the shift count (in bytes).
 /// \returns A 256-bit integer vector containing the result.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_imm>
+static __inline__ __m256i __DEFAULT_FN_ATTRS256 __ms__mm256_slli_si256(__m256i __p_a) {
+  return ((__m256i)__builtin_ia32_pslldqi256_byteshift((__v32qi)(__m256i)(__p_a), (int)(__I_imm)));
+}
+}
+#define _mm256_slli_si256(a, imm) (__ms__mm256_slli_si256<(imm)>((a)))
+#else
 #define _mm256_slli_si256(a, imm)                                              \
   ((__m256i)__builtin_ia32_pslldqi256_byteshift((__v32qi)(__m256i)(a),         \
                                                 (int)(imm)))
+#endif
 
 /// Shifts each 128-bit half of the 256-bit integer vector \a a left by
 ///    \a imm bytes, shifting in zero bytes, and returns the result. If \a imm
@@ -2066,9 +2132,20 @@ _mm256_sign_epi32(__m256i __a, __m256i __b) {
 /// \param imm
 ///    An unsigned immediate value specifying the shift count (in bytes).
 /// \returns A 256-bit integer vector containing the result.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_imm>
+static __inline__ __m256i __DEFAULT_FN_ATTRS256 __ms__mm256_bslli_epi128(__m256i __p_a) {
+  return ((__m256i)__builtin_ia32_pslldqi256_byteshift((__v32qi)(__m256i)(__p_a), (int)(__I_imm)));
+}
+}
+#define _mm256_bslli_epi128(a, imm) (__ms__mm256_bslli_epi128<(imm)>((a)))
+#else
 #define _mm256_bslli_epi128(a, imm)                                            \
   ((__m256i)__builtin_ia32_pslldqi256_byteshift((__v32qi)(__m256i)(a),         \
                                                 (int)(imm)))
+#endif
 
 /// Shifts each 16-bit element of the 256-bit vector of [16 x i16] in \a __a
 ///    left by \a __count bits, shifting in zero bits, and returns the result.
@@ -2281,9 +2358,20 @@ _mm256_sra_epi32(__m256i __a, __m128i __count) {
 /// \param imm
 ///    An unsigned immediate value specifying the shift count (in bytes).
 /// \returns A 256-bit integer vector containing the result.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_imm>
+static __inline__ __m256i __DEFAULT_FN_ATTRS256 __ms__mm256_srli_si256(__m256i __p_a) {
+  return ((__m256i)__builtin_ia32_psrldqi256_byteshift((__v32qi)(__m256i)(__p_a), (int)(__I_imm)));
+}
+}
+#define _mm256_srli_si256(a, imm) (__ms__mm256_srli_si256<(imm)>((a)))
+#else
 #define _mm256_srli_si256(a, imm)                                              \
   ((__m256i)__builtin_ia32_psrldqi256_byteshift((__v32qi)(__m256i)(a),         \
                                                 (int)(imm)))
+#endif
 
 /// Shifts each 128-bit half of the 256-bit integer vector in \a a right by
 ///    \a imm bytes, shifting in zero bytes, and returns the result. If
@@ -2302,9 +2390,20 @@ _mm256_sra_epi32(__m256i __a, __m128i __count) {
 /// \param imm
 ///     An unsigned immediate value specifying the shift count (in bytes).
 /// \returns A 256-bit integer vector containing the result.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_imm>
+static __inline__ __m256i __DEFAULT_FN_ATTRS256 __ms__mm256_bsrli_epi128(__m256i __p_a) {
+  return ((__m256i)__builtin_ia32_psrldqi256_byteshift((__v32qi)(__m256i)(__p_a), (int)(__I_imm)));
+}
+}
+#define _mm256_bsrli_epi128(a, imm) (__ms__mm256_bsrli_epi128<(imm)>((a)))
+#else
 #define _mm256_bsrli_epi128(a, imm)                                            \
   ((__m256i)__builtin_ia32_psrldqi256_byteshift((__v32qi)(__m256i)(a),         \
                                                 (int)(imm)))
+#endif
 
 /// Shifts each 16-bit element of the 256-bit vector of [16 x i16] in \a __a
 ///    right by \a __count bits, shifting in zero bits, and returns the result.
@@ -3031,9 +3130,20 @@ _mm256_broadcastsi128_si256(__m128i __X) {
 ///    corresponds to the index of a copied value. When a mask bit is 0, the
 ///    element is copied from \a V1; otherwise, it is copied from \a V2.
 /// \returns A 128-bit vector of [4 x i32] containing the result.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_M>
+static __inline__ __m128i __DEFAULT_FN_ATTRS128 __ms__mm_blend_epi32(__m128i __p_V1, __m128i __p_V2) {
+  return ((__m128i)__builtin_ia32_pblendd128((__v4si)(__m128i)(__p_V1), (__v4si)(__m128i)(__p_V2), (int)(__I_M)));
+}
+}
+#define _mm_blend_epi32(V1, V2, M) (__ms__mm_blend_epi32<(M)>((V1), (V2)))
+#else
 #define _mm_blend_epi32(V1, V2, M) \
   ((__m128i)__builtin_ia32_pblendd128((__v4si)(__m128i)(V1), \
                                       (__v4si)(__m128i)(V2), (int)(M)))
+#endif
 
 /// Merges 32-bit integer elements from either of the two 256-bit vectors of
 ///    [8 x i32] in \a V1 or \a V2 to return a 256-bit vector of [8 x i32],
@@ -3068,9 +3178,20 @@ _mm256_broadcastsi128_si256(__m128i __X) {
 ///    corresponds to the index of a copied value. When a mask bit is 0, the
 ///    element is copied from \a V1; otherwise, it is copied from \a V2.
 /// \returns A 256-bit vector of [8 x i32] containing the result.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_M>
+static __inline__ __m256i __DEFAULT_FN_ATTRS256 __ms__mm256_blend_epi32(__m256i __p_V1, __m256i __p_V2) {
+  return ((__m256i)__builtin_ia32_pblendd256((__v8si)(__m256i)(__p_V1), (__v8si)(__m256i)(__p_V2), (int)(__I_M)));
+}
+}
+#define _mm256_blend_epi32(V1, V2, M) (__ms__mm256_blend_epi32<(M)>((V1), (V2)))
+#else
 #define _mm256_blend_epi32(V1, V2, M) \
   ((__m256i)__builtin_ia32_pblendd256((__v8si)(__m256i)(V1), \
                                       (__v8si)(__m256i)(V2), (int)(M)))
+#endif
 
 /// Broadcasts the low byte from the 128-bit integer vector in \a __X to all
 ///    bytes of the 256-bit result.
@@ -3367,8 +3488,19 @@ static __inline__ __m256i __DEFAULT_FN_ATTRS256 __ms__mm256_permute4x64_epi64(__
 ///    2: the lower half of \a V2 \n
 ///    3: the upper half of \a V2
 /// \returns A 256-bit integer vector containing the result.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_M>
+static __inline__ __m256i __DEFAULT_FN_ATTRS256 __ms__mm256_permute2x128_si256(__m256i __p_V1, __m256i __p_V2) {
+  return ((__m256i)__builtin_ia32_permti256((__m256i)(__p_V1), (__m256i)(__p_V2), (int)(__I_M)));
+}
+}
+#define _mm256_permute2x128_si256(V1, V2, M) (__ms__mm256_permute2x128_si256<(M)>((V1), (V2)))
+#else
 #define _mm256_permute2x128_si256(V1, V2, M) \
   ((__m256i)__builtin_ia32_permti256((__m256i)(V1), (__m256i)(V2), (int)(M)))
+#endif
 
 /// Extracts half of the 256-bit vector \a V to the 128-bit result. If bit 0
 ///     of the immediate \a M is zero, extracts the lower half of the result;
@@ -3419,9 +3551,20 @@ static __inline__ __m128i __DEFAULT_FN_ATTRS256 __ms__mm256_extracti128_si256(__
 /// \param M
 ///    An immediate value specifying where to put \a V2 in the result.
 /// \returns A 256-bit integer vector containing the result.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_M>
+static __inline__ __m256i __DEFAULT_FN_ATTRS256 __ms__mm256_inserti128_si256(__m256i __p_V1, __m128i __p_V2) {
+  return ((__m256i)__builtin_ia32_insert128i256((__v4di)(__m256i)(__p_V1), (__v2di)(__m128i)(__p_V2), (int)(__I_M)));
+}
+}
+#define _mm256_inserti128_si256(V1, V2, M) (__ms__mm256_inserti128_si256<(M)>((V1), (V2)))
+#else
 #define _mm256_inserti128_si256(V1, V2, M) \
   ((__m256i)__builtin_ia32_insert128i256((__v4di)(__m256i)(V1), \
                                          (__v2di)(__m128i)(V2), (int)(M)))
+#endif
 
 /// Conditionally loads eight 32-bit integer elements from memory \a __X, if
 ///    the most significant bit of the corresponding element in the mask
@@ -3936,11 +4079,22 @@ _mm_srlv_epi64(__m128i __X, __m128i __Y)
 ///    A literal constant scale factor for the indexes in \a i. Must be
 ///    1, 2, 4, or 8.
 /// \returns A 128-bit vector of [2 x double] containing the gathered values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_s>
+static __inline__ __m128d __DEFAULT_FN_ATTRS128 __ms__mm_mask_i32gather_pd(__m128d __p_a, double const * __p_m, __m128i __p_i, __m128d __p_mask) {
+  return ((__m128d)__builtin_ia32_gatherd_pd((__v2df)(__m128i)(__p_a), (double const *)(__p_m), (__v4si)(__m128i)(__p_i), (__v2df)(__m128d)(__p_mask), (__I_s)));
+}
+}
+#define _mm_mask_i32gather_pd(a, m, i, mask, s) (__ms__mm_mask_i32gather_pd<(s)>((a), (m), (i), (mask)))
+#else
 #define _mm_mask_i32gather_pd(a, m, i, mask, s) \
   ((__m128d)__builtin_ia32_gatherd_pd((__v2df)(__m128i)(a), \
                                       (double const *)(m), \
                                       (__v4si)(__m128i)(i), \
                                       (__v2df)(__m128d)(mask), (s)))
+#endif
 
 /// Conditionally gathers four 64-bit floating-point values, either from the
 ///    256-bit vector of [4 x double] in \a a, or from memory \a m using scaled
@@ -3984,11 +4138,22 @@ _mm_srlv_epi64(__m128i __X, __m128i __Y)
 ///    A literal constant scale factor for the indexes in \a i. Must be
 ///    1, 2, 4, or 8.
 /// \returns A 256-bit vector of [4 x double] containing the gathered values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_s>
+static __inline__ __m256d __DEFAULT_FN_ATTRS256 __ms__mm256_mask_i32gather_pd(__m256d __p_a, double const * __p_m, __m128i __p_i, __m256d __p_mask) {
+  return ((__m256d)__builtin_ia32_gatherd_pd256((__v4df)(__m256d)(__p_a), (double const *)(__p_m), (__v4si)(__m128i)(__p_i), (__v4df)(__m256d)(__p_mask), (__I_s)));
+}
+}
+#define _mm256_mask_i32gather_pd(a, m, i, mask, s) (__ms__mm256_mask_i32gather_pd<(s)>((a), (m), (i), (mask)))
+#else
 #define _mm256_mask_i32gather_pd(a, m, i, mask, s) \
   ((__m256d)__builtin_ia32_gatherd_pd256((__v4df)(__m256d)(a), \
                                          (double const *)(m), \
                                          (__v4si)(__m128i)(i), \
                                          (__v4df)(__m256d)(mask), (s)))
+#endif
 
 /// Conditionally gathers two 64-bit floating-point values, either from the
 ///    128-bit vector of [2 x double] in \a a, or from memory \a m using scaled
@@ -4032,11 +4197,22 @@ _mm_srlv_epi64(__m128i __X, __m128i __Y)
 ///    A literal constant scale factor for the indexes in \a i. Must be
 ///    1, 2, 4, or 8.
 /// \returns A 128-bit vector of [2 x double] containing the gathered values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_s>
+static __inline__ __m128d __DEFAULT_FN_ATTRS128 __ms__mm_mask_i64gather_pd(__m128d __p_a, double const * __p_m, __m128i __p_i, __m128d __p_mask) {
+  return ((__m128d)__builtin_ia32_gatherq_pd((__v2df)(__m128d)(__p_a), (double const *)(__p_m), (__v2di)(__m128i)(__p_i), (__v2df)(__m128d)(__p_mask), (__I_s)));
+}
+}
+#define _mm_mask_i64gather_pd(a, m, i, mask, s) (__ms__mm_mask_i64gather_pd<(s)>((a), (m), (i), (mask)))
+#else
 #define _mm_mask_i64gather_pd(a, m, i, mask, s) \
   ((__m128d)__builtin_ia32_gatherq_pd((__v2df)(__m128d)(a), \
                                       (double const *)(m), \
                                       (__v2di)(__m128i)(i), \
                                       (__v2df)(__m128d)(mask), (s)))
+#endif
 
 /// Conditionally gathers four 64-bit floating-point values, either from the
 ///    256-bit vector of [4 x double] in \a a, or from memory \a m using scaled
@@ -4080,11 +4256,22 @@ _mm_srlv_epi64(__m128i __X, __m128i __Y)
 ///    A literal constant scale factor for the indexes in \a i. Must be
 ///    1, 2, 4, or 8.
 /// \returns A 256-bit vector of [4 x double] containing the gathered values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_s>
+static __inline__ __m256d __DEFAULT_FN_ATTRS256 __ms__mm256_mask_i64gather_pd(__m256d __p_a, double const * __p_m, __m256i __p_i, __m256d __p_mask) {
+  return ((__m256d)__builtin_ia32_gatherq_pd256((__v4df)(__m256d)(__p_a), (double const *)(__p_m), (__v4di)(__m256i)(__p_i), (__v4df)(__m256d)(__p_mask), (__I_s)));
+}
+}
+#define _mm256_mask_i64gather_pd(a, m, i, mask, s) (__ms__mm256_mask_i64gather_pd<(s)>((a), (m), (i), (mask)))
+#else
 #define _mm256_mask_i64gather_pd(a, m, i, mask, s) \
   ((__m256d)__builtin_ia32_gatherq_pd256((__v4df)(__m256d)(a), \
                                          (double const *)(m), \
                                          (__v4di)(__m256i)(i), \
                                          (__v4df)(__m256d)(mask), (s)))
+#endif
 
 /// Conditionally gathers four 32-bit floating-point values, either from the
 ///    128-bit vector of [4 x float] in \a a, or from memory \a m using scaled
@@ -4128,11 +4315,22 @@ _mm_srlv_epi64(__m128i __X, __m128i __Y)
 ///    A literal constant scale factor for the indexes in \a i. Must be
 ///    1, 2, 4, or 8.
 /// \returns A 128-bit vector of [4 x float] containing the gathered values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_s>
+static __inline__ __m128 __DEFAULT_FN_ATTRS128 __ms__mm_mask_i32gather_ps(__m128 __p_a, float const * __p_m, __m128i __p_i, __m128 __p_mask) {
+  return ((__m128)__builtin_ia32_gatherd_ps((__v4sf)(__m128)(__p_a), (float const *)(__p_m), (__v4si)(__m128i)(__p_i), (__v4sf)(__m128)(__p_mask), (__I_s)));
+}
+}
+#define _mm_mask_i32gather_ps(a, m, i, mask, s) (__ms__mm_mask_i32gather_ps<(s)>((a), (m), (i), (mask)))
+#else
 #define _mm_mask_i32gather_ps(a, m, i, mask, s) \
   ((__m128)__builtin_ia32_gatherd_ps((__v4sf)(__m128)(a), \
                                      (float const *)(m), \
                                      (__v4si)(__m128i)(i), \
                                      (__v4sf)(__m128)(mask), (s)))
+#endif
 
 /// Conditionally gathers eight 32-bit floating-point values, either from the
 ///    256-bit vector of [8 x float] in \a a, or from memory \a m using scaled
@@ -4176,11 +4374,22 @@ _mm_srlv_epi64(__m128i __X, __m128i __Y)
 ///    A literal constant scale factor for the indexes in \a i. Must be
 ///    1, 2, 4, or 8.
 /// \returns A 256-bit vector of [8 x float] containing the gathered values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_s>
+static __inline__ __m256 __DEFAULT_FN_ATTRS256 __ms__mm256_mask_i32gather_ps(__m256 __p_a, float const * __p_m, __m256i __p_i, __m256 __p_mask) {
+  return ((__m256)__builtin_ia32_gatherd_ps256((__v8sf)(__m256)(__p_a), (float const *)(__p_m), (__v8si)(__m256i)(__p_i), (__v8sf)(__m256)(__p_mask), (__I_s)));
+}
+}
+#define _mm256_mask_i32gather_ps(a, m, i, mask, s) (__ms__mm256_mask_i32gather_ps<(s)>((a), (m), (i), (mask)))
+#else
 #define _mm256_mask_i32gather_ps(a, m, i, mask, s) \
   ((__m256)__builtin_ia32_gatherd_ps256((__v8sf)(__m256)(a), \
                                         (float const *)(m), \
                                         (__v8si)(__m256i)(i), \
                                         (__v8sf)(__m256)(mask), (s)))
+#endif
 
 /// Conditionally gathers two 32-bit floating-point values, either from the
 ///    128-bit vector of [4 x float] in \a a, or from memory \a m using scaled
@@ -4227,11 +4436,22 @@ _mm_srlv_epi64(__m128i __X, __m128i __Y)
 ///    A literal constant scale factor for the indexes in \a i. Must be
 ///    1, 2, 4, or 8.
 /// \returns A 128-bit vector of [4 x float] containing the gathered values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_s>
+static __inline__ __m128 __DEFAULT_FN_ATTRS128 __ms__mm_mask_i64gather_ps(__m128 __p_a, float const * __p_m, __m128i __p_i, __m128 __p_mask) {
+  return ((__m128)__builtin_ia32_gatherq_ps((__v4sf)(__m128)(__p_a), (float const *)(__p_m), (__v2di)(__m128i)(__p_i), (__v4sf)(__m128)(__p_mask), (__I_s)));
+}
+}
+#define _mm_mask_i64gather_ps(a, m, i, mask, s) (__ms__mm_mask_i64gather_ps<(s)>((a), (m), (i), (mask)))
+#else
 #define _mm_mask_i64gather_ps(a, m, i, mask, s) \
   ((__m128)__builtin_ia32_gatherq_ps((__v4sf)(__m128)(a), \
                                      (float const *)(m), \
                                      (__v2di)(__m128i)(i), \
                                      (__v4sf)(__m128)(mask), (s)))
+#endif
 
 /// Conditionally gathers four 32-bit floating-point values, either from the
 ///    128-bit vector of [4 x float] in \a a, or from memory \a m using scaled
@@ -4275,11 +4495,22 @@ _mm_srlv_epi64(__m128i __X, __m128i __Y)
 ///    A literal constant scale factor for the indexes in \a i. Must be
 ///    1, 2, 4, or 8.
 /// \returns A 128-bit vector of [4 x float] containing the gathered values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_s>
+static __inline__ __m128 __DEFAULT_FN_ATTRS256 __ms__mm256_mask_i64gather_ps(__m128 __p_a, float const * __p_m, __m256i __p_i, __m128 __p_mask) {
+  return ((__m128)__builtin_ia32_gatherq_ps256((__v4sf)(__m128)(__p_a), (float const *)(__p_m), (__v4di)(__m256i)(__p_i), (__v4sf)(__m128)(__p_mask), (__I_s)));
+}
+}
+#define _mm256_mask_i64gather_ps(a, m, i, mask, s) (__ms__mm256_mask_i64gather_ps<(s)>((a), (m), (i), (mask)))
+#else
 #define _mm256_mask_i64gather_ps(a, m, i, mask, s) \
   ((__m128)__builtin_ia32_gatherq_ps256((__v4sf)(__m128)(a), \
                                         (float const *)(m), \
                                         (__v4di)(__m256i)(i), \
                                         (__v4sf)(__m128)(mask), (s)))
+#endif
 
 /// Conditionally gathers four 32-bit integer values, either from the
 ///    128-bit vector of [4 x i32] in \a a, or from memory \a m using scaled
@@ -4323,11 +4554,22 @@ _mm_srlv_epi64(__m128i __X, __m128i __Y)
 ///    A literal constant scale factor for the indexes in \a i. Must be
 ///    1, 2, 4, or 8.
 /// \returns A 128-bit vector of [4 x i32] containing the gathered values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_s>
+static __inline__ __m128i __DEFAULT_FN_ATTRS128 __ms__mm_mask_i32gather_epi32(__m128i __p_a, int const * __p_m, __m128i __p_i, __m128i __p_mask) {
+  return ((__m128i)__builtin_ia32_gatherd_d((__v4si)(__m128i)(__p_a), (int const *)(__p_m), (__v4si)(__m128i)(__p_i), (__v4si)(__m128i)(__p_mask), (__I_s)));
+}
+}
+#define _mm_mask_i32gather_epi32(a, m, i, mask, s) (__ms__mm_mask_i32gather_epi32<(s)>((a), (m), (i), (mask)))
+#else
 #define _mm_mask_i32gather_epi32(a, m, i, mask, s) \
   ((__m128i)__builtin_ia32_gatherd_d((__v4si)(__m128i)(a), \
                                      (int const *)(m), \
                                      (__v4si)(__m128i)(i), \
                                      (__v4si)(__m128i)(mask), (s)))
+#endif
 
 /// Conditionally gathers eight 32-bit integer values, either from the
 ///    256-bit vector of [8 x i32] in \a a, or from memory \a m using scaled
@@ -4371,11 +4613,22 @@ _mm_srlv_epi64(__m128i __X, __m128i __Y)
 ///    A literal constant scale factor for the indexes in \a i. Must be
 ///    1, 2, 4, or 8.
 /// \returns A 256-bit vector of [8 x i32] containing the gathered values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_s>
+static __inline__ __m256i __DEFAULT_FN_ATTRS256 __ms__mm256_mask_i32gather_epi32(__m256i __p_a, int const * __p_m, __m256i __p_i, __m256i __p_mask) {
+  return ((__m256i)__builtin_ia32_gatherd_d256((__v8si)(__m256i)(__p_a), (int const *)(__p_m), (__v8si)(__m256i)(__p_i), (__v8si)(__m256i)(__p_mask), (__I_s)));
+}
+}
+#define _mm256_mask_i32gather_epi32(a, m, i, mask, s) (__ms__mm256_mask_i32gather_epi32<(s)>((a), (m), (i), (mask)))
+#else
 #define _mm256_mask_i32gather_epi32(a, m, i, mask, s) \
   ((__m256i)__builtin_ia32_gatherd_d256((__v8si)(__m256i)(a), \
                                         (int const *)(m), \
                                         (__v8si)(__m256i)(i), \
                                         (__v8si)(__m256i)(mask), (s)))
+#endif
 
 /// Conditionally gathers two 32-bit integer values, either from the
 ///    128-bit vector of [4 x i32] in \a a, or from memory \a m using scaled
@@ -4422,11 +4675,22 @@ _mm_srlv_epi64(__m128i __X, __m128i __Y)
 ///    A literal constant scale factor for the indexes in \a i. Must be
 ///    1, 2, 4, or 8.
 /// \returns A 128-bit vector of [4 x i32] containing the gathered values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_s>
+static __inline__ __m128i __DEFAULT_FN_ATTRS128 __ms__mm_mask_i64gather_epi32(__m128i __p_a, int const * __p_m, __m128i __p_i, __m128i __p_mask) {
+  return ((__m128i)__builtin_ia32_gatherq_d((__v4si)(__m128i)(__p_a), (int const *)(__p_m), (__v2di)(__m128i)(__p_i), (__v4si)(__m128i)(__p_mask), (__I_s)));
+}
+}
+#define _mm_mask_i64gather_epi32(a, m, i, mask, s) (__ms__mm_mask_i64gather_epi32<(s)>((a), (m), (i), (mask)))
+#else
 #define _mm_mask_i64gather_epi32(a, m, i, mask, s) \
   ((__m128i)__builtin_ia32_gatherq_d((__v4si)(__m128i)(a), \
                                      (int const *)(m), \
                                      (__v2di)(__m128i)(i), \
                                      (__v4si)(__m128i)(mask), (s)))
+#endif
 
 /// Conditionally gathers four 32-bit integer values, either from the
 ///    128-bit vector of [4 x i32] in \a a, or from memory \a m using scaled
@@ -4470,11 +4734,22 @@ _mm_srlv_epi64(__m128i __X, __m128i __Y)
 ///    A literal constant scale factor for the indexes in \a i. Must be
 ///    1, 2, 4, or 8.
 /// \returns A 128-bit vector of [4 x i32] containing the gathered values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_s>
+static __inline__ __m128i __DEFAULT_FN_ATTRS256 __ms__mm256_mask_i64gather_epi32(__m128i __p_a, int const * __p_m, __m256i __p_i, __m128i __p_mask) {
+  return ((__m128i)__builtin_ia32_gatherq_d256((__v4si)(__m128i)(__p_a), (int const *)(__p_m), (__v4di)(__m256i)(__p_i), (__v4si)(__m128i)(__p_mask), (__I_s)));
+}
+}
+#define _mm256_mask_i64gather_epi32(a, m, i, mask, s) (__ms__mm256_mask_i64gather_epi32<(s)>((a), (m), (i), (mask)))
+#else
 #define _mm256_mask_i64gather_epi32(a, m, i, mask, s) \
   ((__m128i)__builtin_ia32_gatherq_d256((__v4si)(__m128i)(a), \
                                         (int const *)(m), \
                                         (__v4di)(__m256i)(i), \
                                         (__v4si)(__m128i)(mask), (s)))
+#endif
 
 /// Conditionally gathers two 64-bit integer values, either from the
 ///    128-bit vector of [2 x i64] in \a a, or from memory \a m using scaled
@@ -4519,11 +4794,22 @@ _mm_srlv_epi64(__m128i __X, __m128i __Y)
 ///    A literal constant scale factor for the indexes in \a i. Must be
 ///    1, 2, 4, or 8.
 /// \returns A 128-bit vector of [2 x i64] containing the gathered values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_s>
+static __inline__ __m128i __DEFAULT_FN_ATTRS128 __ms__mm_mask_i32gather_epi64(__m128i __p_a, long long const * __p_m, __m128i __p_i, __m128i __p_mask) {
+  return ((__m128i)__builtin_ia32_gatherd_q((__v2di)(__m128i)(__p_a), (long long const *)(__p_m), (__v4si)(__m128i)(__p_i), (__v2di)(__m128i)(__p_mask), (__I_s)));
+}
+}
+#define _mm_mask_i32gather_epi64(a, m, i, mask, s) (__ms__mm_mask_i32gather_epi64<(s)>((a), (m), (i), (mask)))
+#else
 #define _mm_mask_i32gather_epi64(a, m, i, mask, s) \
   ((__m128i)__builtin_ia32_gatherd_q((__v2di)(__m128i)(a), \
                                      (long long const *)(m), \
                                      (__v4si)(__m128i)(i), \
                                      (__v2di)(__m128i)(mask), (s)))
+#endif
 
 /// Conditionally gathers four 64-bit integer values, either from the
 ///    256-bit vector of [4 x i64] in \a a, or from memory \a m using scaled
@@ -4567,11 +4853,22 @@ _mm_srlv_epi64(__m128i __X, __m128i __Y)
 ///    A literal constant scale factor for the indexes in \a i. Must be
 ///    1, 2, 4, or 8.
 /// \returns A 256-bit vector of [4 x i64] containing the gathered values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_s>
+static __inline__ __m256i __DEFAULT_FN_ATTRS256 __ms__mm256_mask_i32gather_epi64(__m256i __p_a, long long const * __p_m, __m128i __p_i, __m256i __p_mask) {
+  return ((__m256i)__builtin_ia32_gatherd_q256((__v4di)(__m256i)(__p_a), (long long const *)(__p_m), (__v4si)(__m128i)(__p_i), (__v4di)(__m256i)(__p_mask), (__I_s)));
+}
+}
+#define _mm256_mask_i32gather_epi64(a, m, i, mask, s) (__ms__mm256_mask_i32gather_epi64<(s)>((a), (m), (i), (mask)))
+#else
 #define _mm256_mask_i32gather_epi64(a, m, i, mask, s) \
   ((__m256i)__builtin_ia32_gatherd_q256((__v4di)(__m256i)(a), \
                                         (long long const *)(m), \
                                         (__v4si)(__m128i)(i), \
                                         (__v4di)(__m256i)(mask), (s)))
+#endif
 
 /// Conditionally gathers two 64-bit integer values, either from the
 ///    128-bit vector of [2 x i64] in \a a, or from memory \a m using scaled
@@ -4615,11 +4912,22 @@ _mm_srlv_epi64(__m128i __X, __m128i __Y)
 ///    A literal constant scale factor for the indexes in \a i. Must be
 ///    1, 2, 4, or 8.
 /// \returns A 128-bit vector of [2 x i64] containing the gathered values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_s>
+static __inline__ __m128i __DEFAULT_FN_ATTRS128 __ms__mm_mask_i64gather_epi64(__m128i __p_a, long long const * __p_m, __m128i __p_i, __m128i __p_mask) {
+  return ((__m128i)__builtin_ia32_gatherq_q((__v2di)(__m128i)(__p_a), (long long const *)(__p_m), (__v2di)(__m128i)(__p_i), (__v2di)(__m128i)(__p_mask), (__I_s)));
+}
+}
+#define _mm_mask_i64gather_epi64(a, m, i, mask, s) (__ms__mm_mask_i64gather_epi64<(s)>((a), (m), (i), (mask)))
+#else
 #define _mm_mask_i64gather_epi64(a, m, i, mask, s) \
   ((__m128i)__builtin_ia32_gatherq_q((__v2di)(__m128i)(a), \
                                      (long long const *)(m), \
                                      (__v2di)(__m128i)(i), \
                                      (__v2di)(__m128i)(mask), (s)))
+#endif
 
 /// Conditionally gathers four 64-bit integer values, either from the
 ///    256-bit vector of [4 x i64] in \a a, or from memory \a m using scaled
@@ -4663,11 +4971,22 @@ _mm_srlv_epi64(__m128i __X, __m128i __Y)
 ///    A literal constant scale factor for the indexes in \a i. Must be
 ///    1, 2, 4, or 8.
 /// \returns A 256-bit vector of [4 x i64] containing the gathered values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_s>
+static __inline__ __m256i __DEFAULT_FN_ATTRS256 __ms__mm256_mask_i64gather_epi64(__m256i __p_a, long long const * __p_m, __m256i __p_i, __m256i __p_mask) {
+  return ((__m256i)__builtin_ia32_gatherq_q256((__v4di)(__m256i)(__p_a), (long long const *)(__p_m), (__v4di)(__m256i)(__p_i), (__v4di)(__m256i)(__p_mask), (__I_s)));
+}
+}
+#define _mm256_mask_i64gather_epi64(a, m, i, mask, s) (__ms__mm256_mask_i64gather_epi64<(s)>((a), (m), (i), (mask)))
+#else
 #define _mm256_mask_i64gather_epi64(a, m, i, mask, s) \
   ((__m256i)__builtin_ia32_gatherq_q256((__v4di)(__m256i)(a), \
                                         (long long const *)(m), \
                                         (__v4di)(__m256i)(i), \
                                         (__v4di)(__m256i)(mask), (s)))
+#endif
 
 /// Gathers two 64-bit floating-point values from memory \a m using scaled
 ///    indexes from the 128-bit vector of [4 x i32] in \a i.
@@ -4697,6 +5016,16 @@ _mm_srlv_epi64(__m128i __X, __m128i __Y)
 ///    A literal constant scale factor for the indexes in \a i. Must be
 ///    1, 2, 4, or 8.
 /// \returns A 128-bit vector of [2 x double] containing the gathered values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_s>
+static __inline__ __m128d __DEFAULT_FN_ATTRS128 __ms__mm_i32gather_pd(double const * __p_m, __m128i __p_i) {
+  return ((__m128d)__builtin_ia32_gatherd_pd((__v2df)_mm_undefined_pd(), (double const *)(__p_m), (__v4si)(__m128i)(__p_i), (__v2df)_mm_cmpeq_pd(_mm_setzero_pd(), _mm_setzero_pd()), (__I_s)));
+}
+}
+#define _mm_i32gather_pd(m, i, s) (__ms__mm_i32gather_pd<(s)>((m), (i)))
+#else
 #define _mm_i32gather_pd(m, i, s) \
   ((__m128d)__builtin_ia32_gatherd_pd((__v2df)_mm_undefined_pd(), \
                                       (double const *)(m), \
@@ -4704,6 +5033,7 @@ _mm_srlv_epi64(__m128i __X, __m128i __Y)
                                       (__v2df)_mm_cmpeq_pd(_mm_setzero_pd(), \
                                                            _mm_setzero_pd()), \
                                       (s)))
+#endif
 
 /// Gathers four 64-bit floating-point values from memory \a m using scaled
 ///    indexes from the 128-bit vector of [4 x i32] in \a i.
@@ -4732,6 +5062,16 @@ _mm_srlv_epi64(__m128i __X, __m128i __Y)
 ///    A literal constant scale factor for the indexes in \a i. Must be
 ///    1, 2, 4, or 8.
 /// \returns A 256-bit vector of [4 x double] containing the gathered values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_s>
+static __inline__ __m256d __DEFAULT_FN_ATTRS256 __ms__mm256_i32gather_pd(double const * __p_m, __m128i __p_i) {
+  return ((__m256d)__builtin_ia32_gatherd_pd256((__v4df)_mm256_undefined_pd(), (double const *)(__p_m), (__v4si)(__m128i)(__p_i), (__v4df)_mm256_cmp_pd(_mm256_setzero_pd(), _mm256_setzero_pd(), _CMP_EQ_OQ), (__I_s)));
+}
+}
+#define _mm256_i32gather_pd(m, i, s) (__ms__mm256_i32gather_pd<(s)>((m), (i)))
+#else
 #define _mm256_i32gather_pd(m, i, s) \
   ((__m256d)__builtin_ia32_gatherd_pd256((__v4df)_mm256_undefined_pd(), \
                                          (double const *)(m), \
@@ -4740,6 +5080,7 @@ _mm_srlv_epi64(__m128i __X, __m128i __Y)
                                                                _mm256_setzero_pd(), \
                                                                _CMP_EQ_OQ), \
                                          (s)))
+#endif
 
 /// Gathers two 64-bit floating-point values from memory \a m using scaled
 ///    indexes from the 128-bit vector of [2 x i64] in \a i.
@@ -4768,6 +5109,16 @@ _mm_srlv_epi64(__m128i __X, __m128i __Y)
 ///    A literal constant scale factor for the indexes in \a i. Must be
 ///    1, 2, 4, or 8.
 /// \returns A 128-bit vector of [2 x double] containing the gathered values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_s>
+static __inline__ __m128d __DEFAULT_FN_ATTRS128 __ms__mm_i64gather_pd(double const * __p_m, __m128i __p_i) {
+  return ((__m128d)__builtin_ia32_gatherq_pd((__v2df)_mm_undefined_pd(), (double const *)(__p_m), (__v2di)(__m128i)(__p_i), (__v2df)_mm_cmpeq_pd(_mm_setzero_pd(), _mm_setzero_pd()), (__I_s)));
+}
+}
+#define _mm_i64gather_pd(m, i, s) (__ms__mm_i64gather_pd<(s)>((m), (i)))
+#else
 #define _mm_i64gather_pd(m, i, s) \
   ((__m128d)__builtin_ia32_gatherq_pd((__v2df)_mm_undefined_pd(), \
                                       (double const *)(m), \
@@ -4775,6 +5126,7 @@ _mm_srlv_epi64(__m128i __X, __m128i __Y)
                                       (__v2df)_mm_cmpeq_pd(_mm_setzero_pd(), \
                                                            _mm_setzero_pd()), \
                                       (s)))
+#endif
 
 /// Gathers four 64-bit floating-point values from memory \a m using scaled
 ///    indexes from the 256-bit vector of [4 x i64] in \a i.
@@ -4803,6 +5155,16 @@ _mm_srlv_epi64(__m128i __X, __m128i __Y)
 ///    A literal constant scale factor for the indexes in \a i. Must be
 ///    1, 2, 4, or 8.
 /// \returns A 256-bit vector of [4 x double] containing the gathered values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_s>
+static __inline__ __m256d __DEFAULT_FN_ATTRS256 __ms__mm256_i64gather_pd(double const * __p_m, __m256i __p_i) {
+  return ((__m256d)__builtin_ia32_gatherq_pd256((__v4df)_mm256_undefined_pd(), (double const *)(__p_m), (__v4di)(__m256i)(__p_i), (__v4df)_mm256_cmp_pd(_mm256_setzero_pd(), _mm256_setzero_pd(), _CMP_EQ_OQ), (__I_s)));
+}
+}
+#define _mm256_i64gather_pd(m, i, s) (__ms__mm256_i64gather_pd<(s)>((m), (i)))
+#else
 #define _mm256_i64gather_pd(m, i, s) \
   ((__m256d)__builtin_ia32_gatherq_pd256((__v4df)_mm256_undefined_pd(), \
                                          (double const *)(m), \
@@ -4811,6 +5173,7 @@ _mm_srlv_epi64(__m128i __X, __m128i __Y)
                                                                _mm256_setzero_pd(), \
                                                                _CMP_EQ_OQ), \
                                          (s)))
+#endif
 
 /// Gathers four 32-bit floating-point values from memory \a m using scaled
 ///    indexes from the 128-bit vector of [4 x i32] in \a i.
@@ -4839,6 +5202,16 @@ _mm_srlv_epi64(__m128i __X, __m128i __Y)
 ///    A literal constant scale factor for the indexes in \a i. Must be
 ///    1, 2, 4, or 8.
 /// \returns A 128-bit vector of [4 x float] containing the gathered values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_s>
+static __inline__ __m128 __DEFAULT_FN_ATTRS128 __ms__mm_i32gather_ps(float const * __p_m, __m128i __p_i) {
+  return ((__m128)__builtin_ia32_gatherd_ps((__v4sf)_mm_undefined_ps(), (float const *)(__p_m), (__v4si)(__m128i)(__p_i), (__v4sf)_mm_cmpeq_ps(_mm_setzero_ps(), _mm_setzero_ps()), (__I_s)));
+}
+}
+#define _mm_i32gather_ps(m, i, s) (__ms__mm_i32gather_ps<(s)>((m), (i)))
+#else
 #define _mm_i32gather_ps(m, i, s) \
   ((__m128)__builtin_ia32_gatherd_ps((__v4sf)_mm_undefined_ps(), \
                                      (float const *)(m), \
@@ -4846,6 +5219,7 @@ _mm_srlv_epi64(__m128i __X, __m128i __Y)
                                      (__v4sf)_mm_cmpeq_ps(_mm_setzero_ps(), \
                                                           _mm_setzero_ps()), \
                                      (s)))
+#endif
 
 /// Gathers eight 32-bit floating-point values from memory \a m using scaled
 ///    indexes from the 256-bit vector of [8 x i32] in \a i.
@@ -4874,6 +5248,16 @@ _mm_srlv_epi64(__m128i __X, __m128i __Y)
 ///    A literal constant scale factor for the indexes in \a i. Must be
 ///    1, 2, 4, or 8.
 /// \returns A 256-bit vector of [8 x float] containing the gathered values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_s>
+static __inline__ __m256 __DEFAULT_FN_ATTRS256 __ms__mm256_i32gather_ps(float const * __p_m, __m256i __p_i) {
+  return ((__m256)__builtin_ia32_gatherd_ps256((__v8sf)_mm256_undefined_ps(), (float const *)(__p_m), (__v8si)(__m256i)(__p_i), (__v8sf)_mm256_cmp_ps(_mm256_setzero_ps(), _mm256_setzero_ps(), _CMP_EQ_OQ), (__I_s)));
+}
+}
+#define _mm256_i32gather_ps(m, i, s) (__ms__mm256_i32gather_ps<(s)>((m), (i)))
+#else
 #define _mm256_i32gather_ps(m, i, s) \
   ((__m256)__builtin_ia32_gatherd_ps256((__v8sf)_mm256_undefined_ps(), \
                                         (float const *)(m), \
@@ -4882,6 +5266,7 @@ _mm_srlv_epi64(__m128i __X, __m128i __Y)
                                                               _mm256_setzero_ps(), \
                                                               _CMP_EQ_OQ), \
                                         (s)))
+#endif
 
 /// Gathers two 32-bit floating-point values from memory \a m using scaled
 ///    indexes from the 128-bit vector of [2 x i64] in \a i. The upper two
@@ -4912,6 +5297,16 @@ _mm_srlv_epi64(__m128i __X, __m128i __Y)
 ///    A literal constant scale factor for the indexes in \a i. Must be
 ///    1, 2, 4, or 8.
 /// \returns A 128-bit vector of [4 x float] containing the gathered values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_s>
+static __inline__ __m128 __DEFAULT_FN_ATTRS128 __ms__mm_i64gather_ps(float const * __p_m, __m128i __p_i) {
+  return ((__m128)__builtin_ia32_gatherq_ps((__v4sf)_mm_undefined_ps(), (float const *)(__p_m), (__v2di)(__m128i)(__p_i), (__v4sf)_mm_cmpeq_ps(_mm_setzero_ps(), _mm_setzero_ps()), (__I_s)));
+}
+}
+#define _mm_i64gather_ps(m, i, s) (__ms__mm_i64gather_ps<(s)>((m), (i)))
+#else
 #define _mm_i64gather_ps(m, i, s) \
   ((__m128)__builtin_ia32_gatherq_ps((__v4sf)_mm_undefined_ps(), \
                                      (float const *)(m), \
@@ -4919,6 +5314,7 @@ _mm_srlv_epi64(__m128i __X, __m128i __Y)
                                      (__v4sf)_mm_cmpeq_ps(_mm_setzero_ps(), \
                                                           _mm_setzero_ps()), \
                                      (s)))
+#endif
 
 /// Gathers four 32-bit floating-point values from memory \a m using scaled
 ///    indexes from the 256-bit vector of [4 x i64] in \a i.
@@ -4947,6 +5343,16 @@ _mm_srlv_epi64(__m128i __X, __m128i __Y)
 ///    A literal constant scale factor for the indexes in \a i. Must be
 ///    1, 2, 4, or 8.
 /// \returns A 128-bit vector of [4 x float] containing the gathered values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_s>
+static __inline__ __m128 __DEFAULT_FN_ATTRS256 __ms__mm256_i64gather_ps(float const * __p_m, __m256i __p_i) {
+  return ((__m128)__builtin_ia32_gatherq_ps256((__v4sf)_mm_undefined_ps(), (float const *)(__p_m), (__v4di)(__m256i)(__p_i), (__v4sf)_mm_cmpeq_ps(_mm_setzero_ps(), _mm_setzero_ps()), (__I_s)));
+}
+}
+#define _mm256_i64gather_ps(m, i, s) (__ms__mm256_i64gather_ps<(s)>((m), (i)))
+#else
 #define _mm256_i64gather_ps(m, i, s) \
   ((__m128)__builtin_ia32_gatherq_ps256((__v4sf)_mm_undefined_ps(), \
                                         (float const *)(m), \
@@ -4954,6 +5360,7 @@ _mm_srlv_epi64(__m128i __X, __m128i __Y)
                                         (__v4sf)_mm_cmpeq_ps(_mm_setzero_ps(), \
                                                              _mm_setzero_ps()), \
                                         (s)))
+#endif
 
 /// Gathers four 32-bit floating-point values from memory \a m using scaled
 ///    indexes from the 128-bit vector of [4 x i32] in \a i.
@@ -4982,10 +5389,21 @@ _mm_srlv_epi64(__m128i __X, __m128i __Y)
 ///    A literal constant scale factor for the indexes in \a i. Must be
 ///    1, 2, 4, or 8.
 /// \returns A 128-bit vector of [4 x i32] containing the gathered values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_s>
+static __inline__ __m128i __DEFAULT_FN_ATTRS128 __ms__mm_i32gather_epi32(int const * __p_m, __m128i __p_i) {
+  return ((__m128i)__builtin_ia32_gatherd_d((__v4si)_mm_undefined_si128(), (int const *)(__p_m), (__v4si)(__m128i)(__p_i), (__v4si)_mm_set1_epi32(-1), (__I_s)));
+}
+}
+#define _mm_i32gather_epi32(m, i, s) (__ms__mm_i32gather_epi32<(s)>((m), (i)))
+#else
 #define _mm_i32gather_epi32(m, i, s) \
   ((__m128i)__builtin_ia32_gatherd_d((__v4si)_mm_undefined_si128(), \
                                      (int const *)(m), (__v4si)(__m128i)(i), \
                                      (__v4si)_mm_set1_epi32(-1), (s)))
+#endif
 
 /// Gathers eight 32-bit floating-point values from memory \a m using scaled
 ///    indexes from the 256-bit vector of [8 x i32] in \a i.
@@ -5014,10 +5432,21 @@ _mm_srlv_epi64(__m128i __X, __m128i __Y)
 ///    A literal constant scale factor for the indexes in \a i. Must be
 ///    1, 2, 4, or 8.
 /// \returns A 256-bit vector of [8 x i32] containing the gathered values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_s>
+static __inline__ __m256i __DEFAULT_FN_ATTRS256 __ms__mm256_i32gather_epi32(int const * __p_m, __m256i __p_i) {
+  return ((__m256i)__builtin_ia32_gatherd_d256((__v8si)_mm256_undefined_si256(), (int const *)(__p_m), (__v8si)(__m256i)(__p_i), (__v8si)_mm256_set1_epi32(-1), (__I_s)));
+}
+}
+#define _mm256_i32gather_epi32(m, i, s) (__ms__mm256_i32gather_epi32<(s)>((m), (i)))
+#else
 #define _mm256_i32gather_epi32(m, i, s) \
   ((__m256i)__builtin_ia32_gatherd_d256((__v8si)_mm256_undefined_si256(), \
                                         (int const *)(m), (__v8si)(__m256i)(i), \
                                         (__v8si)_mm256_set1_epi32(-1), (s)))
+#endif
 
 /// Gathers two 32-bit integer values from memory \a m using scaled indexes
 ///    from the 128-bit vector of [2 x i64] in \a i. The upper two elements
@@ -5048,10 +5477,21 @@ _mm_srlv_epi64(__m128i __X, __m128i __Y)
 ///    A literal constant scale factor for the indexes in \a i. Must be
 ///    1, 2, 4, or 8.
 /// \returns A 128-bit vector of [4 x i32] containing the gathered values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_s>
+static __inline__ __m128i __DEFAULT_FN_ATTRS128 __ms__mm_i64gather_epi32(int const * __p_m, __m128i __p_i) {
+  return ((__m128i)__builtin_ia32_gatherq_d((__v4si)_mm_undefined_si128(), (int const *)(__p_m), (__v2di)(__m128i)(__p_i), (__v4si)_mm_set1_epi32(-1), (__I_s)));
+}
+}
+#define _mm_i64gather_epi32(m, i, s) (__ms__mm_i64gather_epi32<(s)>((m), (i)))
+#else
 #define _mm_i64gather_epi32(m, i, s) \
   ((__m128i)__builtin_ia32_gatherq_d((__v4si)_mm_undefined_si128(), \
                                      (int const *)(m), (__v2di)(__m128i)(i), \
                                      (__v4si)_mm_set1_epi32(-1), (s)))
+#endif
 
 /// Gathers four 32-bit integer values from memory \a m using scaled indexes
 ///    from the 256-bit vector of [4 x i64] in \a i.
@@ -5080,10 +5520,21 @@ _mm_srlv_epi64(__m128i __X, __m128i __Y)
 ///    A literal constant scale factor for the indexes in \a i. Must be
 ///    1, 2, 4, or 8.
 /// \returns A 128-bit vector of [4 x i32] containing the gathered values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_s>
+static __inline__ __m128i __DEFAULT_FN_ATTRS256 __ms__mm256_i64gather_epi32(int const * __p_m, __m256i __p_i) {
+  return ((__m128i)__builtin_ia32_gatherq_d256((__v4si)_mm_undefined_si128(), (int const *)(__p_m), (__v4di)(__m256i)(__p_i), (__v4si)_mm_set1_epi32(-1), (__I_s)));
+}
+}
+#define _mm256_i64gather_epi32(m, i, s) (__ms__mm256_i64gather_epi32<(s)>((m), (i)))
+#else
 #define _mm256_i64gather_epi32(m, i, s) \
   ((__m128i)__builtin_ia32_gatherq_d256((__v4si)_mm_undefined_si128(), \
                                         (int const *)(m), (__v4di)(__m256i)(i), \
                                         (__v4si)_mm_set1_epi32(-1), (s)))
+#endif
 
 /// Gathers two 64-bit integer values from memory \a m using scaled indexes
 ///    from the 128-bit vector of [4 x i32] in \a i.
@@ -5113,11 +5564,22 @@ _mm_srlv_epi64(__m128i __X, __m128i __Y)
 ///    A literal constant scale factor for the indexes in \a i. Must be
 ///    1, 2, 4, or 8.
 /// \returns A 128-bit vector of [2 x i64] containing the gathered values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_s>
+static __inline__ __m128i __DEFAULT_FN_ATTRS128 __ms__mm_i32gather_epi64(long long const * __p_m, __m128i __p_i) {
+  return ((__m128i)__builtin_ia32_gatherd_q((__v2di)_mm_undefined_si128(), (long long const *)(__p_m), (__v4si)(__m128i)(__p_i), (__v2di)_mm_set1_epi64x(-1), (__I_s)));
+}
+}
+#define _mm_i32gather_epi64(m, i, s) (__ms__mm_i32gather_epi64<(s)>((m), (i)))
+#else
 #define _mm_i32gather_epi64(m, i, s) \
   ((__m128i)__builtin_ia32_gatherd_q((__v2di)_mm_undefined_si128(), \
                                      (long long const *)(m), \
                                      (__v4si)(__m128i)(i), \
                                      (__v2di)_mm_set1_epi64x(-1), (s)))
+#endif
 
 /// Gathers four 64-bit integer values from memory \a m using scaled indexes
 ///    from the 128-bit vector of [4 x i32] in \a i.
@@ -5146,11 +5608,22 @@ _mm_srlv_epi64(__m128i __X, __m128i __Y)
 ///    A literal constant scale factor for the indexes in \a i. Must be
 ///    1, 2, 4, or 8.
 /// \returns A 256-bit vector of [4 x i64] containing the gathered values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_s>
+static __inline__ __m256i __DEFAULT_FN_ATTRS256 __ms__mm256_i32gather_epi64(long long const * __p_m, __m128i __p_i) {
+  return ((__m256i)__builtin_ia32_gatherd_q256((__v4di)_mm256_undefined_si256(), (long long const *)(__p_m), (__v4si)(__m128i)(__p_i), (__v4di)_mm256_set1_epi64x(-1), (__I_s)));
+}
+}
+#define _mm256_i32gather_epi64(m, i, s) (__ms__mm256_i32gather_epi64<(s)>((m), (i)))
+#else
 #define _mm256_i32gather_epi64(m, i, s) \
   ((__m256i)__builtin_ia32_gatherd_q256((__v4di)_mm256_undefined_si256(), \
                                         (long long const *)(m), \
                                         (__v4si)(__m128i)(i), \
                                         (__v4di)_mm256_set1_epi64x(-1), (s)))
+#endif
 
 /// Gathers two 64-bit integer values from memory \a m using scaled indexes
 ///    from the 128-bit vector of [2 x i64] in \a i.
@@ -5179,11 +5652,22 @@ _mm_srlv_epi64(__m128i __X, __m128i __Y)
 ///    A literal constant scale factor for the indexes in \a i. Must be
 ///    1, 2, 4, or 8.
 /// \returns A 128-bit vector of [2 x i64] containing the gathered values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_s>
+static __inline__ __m128i __DEFAULT_FN_ATTRS128 __ms__mm_i64gather_epi64(long long const * __p_m, __m128i __p_i) {
+  return ((__m128i)__builtin_ia32_gatherq_q((__v2di)_mm_undefined_si128(), (long long const *)(__p_m), (__v2di)(__m128i)(__p_i), (__v2di)_mm_set1_epi64x(-1), (__I_s)));
+}
+}
+#define _mm_i64gather_epi64(m, i, s) (__ms__mm_i64gather_epi64<(s)>((m), (i)))
+#else
 #define _mm_i64gather_epi64(m, i, s) \
   ((__m128i)__builtin_ia32_gatherq_q((__v2di)_mm_undefined_si128(), \
                                      (long long const *)(m), \
                                      (__v2di)(__m128i)(i), \
                                      (__v2di)_mm_set1_epi64x(-1), (s)))
+#endif
 
 /// Gathers four 64-bit integer values from memory \a m using scaled indexes
 ///    from the 256-bit vector of [4 x i64] in \a i.
@@ -5212,11 +5696,22 @@ _mm_srlv_epi64(__m128i __X, __m128i __Y)
 ///    A literal constant scale factor for the indexes in \a i. Must be
 ///    1, 2, 4, or 8.
 /// \returns A 256-bit vector of [4 x i64] containing the gathered values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_s>
+static __inline__ __m256i __DEFAULT_FN_ATTRS256 __ms__mm256_i64gather_epi64(long long const * __p_m, __m256i __p_i) {
+  return ((__m256i)__builtin_ia32_gatherq_q256((__v4di)_mm256_undefined_si256(), (long long const *)(__p_m), (__v4di)(__m256i)(__p_i), (__v4di)_mm256_set1_epi64x(-1), (__I_s)));
+}
+}
+#define _mm256_i64gather_epi64(m, i, s) (__ms__mm256_i64gather_epi64<(s)>((m), (i)))
+#else
 #define _mm256_i64gather_epi64(m, i, s) \
   ((__m256i)__builtin_ia32_gatherq_q256((__v4di)_mm256_undefined_si256(), \
                                         (long long const *)(m), \
                                         (__v4di)(__m256i)(i), \
                                         (__v4di)_mm256_set1_epi64x(-1), (s)))
+#endif
 
 #undef __DEFAULT_FN_ATTRS256
 #undef __DEFAULT_FN_ATTRS128

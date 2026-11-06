@@ -152,9 +152,20 @@ _mm_abs_epi32(__m128i __a) {
 ///    An immediate operand specifying how many bytes to right-shift the result.
 /// \returns A 128-bit integer vector containing the concatenated right-shifted
 ///    value.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_n>
+static __inline__ __m128i __DEFAULT_FN_ATTRS __ms__mm_alignr_epi8(__m128i __p_a, __m128i __p_b) {
+  return ((__m128i)__builtin_ia32_palignr128((__v16qi)(__m128i)(__p_a), (__v16qi)(__m128i)(__p_b), (__I_n)));
+}
+}
+#define _mm_alignr_epi8(a, b, n) (__ms__mm_alignr_epi8<(n)>((a), (b)))
+#else
 #define _mm_alignr_epi8(a, b, n) \
   ((__m128i)__builtin_ia32_palignr128((__v16qi)(__m128i)(a), \
                                       (__v16qi)(__m128i)(b), (n)))
+#endif
 
 /// Concatenates the two 64-bit integer vector operands, and right-shifts
 ///    the result by the number of bytes specified in the immediate operand.

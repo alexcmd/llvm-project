@@ -242,8 +242,19 @@
 ///      10: Upward (toward positive infinity) \n
 ///      11: Truncated
 /// \returns A 128-bit vector of [4 x float] containing the rounded values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_M>
+static __inline__ __m128 __DEFAULT_FN_ATTRS __ms__mm_round_ps(__m128 __p_X) {
+  return ((__m128)__builtin_ia32_roundps((__v4sf)(__m128)(__p_X), (__I_M)));
+}
+}
+#define _mm_round_ps(X, M) (__ms__mm_round_ps<(M)>((X)))
+#else
 #define _mm_round_ps(X, M)                                                     \
   ((__m128)__builtin_ia32_roundps((__v4sf)(__m128)(X), (M)))
+#endif
 
 /// Copies three upper elements of the first 128-bit vector operand to
 ///    the corresponding three upper elements of the 128-bit result vector of
@@ -283,9 +294,20 @@
 ///      11: Truncated
 /// \returns A 128-bit vector of [4 x float] containing the copied and rounded
 ///    values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_M>
+static __inline__ __m128 __DEFAULT_FN_ATTRS __ms__mm_round_ss(__m128 __p_X, __m128 __p_Y) {
+  return ((__m128)__builtin_ia32_roundss((__v4sf)(__m128)(__p_X), (__v4sf)(__m128)(__p_Y), (__I_M)));
+}
+}
+#define _mm_round_ss(X, Y, M) (__ms__mm_round_ss<(M)>((X), (Y)))
+#else
 #define _mm_round_ss(X, Y, M)                                                  \
   ((__m128)__builtin_ia32_roundss((__v4sf)(__m128)(X), (__v4sf)(__m128)(Y),    \
                                   (M)))
+#endif
 
 /// Rounds each element of the 128-bit vector of [2 x double] to an
 ///    integer value according to the rounding control specified by the second
@@ -317,8 +339,19 @@
 ///      10: Upward (toward positive infinity) \n
 ///      11: Truncated
 /// \returns A 128-bit vector of [2 x double] containing the rounded values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_M>
+static __inline__ __m128d __DEFAULT_FN_ATTRS __ms__mm_round_pd(__m128d __p_X) {
+  return ((__m128d)__builtin_ia32_roundpd((__v2df)(__m128d)(__p_X), (__I_M)));
+}
+}
+#define _mm_round_pd(X, M) (__ms__mm_round_pd<(M)>((X)))
+#else
 #define _mm_round_pd(X, M)                                                     \
   ((__m128d)__builtin_ia32_roundpd((__v2df)(__m128d)(X), (M)))
+#endif
 
 /// Copies the upper element of the first 128-bit vector operand to the
 ///    corresponding upper element of the 128-bit result vector of [2 x double].
@@ -358,9 +391,20 @@
 ///      11: Truncated
 /// \returns A 128-bit vector of [2 x double] containing the copied and rounded
 ///    values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_M>
+static __inline__ __m128d __DEFAULT_FN_ATTRS __ms__mm_round_sd(__m128d __p_X, __m128d __p_Y) {
+  return ((__m128d)__builtin_ia32_roundsd((__v2df)(__m128d)(__p_X), (__v2df)(__m128d)(__p_Y), (__I_M)));
+}
+}
+#define _mm_round_sd(X, Y, M) (__ms__mm_round_sd<(M)>((X), (Y)))
+#else
 #define _mm_round_sd(X, Y, M)                                                  \
   ((__m128d)__builtin_ia32_roundsd((__v2df)(__m128d)(X), (__v2df)(__m128d)(Y), \
                                    (M)))
+#endif
 
 /* SSE4 Packed Blending Intrinsics.  */
 /// Returns a 128-bit vector of [2 x double] where the values are
@@ -387,9 +431,20 @@
 ///    When a mask bit is 1, the corresponding 64-bit element in operand \a V2
 ///    is copied to the same position in the result.
 /// \returns A 128-bit vector of [2 x double] containing the copied values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_M>
+static __inline__ __m128d __DEFAULT_FN_ATTRS __ms__mm_blend_pd(__m128d __p_V1, __m128d __p_V2) {
+  return ((__m128d)__builtin_ia32_blendpd((__v2df)(__m128d)(__p_V1), (__v2df)(__m128d)(__p_V2), (int)(__I_M)));
+}
+}
+#define _mm_blend_pd(V1, V2, M) (__ms__mm_blend_pd<(M)>((V1), (V2)))
+#else
 #define _mm_blend_pd(V1, V2, M)                                                \
   ((__m128d)__builtin_ia32_blendpd((__v2df)(__m128d)(V1),                      \
                                    (__v2df)(__m128d)(V2), (int)(M)))
+#endif
 
 /// Returns a 128-bit vector of [4 x float] where the values are selected
 ///    from either the first or second operand as specified by the third
@@ -415,9 +470,20 @@
 ///    When a mask bit is 1, the corresponding 32-bit element in operand \a V2
 ///    is copied to the same position in the result.
 /// \returns A 128-bit vector of [4 x float] containing the copied values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_M>
+static __inline__ __m128 __DEFAULT_FN_ATTRS __ms__mm_blend_ps(__m128 __p_V1, __m128 __p_V2) {
+  return ((__m128)__builtin_ia32_blendps((__v4sf)(__m128)(__p_V1), (__v4sf)(__m128)(__p_V2), (int)(__I_M)));
+}
+}
+#define _mm_blend_ps(V1, V2, M) (__ms__mm_blend_ps<(M)>((V1), (V2)))
+#else
 #define _mm_blend_ps(V1, V2, M)                                                \
   ((__m128)__builtin_ia32_blendps((__v4sf)(__m128)(V1), (__v4sf)(__m128)(V2),  \
                                   (int)(M)))
+#endif
 
 /// Returns a 128-bit vector of [2 x double] where the values are
 ///    selected from either the first or second operand as specified by the
@@ -521,9 +587,20 @@ _mm_blendv_epi8(__m128i __V1, __m128i __V2, __m128i __M) {
 ///    When a mask bit is 1, the corresponding 16-bit element in operand \a V2
 ///    is copied to the same position in the result.
 /// \returns A 128-bit vector of [8 x i16] containing the copied values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_M>
+static __inline__ __m128i __DEFAULT_FN_ATTRS __ms__mm_blend_epi16(__m128i __p_V1, __m128i __p_V2) {
+  return ((__m128i)__builtin_ia32_pblendw128((__v8hi)(__m128i)(__p_V1), (__v8hi)(__m128i)(__p_V2), (int)(__I_M)));
+}
+}
+#define _mm_blend_epi16(V1, V2, M) (__ms__mm_blend_epi16<(M)>((V1), (V2)))
+#else
 #define _mm_blend_epi16(V1, V2, M)                                             \
   ((__m128i)__builtin_ia32_pblendw128((__v8hi)(__m128i)(V1),                   \
                                       (__v8hi)(__m128i)(V2), (int)(M)))
+#endif
 
 /* SSE4 Dword Multiply Instructions.  */
 /// Multiples corresponding elements of two 128-bit vectors of [4 x i32]
@@ -596,8 +673,19 @@ _mm_mul_epi32(__m128i __V1, __m128i __V2) {
 ///    each [4 x float] subvector. If a bit is set, the dot product is returned
 ///    in the corresponding element; otherwise that element is set to zero.
 /// \returns A 128-bit vector of [4 x float] containing the dot product.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_M>
+static __inline__ __m128 __DEFAULT_FN_ATTRS __ms__mm_dp_ps(__m128 __p_X, __m128 __p_Y) {
+  return ((__m128)__builtin_ia32_dpps((__v4sf)(__m128)(__p_X), (__v4sf)(__m128)(__p_Y), (__I_M)));
+}
+}
+#define _mm_dp_ps(X, Y, M) (__ms__mm_dp_ps<(M)>((X), (Y)))
+#else
 #define _mm_dp_ps(X, Y, M)                                                     \
   ((__m128)__builtin_ia32_dpps((__v4sf)(__m128)(X), (__v4sf)(__m128)(Y), (M)))
+#endif
 
 /// Computes the dot product of the two 128-bit vectors of [2 x double]
 ///    and returns it in the elements of the 128-bit result vector of
@@ -630,9 +718,20 @@ _mm_mul_epi32(__m128i __V1, __m128i __V2) {
 ///    to the lowest element and bit [1] corresponding to the highest element of
 ///    each [2 x double] vector. If a bit is set, the dot product is returned in
 ///    the corresponding element; otherwise that element is set to zero.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_M>
+static __inline__ __m128d __DEFAULT_FN_ATTRS __ms__mm_dp_pd(__m128d __p_X, __m128d __p_Y) {
+  return ((__m128d)__builtin_ia32_dppd((__v2df)(__m128d)(__p_X), (__v2df)(__m128d)(__p_Y), (__I_M)));
+}
+}
+#define _mm_dp_pd(X, Y, M) (__ms__mm_dp_pd<(M)>((X), (Y)))
+#else
 #define _mm_dp_pd(X, Y, M)                                                     \
   ((__m128d)__builtin_ia32_dppd((__v2df)(__m128d)(X), (__v2df)(__m128d)(Y),    \
                                 (M)))
+#endif
 
 /* SSE4 Streaming Load Hint Instruction.  */
 /// Loads integer values from a 128-bit aligned memory location to a
@@ -838,7 +937,18 @@ _mm_max_epu32(__m128i __V1, __m128i __V2) {
 ///    element is cleared.
 /// \returns A 128-bit vector of [4 x float] containing the copied
 ///    single-precision floating point elements from the operands.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_N>
+static __inline__ __m128 __DEFAULT_FN_ATTRS __ms__mm_insert_ps(__m128 __p_X, __m128 __p_Y) {
+  return __builtin_ia32_insertps128((__p_X), (__p_Y), (__I_N));
+}
+}
+#define _mm_insert_ps(X, Y, N) (__ms__mm_insert_ps<(N)>((X), (Y)))
+#else
 #define _mm_insert_ps(X, Y, N) __builtin_ia32_insertps128((X), (Y), (N))
+#endif
 
 /// Extracts a 32-bit integer from a 128-bit vector of [4 x float] and
 ///    returns it, using the immediate value parameter \a N as a selector.
@@ -862,9 +972,20 @@ _mm_max_epu32(__m128i __V1, __m128i __V2) {
 ///    10: Bits [95:64] of parameter \a X are returned. \n
 ///    11: Bits [127:96] of parameter \a X are returned.
 /// \returns A 32-bit integer containing the extracted 32 bits of float data.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_N>
+static __inline__ int __DEFAULT_FN_ATTRS __ms__mm_extract_ps(__m128 __p_X) {
+  return __builtin_bit_cast( int, __builtin_ia32_vec_ext_v4sf((__v4sf)(__m128)(__p_X), (int)(__I_N)));
+}
+}
+#define _mm_extract_ps(X, N) (__ms__mm_extract_ps<(N)>((X)))
+#else
 #define _mm_extract_ps(X, N)                                                   \
   __builtin_bit_cast(                                                          \
       int, __builtin_ia32_vec_ext_v4sf((__v4sf)(__m128)(X), (int)(N)))
+#endif
 
 /* Miscellaneous insert and extract macros.  */
 /* Extract a single-precision float from X at index N into D.  */
@@ -922,9 +1043,20 @@ _mm_max_epu32(__m128i __V1, __m128i __V2) {
 ///    1110: Bits [119:112] of the result are used for insertion. \n
 ///    1111: Bits [127:120] of the result are used for insertion.
 /// \returns A 128-bit integer vector containing the constructed values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_N>
+static __inline__ __m128i __DEFAULT_FN_ATTRS __ms__mm_insert_epi8(__m128i __p_X, int __p_I) {
+  return ((__m128i)__builtin_ia32_vec_set_v16qi((__v16qi)(__m128i)(__p_X), (int)(__p_I), (int)(__I_N)));
+}
+}
+#define _mm_insert_epi8(X, I, N) (__ms__mm_insert_epi8<(N)>((X), (I)))
+#else
 #define _mm_insert_epi8(X, I, N)                                               \
   ((__m128i)__builtin_ia32_vec_set_v16qi((__v16qi)(__m128i)(X), (int)(I),      \
                                          (int)(N)))
+#endif
 
 /// Constructs a 128-bit vector of [4 x i32] by first making a copy of
 ///    the 128-bit integer vector parameter, and then inserting the 32-bit
@@ -954,9 +1086,20 @@ _mm_max_epu32(__m128i __V1, __m128i __V2) {
 ///    10: Bits [95:64] of the result are used for insertion. \n
 ///    11: Bits [127:96] of the result are used for insertion.
 /// \returns A 128-bit integer vector containing the constructed values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_N>
+static __inline__ __m128i __DEFAULT_FN_ATTRS __ms__mm_insert_epi32(__m128i __p_X, int __p_I) {
+  return ((__m128i)__builtin_ia32_vec_set_v4si((__v4si)(__m128i)(__p_X), (int)(__p_I), (int)(__I_N)));
+}
+}
+#define _mm_insert_epi32(X, I, N) (__ms__mm_insert_epi32<(N)>((X), (I)))
+#else
 #define _mm_insert_epi32(X, I, N)                                              \
   ((__m128i)__builtin_ia32_vec_set_v4si((__v4si)(__m128i)(X), (int)(I),        \
                                         (int)(N)))
+#endif
 
 #ifdef __x86_64__
 /// Constructs a 128-bit vector of [2 x i64] by first making a copy of
@@ -985,9 +1128,20 @@ _mm_max_epu32(__m128i __V1, __m128i __V2) {
 ///    0: Bits [63:0] of the result are used for insertion. \n
 ///    1: Bits [127:64] of the result are used for insertion. \n
 /// \returns A 128-bit integer vector containing the constructed values.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_N>
+static __inline__ __m128i __DEFAULT_FN_ATTRS __ms__mm_insert_epi64(__m128i __p_X, long long __p_I) {
+  return ((__m128i)__builtin_ia32_vec_set_v2di((__v2di)(__m128i)(__p_X), (long long)(__p_I), (int)(__I_N)));
+}
+}
+#define _mm_insert_epi64(X, I, N) (__ms__mm_insert_epi64<(N)>((X), (I)))
+#else
 #define _mm_insert_epi64(X, I, N)                                              \
   ((__m128i)__builtin_ia32_vec_set_v2di((__v2di)(__m128i)(X), (long long)(I),  \
                                         (int)(N)))
+#endif
 #endif /* __x86_64__ */
 
 /* Extract int from packed integer array at index.  This returns the element
@@ -1028,9 +1182,20 @@ _mm_max_epu32(__m128i __V1, __m128i __V2) {
 /// \returns  An unsigned integer, whose lower 8 bits are selected from the
 ///    128-bit integer vector parameter and the remaining bits are assigned
 ///    zeros.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_N>
+static __inline__ int __DEFAULT_FN_ATTRS __ms__mm_extract_epi8(__m128i __p_X) {
+  return ((int)(unsigned char)__builtin_ia32_vec_ext_v16qi((__v16qi)(__m128i)(__p_X), (int)(__I_N)));
+}
+}
+#define _mm_extract_epi8(X, N) (__ms__mm_extract_epi8<(N)>((X)))
+#else
 #define _mm_extract_epi8(X, N)                                                 \
   ((int)(unsigned char)__builtin_ia32_vec_ext_v16qi((__v16qi)(__m128i)(X),     \
                                                     (int)(N)))
+#endif
 
 /// Extracts a 32-bit element from the 128-bit integer vector of
 ///    [4 x i32], using the immediate value parameter \a N as a selector.
@@ -1054,8 +1219,19 @@ _mm_max_epu32(__m128i __V1, __m128i __V2) {
 ///    11: Bits [127:96] of the parameter \a X are exracted.
 /// \returns  An integer, whose lower 32 bits are selected from the 128-bit
 ///    integer vector parameter and the remaining bits are assigned zeros.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_N>
+static __inline__ int __DEFAULT_FN_ATTRS __ms__mm_extract_epi32(__m128i __p_X) {
+  return ((int)__builtin_ia32_vec_ext_v4si((__v4si)(__m128i)(__p_X), (int)(__I_N)));
+}
+}
+#define _mm_extract_epi32(X, N) (__ms__mm_extract_epi32<(N)>((X)))
+#else
 #define _mm_extract_epi32(X, N)                                                \
   ((int)__builtin_ia32_vec_ext_v4si((__v4si)(__m128i)(X), (int)(N)))
+#endif
 
 /// Extracts a 64-bit element from the 128-bit integer vector of
 ///    [2 x i64], using the immediate value parameter \a N as a selector.
@@ -1077,8 +1253,19 @@ _mm_max_epu32(__m128i __V1, __m128i __V2) {
 ///    0: Bits [63:0] are returned. \n
 ///    1: Bits [127:64] are returned. \n
 /// \returns  A 64-bit integer.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_N>
+static __inline__ long long __DEFAULT_FN_ATTRS __ms__mm_extract_epi64(__m128i __p_X) {
+  return ((long long)__builtin_ia32_vec_ext_v2di((__v2di)(__m128i)(__p_X), (int)(__I_N)));
+}
+}
+#define _mm_extract_epi64(X, N) (__ms__mm_extract_epi64<(N)>((X)))
+#else
 #define _mm_extract_epi64(X, N)                                                \
   ((long long)__builtin_ia32_vec_ext_v2di((__v2di)(__m128i)(X), (int)(N)))
+#endif
 
 /* SSE4 128-bit Packed Integer Comparisons.  */
 /// Tests whether the specified bits in a 128-bit integer vector are all
@@ -1507,9 +1694,20 @@ _mm_packus_epi32(__m128i __V1, __m128i __V2) {
 ///    \endcode
 /// \returns A 128-bit integer vector containing the sums of the sets of
 ///    absolute differences between both operands.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_M>
+static __inline__ __m128i __DEFAULT_FN_ATTRS __ms__mm_mpsadbw_epu8(__m128i __p_X, __m128i __p_Y) {
+  return ((__m128i)__builtin_ia32_mpsadbw128((__v16qi)(__m128i)(__p_X), (__v16qi)(__m128i)(__p_Y), (__I_M)));
+}
+}
+#define _mm_mpsadbw_epu8(X, Y, M) (__ms__mm_mpsadbw_epu8<(M)>((X), (Y)))
+#else
 #define _mm_mpsadbw_epu8(X, Y, M)                                              \
   ((__m128i)__builtin_ia32_mpsadbw128((__v16qi)(__m128i)(X),                   \
                                       (__v16qi)(__m128i)(Y), (M)))
+#endif
 
 /// Finds the minimum unsigned 16-bit element in the input 128-bit
 ///    vector of [8 x u16] and returns it and along with its index.
@@ -1624,9 +1822,20 @@ _mm_minpos_epu16(__m128i __V) {
 ///         repeating each bit 8 or 16 times).
 /// \returns Returns a 128-bit integer vector representing the result mask of
 ///    the comparison.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_M>
+static __inline__ __m128i __DEFAULT_FN_ATTRS __ms__mm_cmpistrm(__m128i __p_A, __m128i __p_B) {
+  return ((__m128i)__builtin_ia32_pcmpistrm128((__v16qi)(__m128i)(__p_A), (__v16qi)(__m128i)(__p_B), (int)(__I_M)));
+}
+}
+#define _mm_cmpistrm(A, B, M) (__ms__mm_cmpistrm<(M)>((A), (B)))
+#else
 #define _mm_cmpistrm(A, B, M)                                                  \
   ((__m128i)__builtin_ia32_pcmpistrm128((__v16qi)(__m128i)(A),                 \
                                         (__v16qi)(__m128i)(B), (int)(M)))
+#endif
 
 /// Uses the immediate operand \a M to perform a comparison of string
 ///    data with implicitly defined lengths that is contained in source operands
@@ -1678,9 +1887,20 @@ _mm_minpos_epu16(__m128i __V) {
 ///      0: The index of the least significant set bit. \n
 ///      1: The index of the most significant set bit. \n
 /// \returns Returns an integer representing the result index of the comparison.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_M>
+static __inline__ int __DEFAULT_FN_ATTRS __ms__mm_cmpistri(__m128i __p_A, __m128i __p_B) {
+  return ((int)__builtin_ia32_pcmpistri128((__v16qi)(__m128i)(__p_A), (__v16qi)(__m128i)(__p_B), (int)(__I_M)));
+}
+}
+#define _mm_cmpistri(A, B, M) (__ms__mm_cmpistri<(M)>((A), (B)))
+#else
 #define _mm_cmpistri(A, B, M)                                                  \
   ((int)__builtin_ia32_pcmpistri128((__v16qi)(__m128i)(A),                     \
                                     (__v16qi)(__m128i)(B), (int)(M)))
+#endif
 
 /// Uses the immediate operand \a M to perform a comparison of string
 ///    data with explicitly defined lengths that is contained in source operands
@@ -1867,9 +2087,20 @@ static __inline__ int __DEFAULT_FN_ATTRS __ms__mm_cmpestri(__m128i __A, int __LA
 ///          to the size of \a A or \a B. \n
 /// \returns Returns 1 if the bit mask is zero and the length of the string in
 ///    \a B is the maximum; otherwise, returns 0.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_M>
+static __inline__ int __DEFAULT_FN_ATTRS __ms__mm_cmpistra(__m128i __p_A, __m128i __p_B) {
+  return ((int)__builtin_ia32_pcmpistria128((__v16qi)(__m128i)(__p_A), (__v16qi)(__m128i)(__p_B), (int)(__I_M)));
+}
+}
+#define _mm_cmpistra(A, B, M) (__ms__mm_cmpistra<(M)>((A), (B)))
+#else
 #define _mm_cmpistra(A, B, M)                                                  \
   ((int)__builtin_ia32_pcmpistria128((__v16qi)(__m128i)(A),                    \
                                      (__v16qi)(__m128i)(B), (int)(M)))
+#endif
 
 /// Uses the immediate operand \a M to perform a comparison of string
 ///    data with implicitly defined lengths that is contained in source operands
@@ -1916,9 +2147,20 @@ static __inline__ int __DEFAULT_FN_ATTRS __ms__mm_cmpestri(__m128i __A, int __LA
 ///      11: Negate the bit mask only for bits with an index less than or equal
 ///          to the size of \a A or \a B.
 /// \returns Returns 1 if the bit mask is non-zero, otherwise, returns 0.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_M>
+static __inline__ int __DEFAULT_FN_ATTRS __ms__mm_cmpistrc(__m128i __p_A, __m128i __p_B) {
+  return ((int)__builtin_ia32_pcmpistric128((__v16qi)(__m128i)(__p_A), (__v16qi)(__m128i)(__p_B), (int)(__I_M)));
+}
+}
+#define _mm_cmpistrc(A, B, M) (__ms__mm_cmpistrc<(M)>((A), (B)))
+#else
 #define _mm_cmpistrc(A, B, M)                                                  \
   ((int)__builtin_ia32_pcmpistric128((__v16qi)(__m128i)(A),                    \
                                      (__v16qi)(__m128i)(B), (int)(M)))
+#endif
 
 /// Uses the immediate operand \a M to perform a comparison of string
 ///    data with implicitly defined lengths that is contained in source operands
@@ -1964,9 +2206,20 @@ static __inline__ int __DEFAULT_FN_ATTRS __ms__mm_cmpestri(__m128i __A, int __LA
 ///      11: Negate the bit mask only for bits with an index less than or equal
 ///          to the size of \a A or \a B. \n
 /// \returns Returns bit 0 of the resulting bit mask.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_M>
+static __inline__ int __DEFAULT_FN_ATTRS __ms__mm_cmpistro(__m128i __p_A, __m128i __p_B) {
+  return ((int)__builtin_ia32_pcmpistrio128((__v16qi)(__m128i)(__p_A), (__v16qi)(__m128i)(__p_B), (int)(__I_M)));
+}
+}
+#define _mm_cmpistro(A, B, M) (__ms__mm_cmpistro<(M)>((A), (B)))
+#else
 #define _mm_cmpistro(A, B, M)                                                  \
   ((int)__builtin_ia32_pcmpistrio128((__v16qi)(__m128i)(A),                    \
                                      (__v16qi)(__m128i)(B), (int)(M)))
+#endif
 
 /// Uses the immediate operand \a M to perform a comparison of string
 ///    data with implicitly defined lengths that is contained in source operands
@@ -2014,9 +2267,20 @@ static __inline__ int __DEFAULT_FN_ATTRS __ms__mm_cmpestri(__m128i __A, int __LA
 ///          to the size of \a A or \a B. \n
 /// \returns Returns 1 if the length of the string in \a A is less than the
 ///    maximum, otherwise, returns 0.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_M>
+static __inline__ int __DEFAULT_FN_ATTRS __ms__mm_cmpistrs(__m128i __p_A, __m128i __p_B) {
+  return ((int)__builtin_ia32_pcmpistris128((__v16qi)(__m128i)(__p_A), (__v16qi)(__m128i)(__p_B), (int)(__I_M)));
+}
+}
+#define _mm_cmpistrs(A, B, M) (__ms__mm_cmpistrs<(M)>((A), (B)))
+#else
 #define _mm_cmpistrs(A, B, M)                                                  \
   ((int)__builtin_ia32_pcmpistris128((__v16qi)(__m128i)(A),                    \
                                      (__v16qi)(__m128i)(B), (int)(M)))
+#endif
 
 /// Uses the immediate operand \a M to perform a comparison of string
 ///    data with implicitly defined lengths that is contained in source operands
@@ -2064,9 +2328,20 @@ static __inline__ int __DEFAULT_FN_ATTRS __ms__mm_cmpestri(__m128i __A, int __LA
 ///          to the size of \a A or \a B.
 /// \returns Returns 1 if the length of the string in \a B is less than the
 ///    maximum, otherwise, returns 0.
+#if defined(_MSC_VER) && defined(__cplusplus)
+/* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" {
+template <int __I_M>
+static __inline__ int __DEFAULT_FN_ATTRS __ms__mm_cmpistrz(__m128i __p_A, __m128i __p_B) {
+  return ((int)__builtin_ia32_pcmpistriz128((__v16qi)(__m128i)(__p_A), (__v16qi)(__m128i)(__p_B), (int)(__I_M)));
+}
+}
+#define _mm_cmpistrz(A, B, M) (__ms__mm_cmpistrz<(M)>((A), (B)))
+#else
 #define _mm_cmpistrz(A, B, M)                                                  \
   ((int)__builtin_ia32_pcmpistriz128((__v16qi)(__m128i)(A),                    \
                                      (__v16qi)(__m128i)(B), (int)(M)))
+#endif
 
 /// Uses the immediate operand \a M to perform a comparison of string
 ///    data with explicitly defined lengths that is contained in source operands

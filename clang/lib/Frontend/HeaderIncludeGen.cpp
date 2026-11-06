@@ -180,9 +180,14 @@ public:
 // it. A quoted include found next to the including file is that directory made
 // absolute, a backslash, then the spelled name. Any other include is its search
 // directory as given, a backslash, then the name.
+// REAL-DEP-PATHS: a file reached through a VFS overlay that exposes external
+// names (FileEntryRef name differs from the name as requested) is reported by
+// its real on-disk path instead: the virtual one does not exist, so a build
+// tool that stats it (ninja deps = msvc) would rebuild on every run.
 static std::string clIncludePath(const SourceManager &SM,
                                  SourceLocation HashLoc, StringRef SearchPath,
-                                 StringRef RelativePath, bool IsAngled) {
+                                 StringRef RelativePath, bool IsAngled,
+                                 OptionalFileEntryRef File) {
   // Path spelling only, not a file access; runs inside cc1 (IO sandbox on).
   auto BypassSandbox = llvm::sys::sandbox::scopedDisable();
   auto AbsDir = [](StringRef D) {
@@ -191,6 +196,11 @@ static std::string clIncludePath(const SourceManager &SM,
     llvm::sys::path::remove_dots(P, /*remove_dot_dot=*/true);
     return P;
   };
+  if (File && File->getName() != File->getNameAsRequested()) {
+    SmallString<256> Real = AbsDir(File->getName());
+    llvm::sys::path::native(Real, llvm::sys::path::Style::windows_backslash);
+    return std::string(Real);
+  }
   SmallString<256> IncDir =
       AbsDir(llvm::sys::path::parent_path(SM.getFilename(HashLoc)));
   if (!IsAngled && StringRef(IncDir).equals_insensitive(AbsDir(SearchPath))) {
@@ -372,7 +382,7 @@ void HeaderIncludesCallback::InclusionDirective(
   PendingIncludePath.clear();
   if (MSStyle && File)
     PendingIncludePath =
-        clIncludePath(SM, HashLoc, SearchPath, RelativePath, IsAngled);
+        clIncludePath(SM, HashLoc, SearchPath, RelativePath, IsAngled, File);
 }
 
 void HeaderIncludesCallback::FileSkipped(const FileEntryRef &SkippedFile,
@@ -576,8 +586,15 @@ class SourceDependenciesCallback : public PPCallbacks {
   std::vector<std::string> Includes;
 
 public:
-  SourceDependenciesCallback(SourceManager &SM, StringRef OutPath)
-      : SM(SM), OutPath(OutPath) {}
+  SourceDependenciesCallback(SourceManager &SM, StringRef OutPath,
+                             const DependencyOutputOptions &DepOpts)
+      : SM(SM), OutPath(OutPath) {
+    // REAL-DEP-PATHS: implicit inputs (-fdepfile-entry, e.g. the VFS overlay
+    // the driver loads from the openrt layout) are listed as includes, as
+    // /showIncludes does for them.
+    for (const auto &Dep : DepOpts.ExtraDeps)
+      Includes.push_back(clDependencyPath(Dep.first));
+  }
 
   void InclusionDirective(SourceLocation HashLoc, const Token &IncludeTok,
                           StringRef FileName, bool IsAngled,
@@ -589,7 +606,7 @@ public:
     PendingPath.clear();
     if (File)
       PendingPath =
-          clIncludePath(SM, HashLoc, SearchPath, RelativePath, IsAngled);
+          clIncludePath(SM, HashLoc, SearchPath, RelativePath, IsAngled, File);
   }
 
   void FileChanged(SourceLocation Loc, FileChangeReason Reason,
@@ -653,5 +670,5 @@ void SourceDependenciesCallback::EndOfMainFile() {
 void clang::AttachSourceDependencies(Preprocessor &PP,
                                      const DependencyOutputOptions &DepOpts) {
   PP.addPPCallbacks(std::make_unique<SourceDependenciesCallback>(
-      PP.getSourceManager(), DepOpts.SourceDependenciesFile));
+      PP.getSourceManager(), DepOpts.SourceDependenciesFile, DepOpts));
 }

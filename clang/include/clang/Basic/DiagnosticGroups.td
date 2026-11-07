@@ -1649,6 +1649,7 @@ def AIXCompat : DiagGroup<"aix-compat">;
 def MicrosoftCharize : DiagGroup<"microsoft-charize">;
 def MicrosoftDrectveSection : DiagGroup<"microsoft-drectve-section">;
 def MicrosoftInclude : DiagGroup<"microsoft-include">;
+def MicrosoftImportAttribute : DiagGroup<"microsoft-import-attribute">;
 def MicrosoftCppMacro : DiagGroup<"microsoft-cpp-macro">;
 def MicrosoftFixedEnum : DiagGroup<"microsoft-fixed-enum">;
 def MicrosoftEmptyEnum : DiagGroup<"microsoft-empty-enum">;

@@ -2918,17 +2918,20 @@ void Preprocessor::HandleMicrosoftImportDirective(Token &Tok) {
   }
 
   typelib::ImportRequest Req;
-  std::string AttrErr;
-  if (!typelib::parseAttributes(AttrText, Req.Options, AttrErr)) {
-    Diag(FilenameLoc, diag::err_pp_import_typelib_attr) << AttrErr;
-    return;
-  }
+  typelib::AttrIssue Issue;
+  typelib::parseAttributes(AttrText, Req.Options, Issue);
+  if (Issue.K == typelib::AttrIssue::Unknown)
+    Diag(Tok, diag::warn_pp_import_unknown_attr) << Issue.Name;
+  else if (Issue.K == typelib::AttrIssue::ArgCount)
+    Diag(Tok, diag::warn_pp_import_attr_args) << Issue.Name << Issue.Need;
 
   std::string Path;
   std::string Display = Filename.str();
   if (Filename.starts_with("progid:") || Filename.starts_with("libid:")) {
     std::string Err;
-    if (!typelib::resolveRegistered(Filename.str(), Path, Display, Err)) {
+    // lcid("409") selects the registered locale (neutral by default).
+    if (!typelib::resolveRegistered(Filename.str(), Req.Options.Lcid, Path,
+                                    Display, Err)) {
       Diag(FilenameLoc, diag::err_pp_import_typelib_not_found)
           << Filename << Err;
       return;

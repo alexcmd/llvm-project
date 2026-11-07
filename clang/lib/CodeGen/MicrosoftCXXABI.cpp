@@ -1080,7 +1080,10 @@ llvm::Value *MicrosoftCXXABI::emitDynamicCastToVoid(CodeGenFunction &CGF,
       llvm::FunctionType::get(CGF.Int8PtrTy, ArgTypes, false),
       "__RTCastToVoid");
   llvm::Value *Args[] = {Value.emitRawPointer(CGF)};
-  return CGF.EmitRuntimeCall(Function, Args);
+  // openrt DYNCAST-VOID-UNWIND: like __RTDynamicCast and __RTtypeid, the
+  // runtime throws std::__non_rtti_object when the object has no RTTI; cl
+  // emits the call as one that can throw, so an enclosing try catches it.
+  return CGF.EmitRuntimeCallOrInvoke(Function, Args);
 }
 
 bool MicrosoftCXXABI::EmitBadCastCall(CodeGenFunction &CGF) {

@@ -6913,6 +6913,25 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   // wins (cl 14.51). /w<l><n> is a warning when <l> is within the final /W
   // level (whatever the order of the two), else off. It also clears an earlier
   // /we, unless /WX is in effect: cl still reports it as an error then.
+  // UE-W0-WE: /W0 and /w switch every warning off, but cl still reports an
+  // id named by /we as an error (and the /Zc:strictStrings error). clang's -w
+  // would hide those too, so in that case everything is turned off with
+  // -Wno-everything instead and the /we groups come back as errors below.
+  // CLANG-CL-GAP(w-flagless): the few clang warnings without a group are not
+  // reached by -Wno-everything.
+  bool CLKeepErrorsUnderW = false;
+  if (D.IsCLMode() && Args.hasArg(options::OPT_w)) {
+    CLKeepErrorsUnderW = CLStrictStrings;
+    for (const Arg *A : Args.filtered(options::OPT__SLASH_we)) {
+      unsigned N;
+      if (!StringRef(A->getValue()).getAsInteger(10, N) &&
+          !diagGroupsFromCLWarningID(N).empty())
+        CLKeepErrorsUnderW = true;
+    }
+    if (CLKeepErrorsUnderW)
+      CmdArgs.push_back("-Wno-everything");
+  }
+
   bool CLWarningsAsErrors = false;
   for (const Arg *A : Args.filtered(options::OPT_W_Joined)) {
     StringRef V = A->getValue();
@@ -6994,7 +7013,10 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   if (Args.hasFlag(options::OPT_pedantic, options::OPT_no_pedantic, false))
     CmdArgs.push_back("-pedantic");
   Args.AddLastArg(CmdArgs, options::OPT_pedantic_errors);
-  Args.AddLastArg(CmdArgs, options::OPT_w);
+  if (CLKeepErrorsUnderW)
+    Args.ClaimAllArgs(options::OPT_w);
+  else
+    Args.AddLastArg(CmdArgs, options::OPT_w);
 
   Args.addOptInFlag(CmdArgs, options::OPT_ffixed_point,
                     options::OPT_fno_fixed_point);

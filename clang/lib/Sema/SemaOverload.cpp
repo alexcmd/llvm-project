@@ -6617,6 +6617,23 @@ static ExprResult BuildConvertedConstantExpression(Sema &S, Expr *From,
       ReturnPreNarrowingValue = true;
       break;
     }
+    // UE-CASE-NARROWING: cl 14.51 (/permissive-) takes a case label whose
+    // value does not fit the switch condition's type: silently when only the
+    // sign changes (case -1 on a size_t), with a warning when bits are lost
+    // (C4310); never an error.
+    if (CCE == CCEKind::CaseValue && S.getLangOpts().MSVCCompat &&
+        PreNarrowingValue.isInt() && T->isIntegralOrEnumerationType()) {
+      const llvm::APSInt &V = PreNarrowingValue.getInt();
+      unsigned W = S.Context.getIntWidth(T);
+      unsigned Need = V.isNegative() ? V.getSignificantBits() : V.getActiveBits();
+      if (Need > W) {
+        llvm::APSInt Conv = V.extOrTrunc(W);
+        Conv.setIsSigned(T->isSignedIntegerOrEnumerationType());
+        S.Diag(From->getBeginLoc(), diag::warn_case_value_overflow)
+            << toString(V, 10) << toString(Conv, 10);
+      }
+      break;
+    }
     S.Diag(From->getBeginLoc(), diag::ext_cce_narrowing)
         << CCE << /*Constant*/ 1
         << PreNarrowingValue.getAsString(S.Context, PreNarrowingType) << T;

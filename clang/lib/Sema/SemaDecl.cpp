@@ -4233,8 +4233,14 @@ bool Sema::MergeFunctionDecl(FunctionDecl *New, NamedDecl *&OldD, Scope *S,
     //   The first declaration of a function shall specify the noreturn
     //   attribute if any declaration of that function specifies the noreturn
     //   attribute.
+    // MS-PREDECLARED-RUNTIME-NAMES: cl's predeclared noreturn functions
+    // (__std_terminate, _CxxThrowException, __report_*) are already noreturn
+    // (__declspec(noreturn)); cl accepts a [[noreturn]] redeclaration or
+    // definition of them. A predeclared function that is not noreturn
+    // (_purecall) still gets the error (cl: C2381).
     if (const auto *NRA = New->getAttr<CXX11NoReturnAttr>())
-      if (!Old->hasAttr<CXX11NoReturnAttr>()) {
+      if (!Old->hasAttr<CXX11NoReturnAttr>() &&
+          !(isMSPredeclaredFunction(*this, Old) && Old->isNoReturn())) {
         Diag(NRA->getLocation(), diag::err_attribute_missing_on_first_decl)
             << NRA;
         Diag(Old->getLocation(), diag::note_previous_declaration);

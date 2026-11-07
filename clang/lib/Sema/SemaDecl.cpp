@@ -3727,6 +3727,14 @@ static void adjustDeclContextForDeclaratorDecl(DeclaratorDecl *NewD,
     FixSemaDC(VD->getDescribedVarTemplate());
 }
 
+/// A function first declared in the predefines (-fms-predeclare-eh-types) in
+/// MS compatibility mode: cl's predeclared runtime functions.
+static bool isMSPredeclaredFunction(Sema &S, const FunctionDecl *FD) {
+  return S.getLangOpts().MSVCCompat &&
+         S.getSourceManager().isWrittenInBuiltinFile(
+             FD->getFirstDecl()->getLocation());
+}
+
 bool Sema::MergeFunctionDecl(FunctionDecl *New, NamedDecl *&OldD, Scope *S,
                              bool MergeTypeWithOld, bool NewDeclIsDefn) {
   // Verify the old decl was also a function.
@@ -4094,6 +4102,13 @@ bool Sema::MergeFunctionDecl(FunctionDecl *New, NamedDecl *&OldD, Scope *S,
           OldDeclaredReturnType->isObjCObjectPointerType())
         // FIXME: This does the wrong thing for a deduced return type.
         ResQT = Context.mergeObjCGCQualifiers(NewQType, OldQType);
+      if (ResQT.isNull() && isMSPredeclaredFunction(*this, Old)) {
+        // Another return type for a function cl predeclares: as below.
+        Diag(New->getLocation(), diag::warn_redecl_library_builtin) << New;
+        Diag(OldLocation, diag::note_previous_builtin_declaration)
+            << Old << Old->getType();
+        return false;
+      }
       if (ResQT.isNull()) {
         if (New->isCXXClassMember() && New->isOutOfLine())
           Diag(New->getLocation(), diag::err_member_def_does_not_match_ret_type)
@@ -4497,9 +4512,7 @@ bool Sema::MergeFunctionDecl(FunctionDecl *New, NamedDecl *&OldD, Scope *S,
   // redeclared with another type: cl rejects that; accept it with the
   // library-builtin warning (code built only with clang-cl, e.g. a runtime
   // declaring _CxxThrowException with its own ThrowInfo type).
-  if (getLangOpts().MSVCCompat &&
-      getSourceManager().isWrittenInBuiltinFile(
-          Old->getFirstDecl()->getLocation())) {
+  if (isMSPredeclaredFunction(*this, Old)) {
     Diag(New->getLocation(), diag::warn_redecl_library_builtin) << New;
     Diag(OldLocation, diag::note_previous_builtin_declaration)
         << Old << Old->getType();

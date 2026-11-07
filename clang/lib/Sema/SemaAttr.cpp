@@ -623,7 +623,27 @@ void Sema::DiagnoseNonDefaultPragmaAlignPack(PragmaAlignPackDiagnoseKind Kind,
     Diag(PrevAlignPackState.CurrentPragmaLocation, diag::note_pragma_pack_here);
   }
   // Warn about modified alignment after #includes.
-  if (PrevAlignPackState.CurrentValue != AlignPackStack.CurrentValue) {
+  // UE-PRAGMA-PACK-DEFAULT: cl (C4103) compares the effective packing; a
+  // pack(n) equal to the default (/Zp, else 16 on x64 and 8 elsewhere) is
+  // the same as no pack.
+  auto MSEffectivePack = [&](const AlignPackInfo &I) -> unsigned {
+    if (I.IsPackSet())
+      return I.getPackNumber();
+    if (getLangOpts().PackStruct)
+      return getLangOpts().PackStruct;
+    return Context.getTargetInfo().getTriple().getArch() ==
+                   llvm::Triple::x86_64
+               ? 16
+               : 8;
+  };
+  bool MSSamePacking =
+      getLangOpts().MSVCCompat &&
+      PrevAlignPackState.CurrentValue.getAlignMode() ==
+          AlignPackStack.CurrentValue.getAlignMode() &&
+      MSEffectivePack(PrevAlignPackState.CurrentValue) ==
+          MSEffectivePack(AlignPackStack.CurrentValue);
+  if (PrevAlignPackState.CurrentValue != AlignPackStack.CurrentValue &&
+      !MSSamePacking) {
     Diag(IncludeLoc, diag::warn_pragma_pack_modified_after_include);
     Diag(AlignPackStack.CurrentPragmaLocation, diag::note_pragma_pack_here);
   }

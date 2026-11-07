@@ -86,11 +86,12 @@ void nested_direct_cleanup() {
 // FH4-LABEL: define{{.*}} void @"?empty_noexcept@@YAXXZ"()
 // FH4-NOT: personality
 // FH4-NEXT: entry:
+// cl /EHs: __declspec(nothrow) without a try block has no handler at all.
 // FH4-LABEL: define{{.*}} void @"?declspec_nothrow@@YAXXZ"
-// FH4: invoke void @"?may_throw@@YAXXZ"()
-// FH4: unwind label %terminate
-// FH4: terminate:
-// FH4: call void @{{.*terminate.*}}()
+// FH4-NOT: personality
+// FH4: call void @"?may_throw@@YAXXZ"()
+// FH4-NOT: terminate
+// FH4: ret void
 // FH4-LABEL: define{{.*}} i32 @"?musttail_noexcept@@YAHH@Z"
 // FH4: musttail call{{.*}} @"?cannot_throw_value@@YAHH@Z"
 // FH4-NEXT: ret i32
@@ -100,11 +101,11 @@ void nested_direct_cleanup() {
 
 // A throwing callee needs the caller's FH4 frame to remain live, whereas a
 // noexcept callee can enforce the contract after a tail call itself.
-// __declspec(nothrow) retains Clang's explicit terminate funclet and does not
-// use FH4's NoExcept bit.
+// __declspec(nothrow) does not use FH4's NoExcept bit; without a try block it
+// needs no FH4 record (microsoft-abi-eh4-header-parity.cpp has the try case).
 // ASM-LABEL: "?declspec_nothrow@@YAXXZ":
-// ASM: "$cppxdata$?declspec_nothrow@@YAXXZ":
-// ASM-NEXT: .byte 40{{.*}}# FuncInfo4Header
+// ASM-NOT: .seh_handler
+// ASM: jmp "?may_throw@@YAXXZ"{{.*}}# TAILCALL
 // A call eliminated by optimization must not leave a handler on an otherwise
 // empty noexcept function.
 // ASM-LABEL: "?optimized_noexcept@@YAXXZ":

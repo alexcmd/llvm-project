@@ -287,14 +287,46 @@ static llvm::Constant *getOpaquePersonalityFn(CodeGenModule &CGM,
   return cast<llvm::Constant>(Fn.getCallee());
 }
 
+// FuncInfo4 NoExcept bit: cl sets it under /EHs and /EHa alike (/EHa keeps
+// the cleanups, SEH exceptions still unwind the frame).
 static bool useMSVCXXEH4NoexceptMetadata(CodeGenFunction &CGF) {
-  return !CGF.getLangOpts().EHAsynch &&
-         &EHPersonality::get(CGF) == &EHPersonality::MSVC_CxxFrameHandler4;
+  return &EHPersonality::get(CGF) == &EHPersonality::MSVC_CxxFrameHandler4;
+}
+
+/// A try (C++, SEH, ObjC) or coroutine body anywhere in this function's own
+/// code. Lambda bodies are separate functions; blocks have no children.
+static bool containsTryStmt(const Stmt *S) {
+  if (!S || isa<LambdaExpr>(S))
+    return false;
+  if (isa<CXXTryStmt, SEHTryStmt, ObjCAtTryStmt, CoroutineBodyStmt>(S))
+    return true;
+  for (const Stmt *Child : S->children())
+    if (containsTryStmt(Child))
+      return true;
+  return false;
+}
+
+/// cl /EHs, FH4: a noexcept or __declspec(nothrow) function with no try block
+/// of its own gets no unwind actions. Nothing in it can catch, so a C++
+/// exception reaching the frame terminates (NoExcept bit) or is undefined
+/// (nothrow) and the frame is never unwound.
+static bool hasMSVCXXEH4NoUnwindBody(CodeGenFunction &CGF,
+                                     const FunctionDecl *FD) {
+  if (CGF.getLangOpts().EHAsynch || !useMSVCXXEH4NoexceptMetadata(CGF))
+    return false;
+  if (containsTryStmt(FD->getBody()))
+    return false;
+  if (const auto *CD = dyn_cast<CXXConstructorDecl>(FD))
+    for (const CXXCtorInitializer *Init : CD->inits())
+      if (containsTryStmt(Init->getInit()))
+        return false;
+  return true;
 }
 
 static void beginNoexceptScope(CodeGenFunction &CGF,
                                bool IsDeclspecNothrow = false) {
-  if (IsDeclspecNothrow || !useMSVCXXEH4NoexceptMetadata(CGF)) {
+  if (IsDeclspecNothrow || !useMSVCXXEH4NoexceptMetadata(CGF) ||
+      CGF.getLangOpts().EHAsynch) {
     CGF.EHStack.pushTerminate();
     return;
   }
@@ -579,8 +611,16 @@ void CodeGenFunction::EmitStartEHSpec(const Decl *D) {
     }
   } else if (Proto->canThrow() == CT_Cannot) {
     // noexcept functions are simple terminate scopes.
-    if (!getLangOpts().EHAsynch) // -EHa: HW exception still can occur
-      beginNoexceptScope(*this, EST == EST_NoThrow);
+    if (!getLangOpts().EHAsynch) { // -EHa: HW exception still can occur
+      MSVCXXEH4NoUnwindBody = hasMSVCXXEH4NoUnwindBody(*this, FD);
+      // __declspec(nothrow) without a try: no handler at all (cl /EHs).
+      if (!(MSVCXXEH4NoUnwindBody && EST == EST_NoThrow))
+        beginNoexceptScope(*this, EST == EST_NoThrow);
+    } else if (EST != EST_NoThrow && useMSVCXXEH4NoexceptMetadata(*this)) {
+      // cl /EHa: NoExcept bit, cleanups stay; no terminate scope.
+      MSVCXXEH4Noexcept = true;
+      CurFn->addFnAttr(llvm::MSVCXXEH4NoexceptAttr);
+    }
   }
 }
 
@@ -631,7 +671,7 @@ void CodeGenFunction::EmitEndEHSpec(const Decl *D) {
     // Check if CapturedDecl is nothrow and pop terminate scope for it.
     if (const CapturedDecl* CD = dyn_cast_or_null<CapturedDecl>(D)) {
       if (CD->isNothrow()) {
-        if (useMSVCXXEH4NoexceptMetadata(*this))
+        if (useMSVCXXEH4NoexceptMetadata(*this) && !getLangOpts().EHAsynch)
           MSVCXXEH4Noexcept = false;
         else if (!EHStack.empty())
           EHStack.popTerminate();
@@ -662,8 +702,12 @@ void CodeGenFunction::EmitEndEHSpec(const Decl *D) {
     emitFilterDispatchBlock(*this, filterScope);
     EHStack.popFilter();
   } else if (Proto->canThrow() == CT_Cannot) {
+    bool NoUnwindBody = MSVCXXEH4NoUnwindBody;
+    MSVCXXEH4NoUnwindBody = false;
     if (EST != EST_NoThrow && useMSVCXXEH4NoexceptMetadata(*this))
       MSVCXXEH4Noexcept = false;
+    else if (NoUnwindBody) // no terminate scope was pushed
+      ;
     else if (!EHStack.empty())
       // The stack can be empty under asynchronous exceptions.
       EHStack.popTerminate();

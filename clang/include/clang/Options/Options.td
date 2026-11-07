@@ -3516,6 +3516,21 @@ def fms_define_stdc : Flag<["-"], "fms-define-stdc">, Group<f_Group>,
   Visibility<[ClangOption, CC1Option, CLOption]>,
   HelpText<"Define '__STDC__' to '1' in MSVC Compatibility mode">,
   MarshallingInfoFlag<LangOpts<"MSVCEnableStdcMacro">>;
+// CL-STD-VERSION-MACROS: cc1-only; the clang-cl driver passes these so the
+// language version macros carry cl.exe's values.
+def fms_legacy_cplusplus : Flag<["-"], "fms-legacy-cplusplus">,
+  Visibility<[CC1Option]>,
+  HelpText<"Define __cplusplus as 199711L (cl.exe without /Zc:__cplusplus)">,
+  MarshallingInfoFlag<LangOpts<"MSVCLegacyCPlusPlus">>;
+def fms_no_stdc_version : Flag<["-"], "fms-no-stdc-version">,
+  Visibility<[CC1Option]>,
+  HelpText<"Do not define __STDC_VERSION__ (cl.exe C without /std:)">,
+  MarshallingInfoFlag<LangOpts<"MSVCNoStdcVersion">>;
+def fms_lang_version_EQ : Joined<["-"], "fms-lang-version=">,
+  Visibility<[CC1Option]>, MetaVarName<"<value>">,
+  HelpText<"Value of __STDC_VERSION__ (C) or _MSVC_LANG and __cplusplus (C++) "
+           "instead of the one implied by -std=">,
+  MarshallingInfoInt<LangOpts<"MSVCLangVersion">>;
 def fms_extensions : Flag<["-"], "fms-extensions">, Group<f_Group>,
   Visibility<[ClangOption, CC1Option, CLOption]>,
   HelpText<"Accept some non-standard constructs supported by the Microsoft compiler">,
@@ -9349,6 +9364,11 @@ def _SLASH_vd : CLJoined<"vd">, HelpText<"Control vtordisp placement">,
   Alias<vtordisp_mode_EQ>;
 def _SLASH_X : CLFlag<"X">,
   HelpText<"Do not add %INCLUDE% to include search path">, Alias<nostdlibinc>;
+// CL-STD-VERSION-MACROS: __cplusplus is 199711L unless /Zc:__cplusplus.
+def _SLASH_Zc___cplusplus : CLFlag<"Zc:__cplusplus">,
+  HelpText<"Define __cplusplus to the language standard version">;
+def _SLASH_Zc___cplusplus_ : CLFlag<"Zc:__cplusplus-">,
+  HelpText<"Define __cplusplus as 199711L (default)">;
 def _SLASH_Zc___STDC__ : CLFlag<"Zc:__STDC__">,
   HelpText<"Define __STDC__">,
   Alias<fms_define_stdc>;
@@ -9643,7 +9663,6 @@ def _SLASH_utf8 : CLIgnoredFlag<"utf-8">,
   HelpText<"Set source and runtime encoding to UTF-8 (default)">;
 def _SLASH_w : CLIgnoredJoined<"w">;
 def _SLASH_Wv_ : CLIgnoredJoined<"Wv">;
-def _SLASH_Zc___cplusplus : CLIgnoredFlag<"Zc:__cplusplus">;
 def _SLASH_Zc_auto : CLIgnoredFlag<"Zc:auto">;
 def _SLASH_Zc_forScope : CLIgnoredFlag<"Zc:forScope">;
 def _SLASH_Zc_inline : CLIgnoredFlag<"Zc:inline">;

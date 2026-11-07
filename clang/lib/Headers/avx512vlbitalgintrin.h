@@ -15,7 +15,7 @@
 #define __AVX512VLBITALGINTRIN_H
 
 /* Define the default attributes for the functions in this file. */
-#if defined(__cplusplus) && (__cplusplus >= 201103L)
+#if defined(__cplusplus) && (__cplusplus >= 201103L || (defined(_MSVC_LANG) && _MSVC_LANG >= 201103L))
 #define __DEFAULT_FN_ATTRS128                                                  \
   __attribute__((__always_inline__, __nodebug__,                               \
                  __target__("avx512vl,avx512bitalg"),                          \

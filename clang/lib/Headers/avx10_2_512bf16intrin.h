@@ -24,7 +24,7 @@ typedef __bf16 __m512bh_u __attribute__((__vector_size__(64), __aligned__(1)));
   __attribute__((__always_inline__, __nodebug__, __target__("avx10.2"),        \
                  __min_vector_width__(512)))
 
-#if defined(__cplusplus) && (__cplusplus >= 201103L)
+#if defined(__cplusplus) && (__cplusplus >= 201103L || (defined(_MSVC_LANG) && _MSVC_LANG >= 201103L))
 #define __DEFAULT_FN_ATTRS512_CONSTEXPR __DEFAULT_FN_ATTRS512 constexpr
 #else
 #define __DEFAULT_FN_ATTRS512_CONSTEXPR __DEFAULT_FN_ATTRS512

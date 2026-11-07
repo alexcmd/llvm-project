@@ -40,7 +40,7 @@
 
 /* Intrinsics with _avx_ prefix are for compatibility with msvc. */
 /* Define the default attributes for the functions in this file. */
-#if defined(__cplusplus) && (__cplusplus >= 201103L)
+#if defined(__cplusplus) && (__cplusplus >= 201103L || (defined(_MSVC_LANG) && _MSVC_LANG >= 201103L))
 #define __DEFAULT_FN_ATTRS256                                                  \
   __attribute__((__always_inline__, __nodebug__, __target__("avxvnni"),        \
                  __min_vector_width__(256))) constexpr

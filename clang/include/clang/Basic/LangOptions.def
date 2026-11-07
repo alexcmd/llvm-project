@@ -276,6 +276,11 @@ LANGOPT(HIPStdParInterposeAlloc, 1, 0, NotCompatible, "Replace allocations / dea
 LANGOPT(OpenACC           , 1, 0, NotCompatible, "OpenACC Enabled")
 
 LANGOPT(MSVCEnableStdcMacro , 1, 0, NotCompatible, "Define __STDC__ with '-fms-compatibility'")
+// CL-STD-VERSION-MACROS: cl.exe values of the language version macros
+// (set by the clang-cl driver only; the language mode itself is unchanged).
+LANGOPT(MSVCLegacyCPlusPlus, 1, 0, NotCompatible, "Define __cplusplus as 199711L")
+LANGOPT(MSVCNoStdcVersion, 1, 0, NotCompatible, "Do not define __STDC_VERSION__")
+VALUE_LANGOPT(MSVCLangVersion, 32, 0, NotCompatible, "__STDC_VERSION__ / _MSVC_LANG override")
 LANGOPT(SizedDeallocation , 1, 0, NotCompatible, "sized deallocation")
 LANGOPT(AlignedAllocation , 1, 0, NotCompatible, "aligned allocation")
 LANGOPT(AlignedAllocationUnavailable, 1, 0, NotCompatible, "aligned allocation functions are unavailable")

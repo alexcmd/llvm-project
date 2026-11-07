@@ -20,7 +20,7 @@
  */
 #if __STDC_HOSTED__ &&                                                         \
     __has_include_next(<stdatomic.h>) &&                                       \
-    (!defined(_MSC_VER) || (defined(__cplusplus) && __cplusplus >= 202002L))
+    (!defined(_MSC_VER) || (defined(__cplusplus) && (__cplusplus >= 202002L || (defined(_MSVC_LANG) && _MSVC_LANG >= 202002L))))
 # include_next <stdatomic.h>
 #else
 
@@ -56,7 +56,7 @@ extern "C" {
 
 #if ((defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201710L &&              \
       __STDC_VERSION__ < 202311L) ||                                           \
-     (defined(__cplusplus) && __cplusplus >= 202002L)) &&                      \
+     (defined(__cplusplus) && (__cplusplus >= 202002L || (defined(_MSVC_LANG) && _MSVC_LANG >= 202002L)))) && \
     !defined(_CLANG_DISABLE_CRT_DEPRECATION_WARNINGS)
 /* ATOMIC_VAR_INIT was deprecated in C17 and C++20. */
 #pragma clang deprecated(ATOMIC_VAR_INIT)

@@ -40,7 +40,7 @@
  * or -ansi is not specified, since it was not part of C90.
  */
 #if (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L) ||              \
-    (defined(__cplusplus) && __cplusplus >= 201103L) ||                        \
+    (defined(__cplusplus) && (__cplusplus >= 201103L || (defined(_MSVC_LANG) && _MSVC_LANG >= 201103L))) || \
     !defined(__STRICT_ANSI__)
 #define __need_va_copy
 #endif

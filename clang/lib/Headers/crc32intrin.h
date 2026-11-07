@@ -11,7 +11,7 @@
 #define __CRC32INTRIN_H
 
 /// We only declare crc32 as a constexpr if we are compiling C++ code
-#if defined(__cplusplus) && (__cplusplus >= 201103L)
+#if defined(__cplusplus) && (__cplusplus >= 201103L || (defined(_MSVC_LANG) && _MSVC_LANG >= 201103L))
 #define __DEFAULT_FN_ATTRS                                                     \
   __attribute__((__always_inline__, __nodebug__, __target__("crc32"))) constexpr
 #else

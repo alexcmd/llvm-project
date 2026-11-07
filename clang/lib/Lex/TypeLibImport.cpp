@@ -169,9 +169,13 @@ private:
   void buildVtableWrappers(Item &It, ITypeInfo *TI, TYPEATTR *TA,
                            std::vector<Func> &Fs, std::vector<Wrapper> &Ws,
                            std::vector<bool> &HasWrapper);
-  void emitVtableProperties(ITypeInfo *TI, std::vector<Func> &Fs);
+  std::string propertyData(ITypeInfo *TI, std::vector<Func> &Fs, bool Dispatch);
   std::vector<WrapperSection> Sections;
-  size_t KeyedThreshold = 1000;
+  // cl switches to the implementation_key map for large libraries. Its exact
+  // criterion is not a plain wrapper count; "more than 847 wrappers" matches
+  // every measured library/attribute set but one (sapi.dll with
+  // no_dual_interfaces, keyed at 689) and ignores exclude().
+  size_t KeyedThreshold = 847;
   std::string qualify(const TypeClass &C, const std::string &T, bool Void);
   void emitImplementations(const std::string &TliPath);
   void emitWrapperDecls(const std::vector<Wrapper> &Ws);
@@ -495,7 +499,9 @@ void Generator::computeOrder() {
 const char *forwardComment(const Item &It) {
   if (It.Kind == TKIND_INTERFACE)
     return "interface";
-  return It.Dual ? "dual interface" : "dispinterface";
+  // no_dual_interfaces still names it a dual interface.
+  return (It.TA->wTypeFlags & TYPEFLAG_FDUAL) ? "dual interface"
+                                              : "dispinterface";
 }
 
 void Generator::emitForward() {
@@ -767,6 +773,34 @@ struct TypeClass {
   VARTYPE VT = VT_EMPTY; // for _com_dispatch_* calls
 };
 
+// Kind of a coclass's [default] (non-source) interface.
+TYPEKIND defaultInterfaceKind(ITypeInfo *CoClass) {
+  TYPEATTR *A;
+  if (FAILED(CoClass->GetTypeAttr(&A)))
+    return TKIND_DISPATCH;
+  TYPEKIND K = TKIND_DISPATCH;
+  for (WORD J = 0; J < A->cImplTypes; ++J) {
+    INT F = 0;
+    CoClass->GetImplTypeFlags(J, &F);
+    if (!(F & IMPLTYPEFLAG_FDEFAULT) || (F & IMPLTYPEFLAG_FSOURCE))
+      continue;
+    HREFTYPE H;
+    ITypeInfo *D = nullptr;
+    if (SUCCEEDED(CoClass->GetRefTypeOfImplType(J, &H)) &&
+        SUCCEEDED(CoClass->GetRefTypeInfo(H, &D))) {
+      TYPEATTR *DA;
+      if (SUCCEEDED(D->GetTypeAttr(&DA))) {
+        K = DA->typekind;
+        D->ReleaseTypeAttr(DA);
+      }
+      D->Release();
+    }
+    break;
+  }
+  CoClass->ReleaseTypeAttr(A);
+  return K;
+}
+
 TypeClass Generator::classify(ITypeInfo *Ctx, const TYPEDESC &TD) {
   TypeClass C;
   C.Raw = typeText(Ctx, TD);
@@ -782,7 +816,9 @@ TypeClass Generator::classify(ITypeInfo *Ctx, const TYPEDESC &TD) {
     C.K = TypeClass::IfacePtr; C.Ptr = "IUnknownPtr"; C.VT = VT_UNKNOWN;
     return C;
   case VT_INT: C.K = TypeClass::Scalar; C.VT = VT_I4; return C;
-  case VT_UINT: C.K = TypeClass::Scalar; C.VT = VT_UI4; return C;
+  // cl passes the unsigned 32-bit types to the dispatch helpers as VT_I4.
+  case VT_UINT: C.K = TypeClass::Scalar; C.VT = VT_I4; return C;
+  case VT_UI4: C.K = TypeClass::Scalar; C.VT = VT_I4; return C;
   case VT_CY: C.K = TypeClass::Other; C.VT = VT_CY; return C;
   case VT_DECIMAL: C.K = TypeClass::Other; C.VT = VT_DECIMAL; return C;
   case VT_SAFEARRAY:
@@ -809,7 +845,11 @@ TypeClass Generator::classify(ITypeInfo *Ctx, const TYPEDESC &TD) {
           C.K = TypeClass::IfacePtr;
           C.Ptr = N + "Ptr";
           C.LibType = findItem(R) != nullptr;
-          C.VT = Disp ? VT_DISPATCH : VT_UNKNOWN;
+          (void)Disp; // an IDispatch-derived TKIND_INTERFACE stays VT_UNKNOWN
+          TYPEKIND DK = K;
+          if (K == TKIND_COCLASS)
+            DK = defaultInterfaceKind(R);
+          C.VT = DK == TKIND_DISPATCH ? VT_DISPATCH : VT_UNKNOWN;
           R->Release();
           return C;
         }
@@ -854,9 +894,14 @@ TypeClass Generator::classify(ITypeInfo *Ctx, const TYPEDESC &TD) {
   }
 }
 
+// raw_native_types: BSTR, VARIANT and interface pointers stay native.
+thread_local bool NativeTypes = false;
+
 std::string highParam(const TypeClass &C) {
-  if (C.Alias)
+  if (C.Alias || (NativeTypes && C.K == TypeClass::Bstr))
     return C.Raw;
+  if (NativeTypes && C.K == TypeClass::Variant)
+    return "const VARIANT &";
   if (C.K == TypeClass::Bstr)
     return "_bstr_t";
   if (C.K == TypeClass::Variant)
@@ -867,7 +912,7 @@ std::string highParam(const TypeClass &C) {
 }
 
 std::string highRet(const TypeClass &C) {
-  if (C.Alias)
+  if (C.Alias || NativeTypes)
     return C.Raw;
   switch (C.K) {
   case TypeClass::Bstr: return "_bstr_t";
@@ -896,7 +941,7 @@ std::string resultDecl(const TypeClass &C) {
 }
 
 std::string resultExpr(const TypeClass &C) {
-  if (C.Alias)
+  if (C.Alias || NativeTypes)
     return "_result";
   switch (C.K) {
   case TypeClass::Bstr: return "_bstr_t(_result, false)";
@@ -1061,7 +1106,8 @@ std::string repeat(const char *S, int N) {
 }
 
 // Property data of a vtable interface: get/put/putref accessors by name.
-void Generator::emitVtableProperties(ITypeInfo *TI, std::vector<Func> &Fs) {
+std::string Generator::propertyData(ITypeInfo *TI, std::vector<Func> &Fs,
+                                    bool Dispatch) {
   struct Prop {
     std::string Name, Get, Put, Type;
     MEMBERID Id;
@@ -1071,8 +1117,10 @@ void Generator::emitVtableProperties(ITypeInfo *TI, std::vector<Func> &Fs) {
   std::vector<Prop> Ps;
   for (Func &F : Fs) {
     FUNCDESC *FD = F.FD;
-    if (FD->elemdescFunc.tdesc.vt != VT_HRESULT ||
-        !(FD->invkind & (INVOKE_PROPERTYGET | INVOKE_PROPERTYPUT |
+    if (Dispatch ? (FD->wFuncFlags & FUNCFLAG_FRESTRICTED) != 0
+                 : FD->elemdescFunc.tdesc.vt != VT_HRESULT)
+      continue;
+    if (!(FD->invkind & (INVOKE_PROPERTYGET | INVOKE_PROPERTYPUT |
                          INVOKE_PROPERTYPUTREF)))
       continue;
     std::string N = rename(F.Names[0]);
@@ -1089,11 +1137,19 @@ void Generator::emitVtableProperties(ITypeInfo *TI, std::vector<Func> &Fs) {
     int NP = FD->cParams;
     // An accessor with an argument that is neither [in] nor [out,retval]
     // keeps the whole property out of the property data.
-    for (int Q = 0; Q < NP; ++Q)
+    for (int Q = 0; Q < NP && !Dispatch; ++Q)
       if (!(FD->lprgelemdescParam[Q].paramdesc.wParamFlags &
             (PARAMFLAG_FIN | PARAMFLAG_FRETVAL)))
         P->Mismatch = true;
-    if (FD->invkind & INVOKE_PROPERTYGET) {
+    if ((FD->invkind & INVOKE_PROPERTYGET) && Dispatch) {
+      P->Get = O.HighPropGet + N;
+      TypeClass C = classify(TI, FD->elemdescFunc.tdesc);
+      if (!P->Type.empty() && P->Type != highRet(C))
+        P->Mismatch = true;
+      P->Type = highRet(C);
+      if (NP > 0)
+        P->Indexed = NP;
+    } else if (FD->invkind & INVOKE_PROPERTYGET) {
       P->Get = O.HighPropGet + N;
       bool RV = NP > 0 && (FD->lprgelemdescParam[NP - 1].paramdesc.wParamFlags &
                            PARAMFLAG_FRETVAL);
@@ -1131,19 +1187,17 @@ void Generator::emitVtableProperties(ITypeInfo *TI, std::vector<Func> &Fs) {
   std::stable_sort(Out.begin(), Out.end(), [](Prop *A, Prop *B) {
     return (unsigned long)A->Id < (unsigned long)B->Id;
   });
-  if (Out.empty())
-    return;
-  H += "    //\n    // Property data\n    //\n\n";
+  std::string R;
   for (Prop *P : Out) {
     std::string D = "    __declspec(property(";
     if (!P->Get.empty())
       D += "get=" + P->Get;
     if (!P->Put.empty())
       D += std::string(P->Get.empty() ? "" : ",") + "put=" + P->Put;
-    H += D + "))\n    " + P->Type + " " + P->Name +
+    R += D + "))\n    " + P->Type + " " + P->Name +
          repeat("[]", P->Indexed) + ";\n";
   }
-  H += "\n";
+  return R;
 }
 
 void Generator::emitWrapperDecls(const std::vector<Wrapper> &Ws) {
@@ -1186,7 +1240,10 @@ void Generator::emitImplementations(const std::string &TliPath) {
   size_t Count = 0;
   for (const WrapperSection &S : Sections)
     Count += S.Ws.size();
-  bool Keyed = Count > KeyedThreshold;
+  bool Keyed = Count > KeyedThreshold && !O.ImplementationOnly;
+  // implementation_only: out-of-line (non-inline) definitions in the
+  // namespace, for one translation unit to provide.
+  const char *Inline = O.ImplementationOnly ? "" : "inline ";
   std::string Q = O.NoNamespace ? "" : NS + "::";
   unsigned Key = 0;
   std::string Map;
@@ -1206,8 +1263,8 @@ void Generator::emitImplementations(const std::string &TliPath) {
         Map += fmt("__declspec(implementation_key(%u)) ", Key) + W.Ret + " " +
                S.Item + "::" + W.Name + Sig + ";\n";
       } else {
-        I += "\ninline " + W.Ret + " " + S.Item + "::" + W.Name + Sig +
-             " {\n" + W.Body + "}\n";
+        I += "\n" + std::string(Inline) + W.Ret + " " + S.Item + "::" + W.Name +
+             Sig + " {\n" + W.Body + "}\n";
       }
     }
   }
@@ -1218,7 +1275,11 @@ void Generator::emitImplementations(const std::string &TliPath) {
   } else {
     H += "\n//\n// Wrapper method implementations\n//\n\n#include \"" +
          TliPath + "\"\n";
-    I = "#pragma once\n" + I;
+    if (O.ImplementationOnly && !O.NoNamespace)
+      I = "#pragma once\n\nnamespace " + NS + " {\n" + I + "\n} // namespace " +
+          NS + "\n";
+    else
+      I = "#pragma once\n" + I;
   }
 }
 
@@ -1248,7 +1309,9 @@ void Generator::emitInterface(Item &It) {
   if (!O.RawInterfacesOnly) {
     std::vector<Wrapper> Ws;
     buildVtableWrappers(It, TI, TA, Fs, Ws, HasWrapper);
-    emitVtableProperties(TI, Fs);
+    std::string PD = propertyData(TI, Fs, false);
+    if (!PD.empty())
+      H += "    //\n    // Property data\n    //\n\n" + PD + "\n";
     if (!Ws.empty()) {
       H += "    //\n    // Wrapper methods for error-handling\n    //\n\n";
       emitWrapperDecls(Ws);
@@ -1283,8 +1346,11 @@ void Generator::emitDispinterface(Item &It) {
     Vs.push_back(VD);
     VNames.push_back(rename(bstr(N)));
   }
-  if (!Vs.empty()) {
-    H += "    //\n    // Property data\n    //\n\n";
+  std::vector<Func> Fs;
+  loadFuncs(TI, It.TA, Fs);
+  std::string FPD = propertyData(TI, Fs, true);
+  if (!Vs.empty() || !FPD.empty()) {
+    H += "    //\n    // Property data\n    //\n\n" + FPD;
     for (size_t J = 0; J < Vs.size(); ++J) {
       TypeClass C = classify(TI, Vs[J]->elemdescVar.tdesc);
       bool RO = Vs[J]->wVarFlags & VARFLAG_FREADONLY;
@@ -1295,14 +1361,26 @@ void Generator::emitDispinterface(Item &It) {
     H += "\n";
   }
   H += "    //\n    // Wrapper methods for error-handling\n    //\n\n";
-  std::vector<Func> Fs;
-  loadFuncs(TI, It.TA, Fs);
   std::vector<Wrapper> DWs, PWs;
+  std::string RawDecls, RawProps;
   if (!Fs.empty()) {
     H += "    // Methods:\n";
     for (Func &F : Fs) {
       FUNCDESC *FD = F.FD;
+      if (FD->wFuncFlags & FUNCFLAG_FRESTRICTED)
+        continue;
       std::string N = rename(F.Names[0]);
+      bool PGet = FD->invkind & INVOKE_PROPERTYGET,
+           PPut = FD->invkind & INVOKE_PROPERTYPUT,
+           PPutRef = FD->invkind & INVOKE_PROPERTYPUTREF;
+      std::string WName = PGet ? O.HighPropGet + N
+                          : PPut ? O.HighPropPut + N
+                          : PPutRef ? O.HighPropPutRef + N
+                          : O.HighMethodPrefix + N;
+      const char *DK = PGet ? "DISPATCH_PROPERTYGET"
+                       : PPut ? "DISPATCH_PROPERTYPUT"
+                       : PPutRef ? "DISPATCH_PROPERTYPUTREF"
+                       : "DISPATCH_METHOD";
       // Arguments the dispatch helpers cannot pass.
       std::string Bad;
       for (SHORT P = 0; P < FD->cParams && Bad.empty(); ++P) {
@@ -1317,8 +1395,9 @@ void Generator::emitDispinterface(Item &It) {
       }
       TypeClass RC = classify(TI, FD->elemdescFunc.tdesc);
       bool VoidRet = RC.K == TypeClass::Void;
-      std::string Ret = VoidRet ? "HRESULT" : highRet(RC);
-      std::string Decl = "    " + Ret + " " + O.HighMethodPrefix + N + " (";
+      bool PutLike = (PPut || PPutRef) && VoidRet;
+      std::string Ret = PutLike ? "void" : VoidRet ? "HRESULT" : highRet(RC);
+      std::string Decl = "    " + Ret + " " + WName + " (";
       std::string Params, Fmt, Args;
       std::vector<std::string> DP;
       for (SHORT P = 0; P < FD->cParams; ++P) {
@@ -1328,9 +1407,13 @@ void Generator::emitDispinterface(Item &It) {
         std::string T = highParam(PC);
         DP.push_back(T + " " + PN + optionalDefault(FD, P));
         Params += (P ? ", " : "") + T + " " + PN;
-        Fmt += fmt("\\x%04x", (unsigned)PC.VT);
+        // Trailing [optional] VARIANTs (vtMissing) are marked 0x0800 for the dispatch helper.
+        unsigned V = PC.VT;
+        if (!optionalDefault(FD, P).empty())
+          V |= 0x0800;
+        Fmt += fmt("\\x%04x", V);
         std::string A = PN;
-        if (PC.K == TypeClass::Bstr && !PC.Alias)
+        if (PC.K == TypeClass::Bstr && !PC.Alias && !NativeTypes)
           A = "(BSTR)" + PN;
         else if (PC.K == TypeClass::Variant && !PC.Alias)
           A = "&" + PN;
@@ -1345,11 +1428,13 @@ void Generator::emitDispinterface(Item &It) {
       }
       H += Decl;
       std::string Call = "_com_dispatch_method(this, " + dispidText(FD->memid) +
-                         ", DISPATCH_METHOD, ";
+                         ", " + DK + ", ";
       std::string Tail = FD->cParams ? " \n        L\"" + Fmt + "\"" + Args + ");\n"
                                      : " NULL);\n";
       std::string B;
-      if (VoidRet)
+      if (PutLike)
+        B = "    " + Call + "VT_EMPTY, NULL," + Tail;
+      else if (VoidRet)
         B = "    return " + Call + "VT_EMPTY, NULL," + Tail;
       else
         B = resultDecl(RC) + "    " + Call + vtName(RC.VT) +
@@ -1357,7 +1442,7 @@ void Generator::emitDispinterface(Item &It) {
             ";\n";
       {
         Wrapper W;
-        W.Name = O.HighMethodPrefix + N;
+        W.Name = WName;
         W.Ret = Ret;
         W.QRet = qualify(RC, Ret, VoidRet);
         W.Body = B;
@@ -1365,6 +1450,52 @@ void Generator::emitDispinterface(Item &It) {
           W.DefParams.push_back(
               highParam(classify(TI, FD->lprgelemdescParam[P].tdesc)) + " " +
               paramName(F, P));
+        DWs.push_back(std::move(W));
+      }
+      if (O.RawDispinterfaces) {
+        // raw_dispinterfaces: HRESULT-returning twin without error handling.
+        bool SaveNative = NativeTypes;
+        NativeTypes = true;
+        std::string RN = O.RawMethodPrefix + N;
+        if (PGet) RN = O.RawPropGet + N;
+        else if (PPut) RN = O.RawPropPut + N;
+        else if (PPutRef) RN = O.RawPropPutRef + N;
+        std::vector<std::string> RP;
+        std::string RArgs;
+        for (SHORT P = 0; P < FD->cParams; ++P) {
+          TypeClass PC = classify(TI, FD->lprgelemdescParam[P].tdesc);
+          std::string PN = paramName(F, P);
+          RP.push_back(highParam(PC) + " " + PN);
+          std::string A = PN;
+          if (PC.K == TypeClass::Variant && !PC.Alias)
+            A = "&" + PN;
+          RArgs += ", " + A;
+        }
+        Wrapper W;
+        W.Name = RN;
+        W.Ret = W.QRet = "HRESULT";
+        W.DefParams = RP;
+        std::string DeclTail;
+        if (!VoidRet) {
+          W.DefParams.push_back(RC.Raw + " * _presult");
+          RP.push_back(RC.Raw + " * _result = 0");
+        }
+        RawDecls += "   HRESULT " + RN + " (";
+        if (RP.empty())
+          RawDecls += " );\n";
+        else {
+          RawDecls += "\n";
+          for (size_t K = 0; K < RP.size(); ++K)
+            RawDecls += "        " + RP[K] + (K + 1 < RP.size() ? ",\n" : " );\n");
+        }
+        std::string RFmt = Fmt;
+        W.Body = "    return _com_dispatch_raw_method(this, " +
+                 dispidText(FD->memid) + ", " + DK + ", " +
+                 (VoidRet ? std::string("VT_EMPTY, NULL,")
+                          : std::string(vtName(RC.VT)) + ", (void*)_presult,") +
+                 (FD->cParams ? " \n        L\"" + RFmt + "\"" + RArgs + ");\n"
+                              : " NULL);\n");
+        NativeTypes = SaveNative;
         DWs.push_back(std::move(W));
       }
     }
@@ -1393,10 +1524,20 @@ void Generator::emitDispinterface(Item &It) {
                  "    return " + resultExpr(C) + ";\n";
         PWs.push_back(std::move(W));
       }
+      if (O.RawDispinterfaces) {
+        Wrapper W;
+        W.Name = O.RawPropGet + VNames[J];
+        W.Ret = W.QRet = "HRESULT";
+        W.DefParams.push_back(C.Raw + " * _presult");
+        W.Body = "    return _com_dispatch_raw_propget(this, " + dispidText(Id) +
+                 ", " + vtName(C.VT) + ", (void*)_presult);\n";
+        RawProps += "    HRESULT " + W.Name + " ( " + C.Raw + " * _presult );\n";
+        PWs.push_back(std::move(W));
+      }
       if (!RO) {
         H += "    void " + P + " ( " + PT + " _val );\n";
         std::string A = "_val";
-        if (C.K == TypeClass::Bstr && !C.Alias)
+        if (C.K == TypeClass::Bstr && !C.Alias && !NativeTypes)
           A = "(BSTR)_val";
         else if ((C.K == TypeClass::Variant && !C.Alias) ||
                  C.K == TypeClass::Other && !C.Alias)
@@ -1408,8 +1549,35 @@ void Generator::emitDispinterface(Item &It) {
         W.Body = "    _com_dispatch_propput(this, " + dispidText(Id) + ", " +
                  vtName(C.VT) + ", " + A + ");\n";
         PWs.push_back(std::move(W));
+        if (O.RawDispinterfaces) {
+          bool SaveNative = NativeTypes;
+          NativeTypes = true;
+          std::string RPT = C.K == TypeClass::Other && !C.Alias
+                                ? "const " + C.Raw + " &"
+                                : highParam(C);
+          NativeTypes = SaveNative;
+          std::string RA = (C.K == TypeClass::Variant && !C.Alias) ||
+                                   (C.K == TypeClass::Other && !C.Alias)
+                               ? "&_val"
+                               : "_val";
+          Wrapper RW;
+          RW.Name = O.RawPropPut + VNames[J];
+          RW.Ret = RW.QRet = "HRESULT";
+          RW.DefParams.push_back(RPT + " _val");
+          RW.Body = "    return _com_dispatch_raw_propput(this, " +
+                    dispidText(Id) + ", " + vtName(C.VT) + ", " + RA + ");\n";
+          RawProps += "    HRESULT " + RW.Name + " ( " + RPT + " _val );\n";
+          PWs.push_back(std::move(RW));
+        }
       }
     }
+  }
+  if (O.RawDispinterfaces) {
+    H += "\n    //\n    // Wrapper methods without error-handling\n    //\n\n";
+    if (!Fs.empty())
+      H += "    // Methods:\n" + RawDecls;
+    if (!RawProps.empty())
+      H += std::string(Fs.empty() ? "" : "\n") + "    // Properties:\n" + RawProps;
   }
   freeFuncs(TI, Fs);
   for (VARDESC *VD : Vs)
@@ -1530,6 +1698,7 @@ bool Generator::run(ImportResult &R) {
   TL->GetDocumentation(MEMBERID_NIL, &LN, nullptr, nullptr, nullptr);
   LibName = bstr(LN);
   NS = O.HasRenameNamespace ? O.RenameNamespace : LibName;
+  NativeTypes = O.RawNativeTypes;
 
   UINT N = TL->GetTypeInfoCount();
   Items.resize(N);

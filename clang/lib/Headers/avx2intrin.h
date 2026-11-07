@@ -1918,9 +1918,11 @@ _mm256_shuffle_epi8(__m256i __a, __m256i __b) {
 /// \returns A 256-bit vector of [8 x i32] containing the result.
 #if defined(_MSC_VER) && defined(__cplusplus)
 /* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" { /* UE-INTRIN-EXTERNC: also inside an enclosing extern "C" */
 template <int __M>
 static __inline__ __m256i __DEFAULT_FN_ATTRS256 __ms__mm256_shuffle_epi32(__m256i __a) {
   return (__m256i)__builtin_ia32_pshufd256((__v8si)__a, __M);
+}
 }
 #define _mm256_shuffle_epi32(a, imm) (__ms__mm256_shuffle_epi32<(imm)>(a))
 #else
@@ -3369,9 +3371,11 @@ _mm256_permutevar8x32_epi32(__m256i __a, __m256i __b) {
 /// \returns A 256-bit vector of [4 x double] containing the result.
 #if defined(_MSC_VER) && defined(__cplusplus)
 /* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" { /* UE-INTRIN-EXTERNC: also inside an enclosing extern "C" */
 template <int __M>
 static __inline__ __m256d __DEFAULT_FN_ATTRS256 __ms__mm256_permute4x64_pd(__m256d __V) {
   return (__m256d)__builtin_ia32_permdf256((__v4df)__V, __M);
+}
 }
 #define _mm256_permute4x64_pd(V, M) (__ms__mm256_permute4x64_pd<(M)>(V))
 #else
@@ -3435,9 +3439,11 @@ _mm256_permutevar8x32_ps(__m256 __a, __m256i __b) {
 /// \returns A 256-bit vector of [4 x i64] containing the result.
 #if defined(_MSC_VER) && defined(__cplusplus)
 /* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" { /* UE-INTRIN-EXTERNC: also inside an enclosing extern "C" */
 template <int __M>
 static __inline__ __m256i __DEFAULT_FN_ATTRS256 __ms__mm256_permute4x64_epi64(__m256i __V) {
   return (__m256i)__builtin_ia32_permdi256((__v4di)__V, __M);
+}
 }
 #define _mm256_permute4x64_epi64(V, M) (__ms__mm256_permute4x64_epi64<(M)>(V))
 #else
@@ -3521,9 +3527,11 @@ static __inline__ __m256i __DEFAULT_FN_ATTRS256 __ms__mm256_permute2x128_si256(_
 /// \returns A 128-bit integer vector containing the result.
 #if defined(_MSC_VER) && defined(__cplusplus)
 /* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" { /* UE-INTRIN-EXTERNC: also inside an enclosing extern "C" */
 template <int __M>
 static __inline__ __m128i __DEFAULT_FN_ATTRS256 __ms__mm256_extracti128_si256(__m256i __V) {
   return (__m128i)__builtin_ia32_extract128i256((__v4di)__V, __M);
+}
 }
 #define _mm256_extracti128_si256(V, M) (__ms__mm256_extracti128_si256<(M)>(V))
 #else

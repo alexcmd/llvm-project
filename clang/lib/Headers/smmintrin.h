@@ -1960,9 +1960,11 @@ static __inline__ int __DEFAULT_FN_ATTRS __ms__mm_cmpistri(__m128i __p_A, __m128
 ///    the comparison.
 #if defined(_MSC_VER) && defined(__cplusplus)
 /* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" { /* UE-INTRIN-EXTERNC: also inside an enclosing extern "C" */
 template <int __M>
 static __inline__ __m128i __DEFAULT_FN_ATTRS __ms__mm_cmpestrm(__m128i __A, int __LA, __m128i __B, int __LB) {
   return (__m128i)__builtin_ia32_pcmpestrm128((__v16qi)__A, __LA, (__v16qi)__B, __LB, __M);
+}
 }
 #define _mm_cmpestrm(A, LA, B, LB, M) (__ms__mm_cmpestrm<(M)>(A, LA, B, LB))
 #else
@@ -2028,9 +2030,11 @@ static __inline__ __m128i __DEFAULT_FN_ATTRS __ms__mm_cmpestrm(__m128i __A, int 
 /// \returns Returns an integer representing the result index of the comparison.
 #if defined(_MSC_VER) && defined(__cplusplus)
 /* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" { /* UE-INTRIN-EXTERNC: also inside an enclosing extern "C" */
 template <int __M>
 static __inline__ int __DEFAULT_FN_ATTRS __ms__mm_cmpestri(__m128i __A, int __LA, __m128i __B, int __LB) {
   return (int)__builtin_ia32_pcmpestri128((__v16qi)__A, __LA, (__v16qi)__B, __LB, __M);
+}
 }
 #define _mm_cmpestri(A, LA, B, LB, M) (__ms__mm_cmpestri<(M)>(A, LA, B, LB))
 #else
@@ -2395,9 +2399,11 @@ static __inline__ int __DEFAULT_FN_ATTRS __ms__mm_cmpistrz(__m128i __p_A, __m128
 ///    \a B is the maximum, otherwise, returns 0.
 #if defined(_MSC_VER) && defined(__cplusplus)
 /* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" { /* UE-INTRIN-EXTERNC: also inside an enclosing extern "C" */
 template <int __M>
 static __inline__ int __DEFAULT_FN_ATTRS __ms__mm_cmpestra(__m128i __A, int __LA, __m128i __B, int __LB) {
   return (int)__builtin_ia32_pcmpestria128((__v16qi)__A, __LA, (__v16qi)__B, __LB, __M);
+}
 }
 #define _mm_cmpestra(A, LA, B, LB, M) (__ms__mm_cmpestra<(M)>(A, LA, B, LB))
 #else
@@ -2458,9 +2464,11 @@ static __inline__ int __DEFAULT_FN_ATTRS __ms__mm_cmpestra(__m128i __A, int __LA
 /// \returns Returns 1 if the resulting mask is non-zero, otherwise, returns 0.
 #if defined(_MSC_VER) && defined(__cplusplus)
 /* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" { /* UE-INTRIN-EXTERNC: also inside an enclosing extern "C" */
 template <int __M>
 static __inline__ int __DEFAULT_FN_ATTRS __ms__mm_cmpestrc(__m128i __A, int __LA, __m128i __B, int __LB) {
   return (int)__builtin_ia32_pcmpestric128((__v16qi)__A, __LA, (__v16qi)__B, __LB, __M);
+}
 }
 #define _mm_cmpestrc(A, LA, B, LB, M) (__ms__mm_cmpestrc<(M)>(A, LA, B, LB))
 #else
@@ -2520,9 +2528,11 @@ static __inline__ int __DEFAULT_FN_ATTRS __ms__mm_cmpestrc(__m128i __A, int __LA
 /// \returns Returns bit 0 of the resulting bit mask.
 #if defined(_MSC_VER) && defined(__cplusplus)
 /* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" { /* UE-INTRIN-EXTERNC: also inside an enclosing extern "C" */
 template <int __M>
 static __inline__ int __DEFAULT_FN_ATTRS __ms__mm_cmpestro(__m128i __A, int __LA, __m128i __B, int __LB) {
   return (int)__builtin_ia32_pcmpestrio128((__v16qi)__A, __LA, (__v16qi)__B, __LB, __M);
+}
 }
 #define _mm_cmpestro(A, LA, B, LB, M) (__ms__mm_cmpestro<(M)>(A, LA, B, LB))
 #else
@@ -2584,9 +2594,11 @@ static __inline__ int __DEFAULT_FN_ATTRS __ms__mm_cmpestro(__m128i __A, int __LA
 ///    maximum, otherwise, returns 0.
 #if defined(_MSC_VER) && defined(__cplusplus)
 /* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" { /* UE-INTRIN-EXTERNC: also inside an enclosing extern "C" */
 template <int __M>
 static __inline__ int __DEFAULT_FN_ATTRS __ms__mm_cmpestrs(__m128i __A, int __LA, __m128i __B, int __LB) {
   return (int)__builtin_ia32_pcmpestris128((__v16qi)__A, __LA, (__v16qi)__B, __LB, __M);
+}
 }
 #define _mm_cmpestrs(A, LA, B, LB, M) (__ms__mm_cmpestrs<(M)>(A, LA, B, LB))
 #else
@@ -2647,9 +2659,11 @@ static __inline__ int __DEFAULT_FN_ATTRS __ms__mm_cmpestrs(__m128i __A, int __LA
 ///    maximum, otherwise, returns 0.
 #if defined(_MSC_VER) && defined(__cplusplus)
 /* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
+extern "C++" { /* UE-INTRIN-EXTERNC: also inside an enclosing extern "C" */
 template <int __M>
 static __inline__ int __DEFAULT_FN_ATTRS __ms__mm_cmpestrz(__m128i __A, int __LA, __m128i __B, int __LB) {
   return (int)__builtin_ia32_pcmpestriz128((__v16qi)__A, __LA, (__v16qi)__B, __LB, __M);
+}
 }
 #define _mm_cmpestrz(A, LA, B, LB, M) (__ms__mm_cmpestrz<(M)>(A, LA, B, LB))
 #else

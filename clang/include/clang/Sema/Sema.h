@@ -2801,6 +2801,22 @@ public:
                         SourceLocation OpLoc);
 
   bool IsLayoutCompatible(QualType T1, QualType T2) const;
+
+  /// UE-C4267-TEMPLATE (MSVC compatibility): whether \p T is written as
+  /// size_t: the size_t typedef or sizeof's type somewhere in its sugar, or a
+  /// template parameter whose argument was first spelled that way.
+  bool isMSSpelledSizeT(QualType T) const;
+
+  /// UE-C4267-TEMPLATE: cl keeps the spelling of the template arguments that
+  /// first named a specialization (fa<size_t> then fa<unsigned long long>:
+  /// C4267 in the body; the other order: C4244). Records, for a class or
+  /// function template specialization, which type arguments (by index) were
+  /// spelled size_t the first time it was formed. Instantiated bodies only
+  /// see canonical replacement types, so the narrowing check looks it up.
+  void recordMSSizeTTemplateArgs(const Decl *Specialization,
+                                 ArrayRef<TemplateArgument> SugaredArgs);
+  llvm::DenseMap<const Decl *, uint64_t> MSSizeTTemplateArgs;
+
   bool IsPointerInterconvertibleBaseOf(const TypeSourceInfo *Base,
                                        const TypeSourceInfo *Derived);
 

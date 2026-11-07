@@ -4003,6 +4003,8 @@ TemplateDeductionResult Sema::FinishTemplateArgumentDeduction(
       SubstDecl(FD, Owner, SubstArgs));
   if (!Specialization || Specialization->isInvalidDecl())
     return TemplateDeductionResult::SubstitutionFailure;
+  // UE-C4267-TEMPLATE: the spelling of the arguments that first name it.
+  recordMSSizeTTemplateArgs(Specialization, CTAI.SugaredConverted);
 
   assert(isSameDeclaration(Specialization->getPrimaryTemplate(),
                            FunctionTemplate));

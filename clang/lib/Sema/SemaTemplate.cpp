@@ -4005,6 +4005,8 @@ QualType Sema::CheckTemplateIdType(ElaboratedTypeKeyword Keyword,
       if (ClassTemplate->isOutOfLine())
         Decl->setLexicalDeclContext(ClassTemplate->getLexicalDeclContext());
     }
+    // UE-C4267-TEMPLATE: the spelling of the arguments that first name it.
+    recordMSSizeTTemplateArgs(Decl, CTAI.SugaredConverted);
 
     if (Decl->getSpecializationKind() == TSK_Undeclared &&
         ClassTemplate->getTemplatedDecl()->hasAttrs()) {

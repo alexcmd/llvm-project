@@ -1058,8 +1058,12 @@ void Clang::AddPreprocessingOptions(Compilation &C, const JobAction &JA,
 
   bool RenderedImplicitInclude = false;
   for (const Arg *A : Args.filtered(options::OPT_clang_i_Group)) {
+    // UE-PCH-GCHPROBE: cl has no gcc-style probe, and with /Yu the PCH of a
+    // /FI header is commonly named <header>.pch next to it (UnrealBuildTool):
+    // probing would turn the /FI into a second -include-pch and hide the
+    // through header. No probe in cl mode.
     if (A->getOption().matches(options::OPT_include) &&
-        D.getProbePrecompiled()) {
+        D.getProbePrecompiled() && !D.IsCLMode()) {
       // Handling of gcc-style gch precompiled headers.
       bool IsFirstImplicitInclude = !RenderedImplicitInclude;
       RenderedImplicitInclude = true;

@@ -34,6 +34,7 @@ add_clang_library(clangFrontend
   PrintPreprocessedOutput.cpp
   SARIFDiagnostic.cpp
   SARIFDiagnosticPrinter.cpp
+  SARIFLogConsumer.cpp
   SerializedDiagnosticPrinter.cpp
   SerializedDiagnosticReader.cpp
   StandaloneDiagnostic.cpp

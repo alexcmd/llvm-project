@@ -6715,6 +6715,26 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     D.Diag(diag::remark_drv_cl_spectre_not_implemented) << A->getSpelling();
   }
 
+  // UE-EXPLOG-SARIF: /experimental:log <path> (cl 14.51): the path is the
+  // log file, <path>.sarif when it has no extension, <dir>\<stem>.sarif when
+  // it ends in a separator. Not for /E and /P (cl writes none there either).
+  if (const Arg *A = Args.getLastArg(options::OPT__SLASH_experimental_log)) {
+    StringRef V = A->getValue();
+    if (V.empty()) {
+      D.Diag(diag::err_drv_cl_requires_argument) << A->getSpelling();
+    } else if (!isa<PreprocessJobAction>(JA)) {
+      SmallString<128> P(V);
+      if (llvm::sys::path::is_separator(V.back())) {
+        llvm::sys::path::append(
+            P, llvm::sys::path::stem(Inputs[0].getBaseInput()) + ".sarif");
+      } else if (!llvm::sys::path::has_extension(V)) {
+        P += ".sarif";
+      }
+      CmdArgs.push_back("-diagnostic-sarif-file");
+      CmdArgs.push_back(Args.MakeArgString(P));
+    }
+  }
+
   // cl.exe: an unknown /d1 name is C1007 from c1xx, an unknown /d2 name C1007
   // from p2; a bare name is D8004 (probes_cl_decisions.md section 1). Known
   // spellings have their own defs in Options.td and never reach here.

@@ -8379,6 +8379,10 @@ let Visibility = [CC1Option] in {
 def diagnostic_log_file : Separate<["-"], "diagnostic-log-file">,
   HelpText<"Filename (or -) to log diagnostics to">,
   MarshallingInfoString<DiagnosticOpts<"DiagnosticLogFile">>;
+def diagnostic_sarif_file : Separate<["-"], "diagnostic-sarif-file">,
+  MetaVarName<"<filename>">,
+  HelpText<"Also write the diagnostics as a SARIF log to <filename> (clang-cl /experimental:log)">,
+  MarshallingInfoString<DiagnosticOpts<"DiagnosticSARIFFile">>;
 def diagnostic_serialized_file : Separate<["-"], "serialize-diagnostic-file">,
   MetaVarName<"<filename>">,
   HelpText<"File for serializing diagnostics in a binary format">;
@@ -9524,6 +9528,11 @@ def : CLFlag<"Qgather-">, Alias<mno_gather>,
       HelpText<"Disable generation of gather instructions in auto-vectorization(x86 only)">;
 def : CLFlag<"Qscatter-">, Alias<mno_scatter>,
       HelpText<"Disable generation of scatter instructions in auto-vectorization(x86 only)">;
+// UE-EXPLOG-SARIF: /experimental:log <path> (joined or separate): cl writes a
+// SARIF log of the diagnostics. A path ending in a separator is a directory
+// (<dir>\<source stem>.sarif); a path without extension gets .sarif.
+def _SLASH_experimental_log : CLJoinedOrSeparate<"experimental:log">,
+  HelpText<"Write a SARIF log of the diagnostics">, MetaVarName<"<path>">;
 def _SLASH_experimental_deterministic : CLJoined<"experimental:deterministic">,
       HelpText<"Emit warnings on usage of non-deterministic macros __DATE__, __TIME__ and __TIMESTAMP__">;
 def _SLASH_d1nodatetime : CLFlag<"d1nodatetime">,

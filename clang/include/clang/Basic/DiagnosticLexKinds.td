@@ -460,6 +460,11 @@ def ext_pp_import_directive : Extension<"#import is a language extension">,
   InGroup<DiagGroup<"import-preprocessor-directive-pedantic">>;
 def err_pp_import_directive_ms : Error<
   "#import of type library is an unsupported Microsoft feature">;
+def err_pp_import_typelib_not_found : Error<
+  "cannot open type library file: '%0': %1">, DefaultFatal;
+def err_pp_import_typelib_failed : Error<
+  "#import of type library '%0' failed: %1">;
+def err_pp_import_typelib_attr : Error<"%0">;
 def ext_pp_include_search_ms : ExtWarn<
   "#include resolved using non-portable Microsoft search rules as: %0">,
   InGroup<MicrosoftInclude>;

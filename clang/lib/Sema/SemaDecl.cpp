@@ -8812,6 +8812,39 @@ void Sema::CheckShadowingDeclModification(Expr *E, SourceLocation Loc) {
 
 /// Check for conflict between this global or extern "C" declaration and
 /// previous global or extern "C" declarations. This is only used in C++.
+/// cl accepts an extern "C" variable redeclared with a same-named record type
+/// of another scope: the header of an #import'ed type library declares, inside
+/// its namespace, its own GUID struct and `extern "C" const GUID CLSID_X`,
+/// next to the SDK's ::GUID declarations of the same names. Keep such a
+/// declaration a separate entity in Microsoft compatibility mode.
+static bool isMSExternCRecordTypeClash(Sema &S, const NamedDecl *ND,
+                                       const NamedDecl *Prev) {
+  if (!S.getLangOpts().MSVCCompat)
+    return false;
+  const auto *NV = dyn_cast<VarDecl>(ND);
+  const auto *PV = dyn_cast<VarDecl>(Prev);
+  if (!NV || !PV || NV->getType().isNull() || PV->getType().isNull() ||
+      S.Context.hasSameType(NV->getType(), PV->getType()))
+    return false;
+  const RecordDecl *NR = NV->getType()->getAsRecordDecl();
+  const RecordDecl *PR = PV->getType()->getAsRecordDecl();
+  if (!NR || !PR || NR == PR || NR->isInvalidDecl() || PR->isInvalidDecl())
+    return false;
+  StringRef NN = NR->getName(), PN = PR->getName();
+  if (const TypedefNameDecl *TD = PR->getTypedefNameForAnonDecl())
+    PN = TD->getName();
+  // ::GUID is `typedef struct _GUID GUID`; the type library's is `GUID`.
+  auto Spelled = [](const VarDecl *V) {
+    if (const auto *TT = V->getType()->getAs<TypedefType>())
+      return TT->getDecl()->getName();
+    return StringRef();
+  };
+  if (NN != PN && NN != Spelled(PV) && Spelled(NV) != Spelled(PV))
+    return false;
+  return NV->getDeclContext()->getRedeclContext() !=
+         PV->getDeclContext()->getRedeclContext();
+}
+
 template<typename T>
 static bool checkGlobalOrExternCConflict(
     Sema &S, const T *ND, bool IsGlobal, LookupResult &Previous) {
@@ -8826,6 +8859,8 @@ static bool checkGlobalOrExternCConflict(
 
   if (Prev) {
     if (!IsGlobal || isIncompleteDeclExternC(S, ND)) {
+      if (isMSExternCRecordTypeClash(S, ND, Prev))
+        return false;
       // Both the old and new declarations have C language linkage. This is a
       // redeclaration.
       Previous.clear();

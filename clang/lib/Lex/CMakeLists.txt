@@ -32,7 +32,13 @@ add_clang_library(clangLex
   TextEncoding.cpp
   TokenConcatenation.cpp
   TokenLexer.cpp
+  TypeLibImport.cpp
 
   LINK_LIBS
   clangBasic
   )
+
+# #import of a type library reads it through the COM automation API.
+if(WIN32)
+  target_link_libraries(clangLex PRIVATE ole32 oleaut32 advapi32)
+endif()

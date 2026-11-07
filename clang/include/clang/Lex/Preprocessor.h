@@ -2896,6 +2896,13 @@ private:
   void HandleIncludeMacrosDirective(SourceLocation HashLoc, Token &Tok);
   void HandleImportDirective(SourceLocation HashLoc, Token &Tok);
   void HandleMicrosoftImportDirective(Token &Tok);
+
+public:
+  /// Replace a \#pragma start_map_region ... stop_map_region block of an
+  /// \#import'ed type library header with the .tli it names.
+  void HandleMicrosoftMapRegion(SourceLocation Loc, StringRef TliPath);
+
+private:
   void HandleObjCImportDirective(Token &AtTok, Token &ImportTok);
 
 public:

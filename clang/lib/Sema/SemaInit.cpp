@@ -7752,13 +7752,16 @@ void Sema::checkInitializerLifetime(const InitializedEntity &Entity,
   return sema::checkInitLifetime(*this, Entity, Init);
 }
 
+// UE-NARROWING-C4838: how cl treats narrowing in this initializer element.
+enum class MSAggregateNarrowing { No, Variable, Constexpr };
 static void DiagnoseNarrowingInInitList(Sema &S,
                                         const ImplicitConversionSequence &ICS,
                                         QualType PreNarrowingType,
                                         QualType EntityType,
                                         const Expr *PostInit,
-                                        bool MSAggregateVariable);
-static bool isMSAggregateElementOfVariable(const InitializedEntity &Entity);
+                                        MSAggregateNarrowing MSAggregate);
+static MSAggregateNarrowing
+isMSAggregateElementOfVariable(const InitializedEntity &Entity);
 
 static void CheckC23ConstexprInitConversion(Sema &S, QualType FromType,
                                             QualType ToType, Expr *Init);
@@ -9924,9 +9927,11 @@ void InitializationSequence::dump() const {
 /// an aggregate initializer of a variable. cl 14.51 reports narrowing there as
 /// warning C4838 (level 1, /wd4838), and as error C2397 for scalars, T{...}
 /// prvalues, return values, arguments, new, mem-initializers and default
-/// member initializers. CLANG-CL-GAP(c4838-constexpr): cl is silent for a
-/// constant floating value that converts exactly in a constexpr variable.
-static bool isMSAggregateElementOfVariable(const InitializedEntity &Entity) {
+/// member initializers. UE-C4838-CONSTEXPR: for a constexpr variable cl
+/// reports no narrowing in its aggregate initializer at all (measured: also
+/// inexact, out of range and overflowing constants).
+static MSAggregateNarrowing
+isMSAggregateElementOfVariable(const InitializedEntity &Entity) {
   const InitializedEntity *E = &Entity;
   bool Element = false;
   while (E && (E->getKind() == InitializedEntity::EK_Member ||
@@ -9934,7 +9939,12 @@ static bool isMSAggregateElementOfVariable(const InitializedEntity &Entity) {
     Element = true;
     E = E->getParent();
   }
-  return Element && E && E->getKind() == InitializedEntity::EK_Variable;
+  if (!Element || !E || E->getKind() != InitializedEntity::EK_Variable)
+    return MSAggregateNarrowing::No;
+  if (const auto *VD = dyn_cast_or_null<VarDecl>(E->getDecl()))
+    if (VD->isConstexpr())
+      return MSAggregateNarrowing::Constexpr;
+  return MSAggregateNarrowing::Variable;
 }
 
 static void DiagnoseNarrowingInInitList(Sema &S,
@@ -9942,7 +9952,12 @@ static void DiagnoseNarrowingInInitList(Sema &S,
                                         QualType PreNarrowingType,
                                         QualType EntityType,
                                         const Expr *PostInit,
-                                        bool MSAggregateVariable) {
+                                        MSAggregateNarrowing MSAggregate) {
+  bool MSAggregateVariable = MSAggregate == MSAggregateNarrowing::Variable;
+  if (MSAggregate == MSAggregateNarrowing::Constexpr &&
+      S.getLangOpts().MSVCCompat && S.getLangOpts().CPlusPlus11 &&
+      S.getLangOpts().isCompatibleWithMSVC(LangOptions::MSVC2015))
+    return;
   const StandardConversionSequence *SCS = nullptr;
   switch (ICS.getKind()) {
   case ImplicitConversionSequence::StandardConversion:

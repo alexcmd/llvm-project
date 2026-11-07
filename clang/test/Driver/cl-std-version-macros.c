@@ -16,9 +16,9 @@
 // C-STD-NOT: "-fms-lang-version=
 
 // RUN: %clang_cl -### -c /std:clatest /Tc%s 2>&1 | FileCheck -check-prefix=C-LATEST %s
-// C-LATEST: "-std=c23"
-// C-LATEST: "-fms-lang-version=202312"
 // C-LATEST-NOT: "-fms-no-stdc-version"
+// C-LATEST: "-fms-lang-version=202312"
+// C-LATEST: "-std=c23"
 
 // /Za in C defines __STDC__ like /Zc:__STDC__; /Zc:__cplusplus is claimed.
 // RUN: %clang_cl -### -c /Za /Zc:__cplusplus /Tc%s 2>&1 | FileCheck -check-prefix=C-ZA %s

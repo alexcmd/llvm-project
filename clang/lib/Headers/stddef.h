@@ -74,7 +74,7 @@
 #define __need_unreachable
 #endif
 #if (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L) ||              \
-    (defined(__cplusplus) && __cplusplus >= 201103L)
+    (defined(__cplusplus) && (__cplusplus >= 201103L || (defined(_MSVC_LANG) && _MSVC_LANG >= 201103L)))
 #define __need_max_align_t
 #endif
 #define __need_offsetof

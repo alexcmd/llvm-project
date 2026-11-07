@@ -466,13 +466,26 @@ static void InitializeStandardPredefinedMacros(const TargetInfo &TI,
   //      [C++] Whether __STDC_VERSION__ is predefined and if so, what its
   //      value is, are implementation-defined.
   // (Removed in C++20.)
+  // CL-STD-VERSION-MACROS: -fms-lang-version / -fms-no-stdc-version /
+  // -fms-legacy-cplusplus (clang-cl driver only) give cl.exe's values.
   if (!LangOpts.CPlusPlus) {
-    if (std::optional<uint32_t> Lang = LangOpts.getCLangStd())
-      Builder.defineMacro("__STDC_VERSION__", Twine(*Lang) + "L");
+    if (LangOpts.MSVCLangVersion)
+      Builder.defineMacro("__STDC_VERSION__",
+                          Twine(LangOpts.MSVCLangVersion) + "L");
+    else if (!LangOpts.MSVCNoStdcVersion) {
+      if (std::optional<uint32_t> Lang = LangOpts.getCLangStd())
+        Builder.defineMacro("__STDC_VERSION__", Twine(*Lang) + "L");
+    }
   } else {
     //   -- __cplusplus
-    Builder.defineMacro("__cplusplus",
-                        Twine(*LangOpts.getCPlusPlusLangStd()) + "L");
+    if (LangOpts.MSVCLegacyCPlusPlus)
+      Builder.defineMacro("__cplusplus", "199711L");
+    else if (LangOpts.MSVCLangVersion)
+      Builder.defineMacro("__cplusplus",
+                          Twine(LangOpts.MSVCLangVersion) + "L");
+    else
+      Builder.defineMacro("__cplusplus",
+                          Twine(*LangOpts.getCPlusPlusLangStd()) + "L");
 
     //   -- __STDCPP_DEFAULT_NEW_ALIGNMENT__
     //      [C++17] An integer literal of type std::size_t whose value is the

@@ -100,7 +100,7 @@
    C++11 18.3.3.2: same contents as the Standard C Library header <limits.h>.
  */
 #if (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L) ||              \
-    (defined(__cplusplus) && __cplusplus >= 201103L)
+    (defined(__cplusplus) && (__cplusplus >= 201103L || (defined(_MSVC_LANG) && _MSVC_LANG >= 201103L)))
 
 #undef  LLONG_MIN
 #undef  LLONG_MAX

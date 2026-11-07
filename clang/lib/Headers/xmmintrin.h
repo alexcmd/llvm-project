@@ -40,7 +40,7 @@ typedef unsigned char __v16qu __attribute__((__vector_size__(16)));
   __attribute__((__always_inline__, __nodebug__, __target__("sse2"),           \
                  __min_vector_width__(128)))
 
-#if defined(__cplusplus) && (__cplusplus >= 201103L)
+#if defined(__cplusplus) && (__cplusplus >= 201103L || (defined(_MSVC_LANG) && _MSVC_LANG >= 201103L))
 #define __DEFAULT_FN_ATTRS_CONSTEXPR __DEFAULT_FN_ATTRS constexpr
 #define __DEFAULT_FN_ATTRS_SSE2_CONSTEXPR __DEFAULT_FN_ATTRS_SSE2 constexpr
 #else

@@ -17,7 +17,7 @@
 /* Allow using the tzcnt intrinsics even for non-BMI targets. Since the TZCNT
    instruction behaves as BSF on non-BMI targets, there is code that expects
    to use it as a potentially faster version of BSF. */
-#if defined(__cplusplus) && (__cplusplus >= 201103L)
+#if defined(__cplusplus) && (__cplusplus >= 201103L || (defined(_MSVC_LANG) && _MSVC_LANG >= 201103L))
 #define __RELAXED_FN_ATTRS                                                     \
   __attribute__((__always_inline__, __nodebug__)) constexpr
 #else
@@ -162,7 +162,7 @@ _mm_tzcnt_64(unsigned long long __X) {
 #undef __RELAXED_FN_ATTRS
 
 /* Define the default attributes for the functions in this file. */
-#if defined(__cplusplus) && (__cplusplus >= 201103L)
+#if defined(__cplusplus) && (__cplusplus >= 201103L || (defined(_MSVC_LANG) && _MSVC_LANG >= 201103L))
 #define __DEFAULT_FN_ATTRS                                                     \
   __attribute__((__always_inline__, __nodebug__, __target__("bmi"))) constexpr
 #else

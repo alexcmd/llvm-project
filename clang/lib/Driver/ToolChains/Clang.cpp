@@ -9131,6 +9131,41 @@ void Clang::AddClangCLArgs(const ArgList &Args, types::ID InputType,
     CmdArgs.push_back("-P");
   }
 
+  // CL-STD-VERSION-MACROS: language version macros as cl.exe defines them
+  // (observed on 14.44/14.51). The -std= mode clang uses is unchanged.
+  //   C, no /std:c11|c17|clatest: no __STDC_VERSION__; /std:clatest: 202312L.
+  //   C, /Za: __STDC__ 1, like /Zc:__STDC__.
+  //   C++: __cplusplus 199711L unless /Zc:__cplusplus (last of +/- wins);
+  //   /std:c++latest: _MSVC_LANG (and __cplusplus with /Zc) 202400L.
+  // An explicit -std= (/clang:-std=...) keeps clang's values.
+  // clang's builtin headers also test _MSVC_LANG, so their C++ paths
+  // (constexpr intrinsics, max_align_t, ...) do not depend on __cplusplus.
+  {
+    const Arg *StdArg = Args.getLastArg(options::OPT__SLASH_std);
+    StringRef Std = StdArg ? StringRef(StdArg->getValue()) : StringRef();
+    bool ExplicitStd = Args.hasArg(options::OPT_std_EQ);
+    if (types::isCuda(InputType) || types::isHIP(InputType)) {
+      // Not a cl.exe language: clang values.
+    } else if (types::isCXX(InputType)) {
+      if (!ExplicitStd && Std == "c++latest")
+        CmdArgs.push_back("-fms-lang-version=202400");
+      if (!Args.hasFlag(options::OPT__SLASH_Zc___cplusplus,
+                        options::OPT__SLASH_Zc___cplusplus_, false))
+        CmdArgs.push_back("-fms-legacy-cplusplus");
+    } else if (types::isDerivedFromC(InputType)) {
+      Args.claimAllArgs(options::OPT__SLASH_Zc___cplusplus,
+                        options::OPT__SLASH_Zc___cplusplus_);
+      if (!ExplicitStd) {
+        if (Std == "clatest")
+          CmdArgs.push_back("-fms-lang-version=202312");
+        else if (Std != "c11" && Std != "c17")
+          CmdArgs.push_back("-fms-no-stdc-version");
+      }
+      if (Args.hasArg(options::OPT__SLASH_Za))
+        CmdArgs.push_back("-fms-define-stdc");
+    }
+  }
+
  if (Args.hasFlag(options::OPT__SLASH_Zc_dllexportInlines_,
                   options::OPT__SLASH_Zc_dllexportInlines,
                   false)) {

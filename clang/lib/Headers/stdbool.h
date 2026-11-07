@@ -27,7 +27,7 @@
 #elif defined(__GNUC__) && !defined(__STRICT_ANSI__)
 /* Define _Bool as a GNU extension. */
 #define _Bool bool
-#if defined(__cplusplus) && __cplusplus < 201103L
+#if defined(__cplusplus) && (__cplusplus < 201103L && !(defined(_MSVC_LANG) && _MSVC_LANG >= 201103L))
 /* For C++98, define bool, false, true as a GNU extension. */
 #define bool bool
 #define false false

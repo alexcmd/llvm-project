@@ -4493,6 +4493,19 @@ bool Sema::MergeFunctionDecl(FunctionDecl *New, NamedDecl *&OldD, Scope *S,
   // A function that has already been declared has been redeclared or
   // defined with a different type; show an appropriate diagnostic.
 
+  // A function the Microsoft compiler predeclares (-fms-predeclare-eh-types)
+  // redeclared with another type: cl rejects that; accept it with the
+  // library-builtin warning (code built only with clang-cl, e.g. a runtime
+  // declaring _CxxThrowException with its own ThrowInfo type).
+  if (getLangOpts().MSVCCompat &&
+      getSourceManager().isWrittenInBuiltinFile(
+          Old->getFirstDecl()->getLocation())) {
+    Diag(New->getLocation(), diag::warn_redecl_library_builtin) << New;
+    Diag(OldLocation, diag::note_previous_builtin_declaration)
+        << Old << Old->getType();
+    return false;
+  }
+
   // If the previous declaration was an implicitly-generated builtin
   // declaration, then at the very least we should use a specialized note.
   unsigned BuiltinID;

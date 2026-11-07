@@ -52,6 +52,13 @@ extern "C" __declspec(thread) bool __tls_guard;
 extern "C" void __cdecl _Init_thread_header(int *const);
 extern "C" void __cdecl _Init_thread_abort(int *const) {}
 
+// A redeclaration with another type (cl: error C2733) is accepted with the
+// library-builtin warning, for code built only with clang-cl.
+struct OwnThrowInfo;
+extern "C" void _CxxThrowException(void *, const OwnThrowInfo *); // expected-warning {{incompatible redeclaration of library function '_CxxThrowException'}}
+                                                                  // expected-note@* {{is a builtin with type}}
+void own_throw() { _CxxThrowException(0, (const OwnThrowInfo *)0); }
+
 // Exception specifications as cl has them.
 static_assert(noexcept(_Init_thread_header(0)), "");
 static_assert(noexcept(__dyn_tls_on_demand_init()), "");

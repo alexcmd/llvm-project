@@ -23,6 +23,12 @@ def libpath: P<"libpath", "Object file search path">;
 def lst    : F<"list">, HelpText<"List contents of .lib file on stdout">;
 def out    : P<"out", "Path to file to write output">;
 def deffile : P<"def", "def file to use to generate import library">;
+// LIB-DEF-FROMOBJ: link /LIB /DEF without a file: import library + .exp from
+// the /EXPORT directives of the objects (link.exe 14.51). /NAME names the
+// DLL (LIBRARY in a .def wins); /EXPORT adds an export.
+def deffile_bare : F<"def">, HelpText<"Build an import library from the exports of the input objects">;
+def name : P<"name", "DLL name for /def (default: output name)">;
+def export : P<"export", "Export a symbol (with /def)">;
 def nativedeffile : P<"defArm64Native", "def file to use to generate native ARM64 symbols in ARM64EC import library">;
 
 def llvmlibthin : F<"llvmlibthin">,
@@ -54,3 +60,8 @@ def nodefaultlib_all: F<"nodefaultlib">;
 def nologo : F<"nologo">;
 def subsystem : P<"subsystem", "">;
 def verbose : F<"verbose">;
+// link.exe /LIB accepts these and ignores them (UnrealBuildTool passes them).
+def errorreport : P<"errorreport", "">;
+def experimental : P<"experimental", "">;
+def subsystem_bare : F<"subsystem">;
+def d2 : P<"d2", "">;

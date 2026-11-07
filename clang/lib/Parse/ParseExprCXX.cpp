@@ -2644,9 +2644,11 @@ bool Parser::ParseUnqualifiedId(CXXScopeSpec &SS, ParsedType ObjectType,
       // C++2c [tem.names]p6
       // A name prefixed by the keyword template shall be followed by a template
       // argument list or refer to a class template or an alias template.
+      // UE-TEMPLATE-KW-NOARGS: cl 14.51 accepts Name::template Func(args)
+      // (deduced, no argument list) silently, also under /permissive-.
       if ((TNK == TNK_Function_template || TNK == TNK_Dependent_template_name ||
            TNK == TNK_Var_template) &&
-          !Tok.is(tok::less))
+          !Tok.is(tok::less) && !getLangOpts().MSVCCompat)
         Diag(IdLoc, diag::missing_template_arg_list_after_template_kw);
     }
     return false;

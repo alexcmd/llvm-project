@@ -2990,7 +2990,13 @@ void Preprocessor::HandleMicrosoftImportDirective(Token &Tok) {
   Req.BaseName = llvm::sys::path::stem(Path).str();
   Req.Banner = "Created by " + getClangFullVersion();
   Req.AttrText = AttrText;
-  Req.IsMacro = [this](const std::string &N) { return isMacroDefined(N); };
+  // auto_rename: names that are, or were, macros so far (cl also renames a
+  // name a header defined and later #undef'd).
+  Req.IsMacro = [this](const std::string &N) {
+    auto It = getIdentifierTable().find(N);
+    return It != getIdentifierTable().end() &&
+           It->getValue()->hadMacroDefinition();
+  };
   typelib::ImportResult Res;
   if (!typelib::importTypeLibrary(Req, Res)) {
     Diag(FilenameLoc, diag::err_pp_import_typelib_failed)

@@ -1619,6 +1619,37 @@ struct PragmaIncludeAliasHandler : public PragmaHandler {
   }
 };
 
+/// "\#pragma start_map_region("file.tli")" ... "\#pragma stop_map_region":
+/// the function implementation map of a large #import'ed type library (cl
+/// loads the keyed definitions from the .tli lazily); the region is replaced
+/// by the .tli itself. "\#pragma implementation_key(N)" in that .tli is a
+/// no-op here.
+struct PragmaMapRegionHandler : public PragmaHandler {
+  PragmaMapRegionHandler(const char *N) : PragmaHandler(N) {}
+
+  void HandlePragma(Preprocessor &PP, PragmaIntroducer Introducer,
+                    Token &Tok) override {
+    bool Start = getName() == "start_map_region";
+    std::string File;
+    SourceLocation Loc = Tok.getLocation();
+    PP.Lex(Tok);
+    if (Start && Tok.is(tok::l_paren)) {
+      PP.Lex(Tok);
+      if (Tok.is(tok::string_literal)) {
+        SmallString<260> Buf;
+        bool Invalid = false;
+        StringRef Spelling = PP.getSpelling(Tok, Buf, &Invalid);
+        if (!Invalid && Spelling.size() >= 2)
+          File = Spelling.substr(1, Spelling.size() - 2).str();
+      }
+    }
+    while (Tok.isNot(tok::eod))
+      PP.Lex(Tok);
+    if (Start && !File.empty())
+      PP.HandleMicrosoftMapRegion(Loc, File);
+  }
+};
+
 /// PragmaMessageHandler - Handle the microsoft and gcc \#pragma message
 /// extension.  The syntax is:
 /// \code
@@ -2202,6 +2233,9 @@ void Preprocessor::RegisterBuiltinPragmas() {
     AddPragmaHandler(new PragmaExecCharsetHandler());
     AddPragmaHandler(new PragmaIncludeAliasHandler());
     AddPragmaHandler(new PragmaHdrstopHandler());
+    AddPragmaHandler(new PragmaMapRegionHandler("start_map_region"));
+    AddPragmaHandler(new PragmaMapRegionHandler("stop_map_region"));
+    AddPragmaHandler(new EmptyPragmaHandler("implementation_key"));
     AddPragmaHandler(new PragmaSystemHeaderHandler());
     AddPragmaHandler(new PragmaManagedHandler("managed"));
     AddPragmaHandler(new PragmaManagedHandler("unmanaged"));

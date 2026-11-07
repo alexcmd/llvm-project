@@ -6465,6 +6465,18 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   if (D.IsCLMode())
     AddClangCLArgs(Args, InputType, CmdArgs);
 
+  // cl writes the .tlh/.tli of a type library #import next to the object
+  // file (the current directory when there is none).
+  if (D.IsCLMode() && Output.isFilename() &&
+      JA.getType() != types::TY_PP_C && JA.getType() != types::TY_PP_CXX) {
+    SmallString<256> Dir(Output.getFilename());
+    llvm::sys::path::remove_filename(Dir);
+    if (!Dir.empty()) {
+      D.getVFS().makeAbsolute(Dir);
+      CmdArgs.push_back(Args.MakeArgString("-fms-import-output-dir=" + Dir));
+    }
+  }
+
   llvm::codegenoptions::DebugInfoKind DebugInfoKind =
       llvm::codegenoptions::NoDebugInfo;
   DwarfFissionKind DwarfFission = DwarfFissionKind::None;

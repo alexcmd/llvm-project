@@ -36,6 +36,12 @@
 #include "clang/Lex/PreprocessorOptions.h"
 #include "clang/Lex/Token.h"
 #include "clang/Lex/VariadicMacroSupport.h"
+#include "TypeLibImport.h"
+#include "clang/Basic/Version.h"
+#include "llvm/Support/ConvertUTF.h"
+#include "llvm/Support/FileSystem.h"
+#include "llvm/Support/IOSandbox.h"
+#include "llvm/Support/Process.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/ScopeExit.h"
@@ -2869,17 +2875,190 @@ void Preprocessor::HandleIncludeNextDirective(SourceLocation HashLoc,
 }
 
 /// HandleMicrosoftImportDirective - Implements \#import for Microsoft Mode
+///
+/// cl's \#import of a type library: resolve the type library (include search,
+/// then PATH and LIB; "progid:" / "libid:" through the registry), write
+/// <name>.tlh/.tli into the object file directory (reused while their stamp
+/// equals the type library's) and include the .tlh.
 void Preprocessor::HandleMicrosoftImportDirective(Token &Tok) {
-  // The Microsoft #import directive takes a type library and generates header
-  // files from it, and includes those.  This is beyond the scope of what clang
-  // does, so we ignore it and error out.  However, #import can optionally have
-  // trailing attributes that span multiple lines.  We're going to eat those
-  // so we can continue processing from there.
-  Diag(Tok, diag::err_pp_import_directive_ms );
-
-  // Read tokens until we get to the end of the directive.  Note that the
-  // directive can be split over multiple lines using the backslash character.
+#ifndef _WIN32
+  Diag(Tok, diag::err_pp_import_directive_ms);
   DiscardUntilEndOfDirective();
+#else
+  // Resolving and writing the generated headers is real file system work,
+  // like cl's (outside the VFS).
+  auto BypassSandbox = llvm::sys::sandbox::scopedDisable();
+  Token FilenameTok;
+  if (LexHeaderName(FilenameTok))
+    return;
+  if (FilenameTok.isNot(tok::header_name)) {
+    Diag(FilenameTok.getLocation(), diag::err_pp_expects_filename);
+    if (FilenameTok.isNot(tok::eod))
+      DiscardUntilEndOfDirective();
+    return;
+  }
+  SmallString<128> FilenameBuffer;
+  StringRef Filename = getSpelling(FilenameTok, FilenameBuffer);
+  SourceLocation FilenameLoc = FilenameTok.getLocation();
+  bool isAngled = GetIncludeFilenameSpelling(FilenameLoc, Filename);
+  if (Filename.empty()) {
+    DiscardUntilEndOfDirective();
+    return;
+  }
+
+  // The attribute list, as written (string arguments keep their quotes).
+  std::string AttrText;
+  Token T;
+  LexUnexpandedToken(T);
+  while (T.isNot(tok::eod)) {
+    if (!AttrText.empty() && T.hasLeadingSpace())
+      AttrText += ' ';
+    AttrText += getSpelling(T);
+    LexUnexpandedToken(T);
+  }
+
+  typelib::ImportRequest Req;
+  std::string AttrErr;
+  if (!typelib::parseAttributes(AttrText, Req.Options, AttrErr)) {
+    Diag(FilenameLoc, diag::err_pp_import_typelib_attr) << AttrErr;
+    return;
+  }
+
+  std::string Path;
+  std::string Display = Filename.str();
+  if (Filename.starts_with("progid:") || Filename.starts_with("libid:")) {
+    std::string Err;
+    if (!typelib::resolveRegistered(Filename.str(), Path, Display, Err)) {
+      Diag(FilenameLoc, diag::err_pp_import_typelib_not_found)
+          << Filename << Err;
+      return;
+    }
+  } else {
+    ConstSearchDirIterator CurDir = nullptr;
+    if (OptionalFileEntryRef F = LookupFile(
+            FilenameLoc, Filename, isAngled, nullptr, nullptr, &CurDir,
+            nullptr, nullptr, nullptr, nullptr, nullptr))
+      Path = F->getName().str();
+    // Then the PATH and LIB directory lists.
+    for (const char *Var : {"PATH", "LIB"}) {
+      if (!Path.empty())
+        break;
+      std::optional<std::string> L = llvm::sys::Process::GetEnv(Var);
+      if (!L)
+        continue;
+      SmallVector<StringRef, 16> Dirs;
+      StringRef(*L).split(Dirs, ';', -1, false);
+      for (StringRef D : Dirs) {
+        SmallString<260> P(D);
+        llvm::sys::path::append(P, Filename);
+        if (llvm::sys::fs::is_regular_file(P)) {
+          Path = std::string(P);
+          break;
+        }
+      }
+    }
+    if (Path.empty()) {
+      Diag(FilenameLoc, diag::err_pp_import_typelib_not_found)
+          << Filename << "No such file or directory";
+      return;
+    }
+  }
+  {
+    SmallString<260> Abs(Path);
+    llvm::sys::fs::make_absolute(Abs);
+    llvm::sys::path::remove_dots(Abs, /*remove_dot_dot=*/true);
+    llvm::sys::path::native(Abs);
+    Path = std::string(Abs);
+  }
+
+  SmallString<260> OutDir(PPOpts.MSImportOutputDir);
+  if (OutDir.empty())
+    llvm::sys::fs::current_path(OutDir);
+  llvm::sys::fs::make_absolute(OutDir);
+  llvm::sys::path::remove_dots(OutDir, /*remove_dot_dot=*/true);
+  llvm::sys::path::native(OutDir);
+  while (OutDir.size() > 3 && llvm::sys::path::is_separator(OutDir.back()))
+    OutDir.pop_back();
+
+  if (!llvm::ConvertUTF8toWide(Path, Req.TypeLibPath)) {
+    Diag(FilenameLoc, diag::err_pp_import_typelib_not_found)
+        << Filename << "invalid path";
+    return;
+  }
+  Req.SpelledName = Display;
+  Req.OutputDir = std::string(OutDir);
+  Req.BaseName = llvm::sys::path::stem(Path).str();
+  Req.Banner = "Created by " + getClangFullVersion();
+  Req.AttrText = AttrText;
+  Req.IsMacro = [this](const std::string &N) { return isMacroDefined(N); };
+  typelib::ImportResult Res;
+  if (!typelib::importTypeLibrary(Req, Res)) {
+    Diag(FilenameLoc, diag::err_pp_import_typelib_failed)
+        << Filename << Res.Error;
+    return;
+  }
+
+  // implementation_only includes the .tli instead of the .tlh.
+  std::string Inc = Req.Options.ImplementationOnly ? Res.TliPath : Res.TlhPath;
+  if (Inc.empty())
+    return;
+  OptionalFileEntryRef File = FileMgr.getOptionalFileRef(
+      Inc, /*OpenFile=*/true, /*CacheFailure=*/false);
+  if (!File) {
+    Diag(FilenameLoc, diag::err_pp_import_typelib_not_found)
+        << Inc << "No such file or directory";
+    return;
+  }
+  bool IsFirstIncludeOfFile = false;
+  if (!HeaderInfo.ShouldEnterIncludeFile(*this, *File, /*isImport=*/false,
+                                         getLangOpts().Modules, nullptr,
+                                         IsFirstIncludeOfFile))
+    return;
+  if (IncludeMacroStack.size() == MaxAllowedIncludeStackDepth - 1) {
+    Diag(FilenameTok, diag::err_pp_include_too_deep);
+    HasReachedMaxIncludeDepth = true;
+    return;
+  }
+  SourceLocation IncludePos = FilenameLoc;
+  if (IncludePos.isMacroID())
+    IncludePos = SourceMgr.getExpansionRange(IncludePos).getEnd();
+  FileID FID = SourceMgr.createFileID(
+      *File, IncludePos, SourceMgr.getFileCharacteristic(FilenameLoc));
+  if (FID.isValid())
+    EnterSourceFile(FID, nullptr, FilenameLoc, IsFirstIncludeOfFile);
+#endif
+}
+
+void Preprocessor::HandleMicrosoftMapRegion(SourceLocation Loc,
+                                            StringRef TliPath) {
+  if (!CurLexer)
+    return;
+  auto BypassSandbox = llvm::sys::sandbox::scopedDisable();
+  // Skip the declarations up to and including "#pragma stop_map_region".
+  StringRef Buf = CurLexer->getBuffer();
+  size_t Off = CurLexer->getBufferLocation() - Buf.data();
+  size_t E = Buf.find("#pragma stop_map_region", Off);
+  if (E == StringRef::npos)
+    return;
+  size_t EOL = Buf.find('\n', E);
+  CurLexer->seek(EOL == StringRef::npos ? Buf.size() : EOL + 1,
+                 /*IsAtStartOfLine=*/true);
+  OptionalFileEntryRef File = FileMgr.getOptionalFileRef(
+      TliPath, /*OpenFile=*/true, /*CacheFailure=*/false);
+  if (!File) {
+    Diag(Loc, diag::err_pp_import_typelib_not_found)
+        << TliPath << "No such file or directory";
+    return;
+  }
+  bool IsFirstIncludeOfFile = false;
+  if (!HeaderInfo.ShouldEnterIncludeFile(*this, *File, /*isImport=*/false,
+                                         getLangOpts().Modules, nullptr,
+                                         IsFirstIncludeOfFile))
+    return;
+  FileID FID = SourceMgr.createFileID(*File, Loc,
+                                      SourceMgr.getFileCharacteristic(Loc));
+  if (FID.isValid())
+    EnterSourceFile(FID, nullptr, Loc, IsFirstIncludeOfFile);
 }
 
 /// HandleImportDirective - Implements \#import.

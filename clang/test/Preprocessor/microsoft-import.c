@@ -1,4 +1,6 @@
 // RUN: %clang_cc1 -E -verify -fms-compatibility %s
+// Off Windows there is no COM to read type libraries with.
+// UNSUPPORTED: system-windows
 
 #import "pp-record.h" // expected-error {{#import of type library is an unsupported Microsoft feature}}
 

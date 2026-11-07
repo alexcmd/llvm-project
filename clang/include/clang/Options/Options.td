@@ -8707,6 +8707,10 @@ def pch_through_header_EQ : Joined<["-"], "pch-through-header=">,
   HelpText<"Stop PCH generation after including this file.  When using a PCH, "
            "skip tokens until after this file is included.">,
   MarshallingInfoString<PreprocessorOpts<"PCHThroughHeader">>;
+def fms_import_output_dir_EQ : Joined<["-"], "fms-import-output-dir=">,
+  HelpText<"Directory for the .tlh/.tli files written by #import of a type "
+           "library">,
+  MarshallingInfoString<PreprocessorOpts<"MSImportOutputDir">>;
 def pch_through_hdrstop_create : Flag<["-"], "pch-through-hdrstop-create">,
   HelpText<"When creating a PCH, stop PCH generation after #pragma hdrstop.">,
   MarshallingInfoFlag<PreprocessorOpts<"PCHWithHdrStopCreate">>;

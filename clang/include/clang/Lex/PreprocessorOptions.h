@@ -116,6 +116,10 @@ public:
   /// skipped until after an #include of this header is seen.
   std::string PCHThroughHeader;
 
+  /// Directory receiving the .tlh/.tli files of a Microsoft #import of a type
+  /// library (cl: the /Fo directory, else the current directory).
+  std::string MSImportOutputDir;
+
   /// The implicit PCH included at the start of the translation unit, or empty.
   std::string ImplicitPCHInclude;
 

@@ -4,25 +4,25 @@
 
 // RUN: %clang --target=i686-windows -fms-compatibility -fms-compatibility-version=14 -dM -E - </dev/null -o - | FileCheck %s --check-prefix=CHECK-MSC-VERSION-MAJOR
 
-// CHECK-MSC-VERSION-MAJOR: _MSC_BUILD 1
+// CHECK-MSC-VERSION-MAJOR: _MSC_BUILD 0
 // CHECK-MSC-VERSION-MAJOR: _MSC_FULL_VER 140000000
 // CHECK-MSC-VERSION-MAJOR: _MSC_VER 1400
 
 // RUN: %clang --target=i686-windows -fms-compatibility -fms-compatibility-version=15.00 -dM -E - </dev/null -o - | FileCheck %s --check-prefix=CHECK-MSC-VERSION-MAJOR-MINOR
 
-// CHECK-MSC-VERSION-MAJOR-MINOR: _MSC_BUILD 1
+// CHECK-MSC-VERSION-MAJOR-MINOR: _MSC_BUILD 0
 // CHECK-MSC-VERSION-MAJOR-MINOR: _MSC_FULL_VER 150000000
 // CHECK-MSC-VERSION-MAJOR-MINOR: _MSC_VER 1500
 
 // RUN: %clang --target=i686-windows -fms-compatibility -fms-compatibility-version=15.00.20706 -dM -E - </dev/null -o - | FileCheck %s --check-prefix=CHECK-MSC-VERSION-MAJOR-MINOR-BUILD
 
-// CHECK-MSC-VERSION-MAJOR-MINOR-BUILD: _MSC_BUILD 1
+// CHECK-MSC-VERSION-MAJOR-MINOR-BUILD: _MSC_BUILD 0
 // CHECK-MSC-VERSION-MAJOR-MINOR-BUILD: _MSC_FULL_VER 150020706
 // CHECK-MSC-VERSION-MAJOR-MINOR-BUILD: _MSC_VER 1500
 
 // RUN: %clang --target=i686-windows -fms-compatibility -fms-compatibility-version=15.00.20706.01 -dM -E - </dev/null -o - | FileCheck %s --check-prefix=CHECK-MSC-VERSION-MAJOR-MINOR-BUILD-PATCH
 
-// CHECK-MSC-VERSION-MAJOR-MINOR-BUILD-PATCH: _MSC_BUILD 1
+// CHECK-MSC-VERSION-MAJOR-MINOR-BUILD-PATCH: _MSC_BUILD 0
 // CHECK-MSC-VERSION-MAJOR-MINOR-BUILD-PATCH: _MSC_FULL_VER 150020706
 // CHECK-MSC-VERSION-MAJOR-MINOR-BUILD-PATCH: _MSC_VER 1500
 
@@ -61,6 +61,6 @@
 
 // RUN: %clang --target=i686-windows -fms-extensions -dM -E - </dev/null -o - | FileCheck %s --check-prefix=CHECK-MS-EXTENSIONS
 
-// CHECK-MS-EXTENSIONS: _MSC_BUILD 1
+// CHECK-MS-EXTENSIONS: _MSC_BUILD 0
 // CHECK-MS-EXTENSIONS: _MSC_FULL_VER {{.+}}
 // CHECK-MS-EXTENSIONS: _MSC_VER {{....}}

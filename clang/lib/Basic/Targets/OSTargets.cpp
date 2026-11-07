@@ -219,8 +219,9 @@ static void addVisualCDefines(const LangOptions &Opts, MacroBuilder &Builder) {
     Builder.defineMacro("_MSC_VER",
                         Twine(Opts.MSCompatibilityVersion / 100000));
     Builder.defineMacro("_MSC_FULL_VER", Twine(Opts.MSCompatibilityVersion));
-    // FIXME We cannot encode the revision information into 32-bits
-    Builder.defineMacro("_MSC_BUILD", Twine(1));
+    // UE-MSCVER-NOENV: cl 14.51 defines _MSC_BUILD 0 (the revision is not
+    // encoded in _MSC_FULL_VER either).
+    Builder.defineMacro("_MSC_BUILD", Twine(0));
     // Exposed by MSVC, used in their stddef.h.
     Builder.defineMacro("_CRT_USE_BUILTIN_OFFSETOF", Twine(1));
 

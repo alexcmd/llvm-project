@@ -48,8 +48,12 @@ struct ImportOptions {
   std::string HighPropGet = "Get", HighPropPut = "Put",
               HighPropPutRef = "PutRef"; // high_property_prefixes
   std::vector<std::string> Exclude;                          // exclude("a",..)
+  std::vector<std::string> Include; // include("a",..): keep auto-excluded
   std::vector<std::pair<std::string, std::string>> Renames; // rename("a","b")
   std::vector<std::string> InjectStatements; // inject_statement("text")
+  bool HasLcid = false;  // lcid("409"): locale of a registry (progid:/libid:)
+  unsigned long Lcid = 0; // lookup; no effect on the generated text
+  unsigned TlbId = 0;    // tlbid(n): n-th type library resource of a DLL
 };
 
 struct ImportRequest {
@@ -73,19 +77,27 @@ struct ImportResult {
   std::string Error;      // non-empty on failure
 };
 
+/// First attribute cl ignores; it also ignores every attribute after it.
+struct AttrIssue {
+  enum Kind { None, Unknown, ArgCount } K = None; // C4185 / C4186
+  std::string Name;
+  unsigned Need = 0; // ArgCount: arguments the attribute requires
+};
+
 /// Parse the attribute list of the directive (cl spelling, e.g.
-/// `raw_interfaces_only rename("a", "b")`). Returns false with Err set on an
-/// unknown attribute or malformed argument list.
-bool parseAttributes(const std::string &Text, ImportOptions &O,
-                     std::string &Err);
+/// `raw_interfaces_only rename("a", "b")`). Like cl, an unknown attribute or
+/// one with too few arguments stops the scan (reported in Issue).
+void parseAttributes(const std::string &Text, ImportOptions &O,
+                     AttrIssue &Issue);
 
 /// Generate the header pair; fills Result.TlhText/TliText. Does not write.
 bool generate(const ImportRequest &Req, ImportResult &Result);
 
 /// Resolve "progid:X" / "libid:{...}[,maj.min]" through the registry to the
 /// type library file; Display receives the text cl puts in the banner.
-bool resolveRegistered(const std::string &Spec, std::string &Path,
-                       std::string &Display, std::string &Err);
+bool resolveRegistered(const std::string &Spec, unsigned long Lcid,
+                       std::string &Path, std::string &Display,
+                       std::string &Err);
 
 /// cl's #import step: reuse <OutputDir>\<BaseName>.tlh when its timestamp
 /// equals the type library's and its banner line (which carries a hash of

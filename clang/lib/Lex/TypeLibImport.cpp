@@ -24,6 +24,7 @@
 #include <algorithm>
 #include <cstdarg>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <cstdio>
 #include <map>
@@ -40,8 +41,9 @@ bool clang::typelib::importTypeLibrary(const ImportRequest &Q,
                                        ImportResult &R) {
   return generate(Q, R);
 }
-bool clang::typelib::resolveRegistered(const std::string &, std::string &,
-                                       std::string &, std::string &Err) {
+bool clang::typelib::resolveRegistered(const std::string &, unsigned long,
+                                       std::string &, std::string &,
+                                       std::string &Err) {
   Err = "type library import requires a Windows host";
   return false;
 }
@@ -216,7 +218,8 @@ bool Generator::isExcludedName(const std::string &N) const {
   for (const std::string &E : O.Exclude)
     if (E == N)
       return true;
-  if (!O.NoAutoExclude)
+  if (!O.NoAutoExclude &&
+      std::find(O.Include.begin(), O.Include.end(), N) == O.Include.end())
     for (const char *E : AutoExcluded)
       if (N == E)
         return true;
@@ -1386,7 +1389,7 @@ void Generator::emitDispinterface(Item &It) {
       for (SHORT P = 0; P < FD->cParams && Bad.empty(); ++P) {
         const TYPEDESC &T = FD->lprgelemdescParam[P].tdesc;
         if (T.vt == VT_PTR && T.lptdesc->vt == VT_VOID)
-          Bad = "Method '" + N + "' not emitted because argument '" +
+          Bad = "Method '" + WName + "' not emitted because argument '" +
                 paramName(F, P) + "' has invalid type: " + typeText(TI, T);
       }
       if (!Bad.empty()) {
@@ -1688,7 +1691,10 @@ std::string toCRLF(const std::string &S) {
 }
 
 bool Generator::run(ImportResult &R) {
-  HRESULT HR = LoadTypeLibEx(Req.TypeLibPath.c_str(), REGKIND_NONE, &TL);
+  std::wstring LoadPath = Req.TypeLibPath;
+  if (O.TlbId > 1) // n-th TYPELIB resource of a DLL
+    LoadPath += L"\\" + std::to_wstring(O.TlbId);
+  HRESULT HR = LoadTypeLibEx(LoadPath.c_str(), REGKIND_NONE, &TL);
   if (FAILED(HR)) {
     R.Error = fmt("cannot load type library (hr 0x%08lx)", (unsigned long)HR);
     return false;
@@ -1740,6 +1746,12 @@ bool Generator::run(ImportResult &R) {
   H += "#pragma once\n#pragma pack(push, 8)\n\n#include <comdef.h>\n\n";
   if (!O.NoNamespace)
     H += "namespace " + NS + " {\n\n";
+  if (!O.InjectStatements.empty()) {
+    H += "//\n// User-injected statements\n//\n\n";
+    for (const std::string &St : O.InjectStatements)
+      H += St + "\n";
+    H += "\n";
+  }
   emitForward();
   if (!O.NoSmartPointers)
     emitSmartPointers();
@@ -1799,21 +1811,26 @@ struct AttrScanner {
 };
 } // namespace
 
-bool clang::typelib::parseAttributes(const std::string &S, ImportOptions &O,
-                                      std::string &Err) {
+void clang::typelib::parseAttributes(const std::string &S, ImportOptions &O,
+                                      AttrIssue &Issue) {
   AttrScanner Sc{S};
   while (true) {
     Sc.ws();
     if (Sc.P >= S.size())
-      return true;
+      return;
     size_t B = Sc.P;
     while (Sc.P < S.size() &&
            (isalnum((unsigned char)S[Sc.P]) || S[Sc.P] == '_'))
       ++Sc.P;
     std::string Name = S.substr(B, Sc.P - B);
     if (Name.empty()) {
-      Err = "unexpected character in #import attribute list";
-      return false;
+      // Not an identifier: cl reports it as an unknown attribute.
+      size_t E = Sc.P;
+      while (E < S.size() && !isspace((unsigned char)S[E]))
+        ++E;
+      Issue.K = AttrIssue::Unknown;
+      Issue.Name = S.substr(Sc.P, E - Sc.P);
+      return;
     }
     std::vector<std::string> Args;
     bool HasArgs = false;
@@ -1826,10 +1843,8 @@ bool clang::typelib::parseAttributes(const std::string &S, ImportOptions &O,
         while (Sc.P < S.size() &&
                (isspace((unsigned char)S[Sc.P]) || S[Sc.P] == ','))
           ++Sc.P;
-        if (Sc.P >= S.size()) {
-          Err = "missing ')' in #import attribute '" + Name + "'";
-          return false;
-        }
+        if (Sc.P >= S.size())
+          break;
         if (S[Sc.P] == ')') {
           ++Sc.P;
           break;
@@ -1855,7 +1870,9 @@ bool clang::typelib::parseAttributes(const std::string &S, ImportOptions &O,
     }
     auto need = [&](size_t Min) {
       if (Args.size() < Min) {
-        Err = "#import attribute '" + Name + "' needs an argument";
+        Issue.K = AttrIssue::ArgCount;
+        Issue.Name = Name;
+        Issue.Need = (unsigned)Min;
         return false;
       }
       return true;
@@ -1864,7 +1881,7 @@ bool clang::typelib::parseAttributes(const std::string &S, ImportOptions &O,
     else if (Name == "named_guids") O.NamedGuids = true;
     else if (Name == "no_namespace") O.NoNamespace = true;
     else if (Name == "rename_namespace") {
-      if (!need(1)) return false;
+      if (!need(1)) return;
       O.HasRenameNamespace = true;
       O.RenameNamespace = Args[0];
     } else if (Name == "no_implementation") O.NoImplementation = true;
@@ -1878,35 +1895,48 @@ bool clang::typelib::parseAttributes(const std::string &S, ImportOptions &O,
     else if (Name == "no_search_namespace") O.NoSearchNamespace = true;
     else if (Name == "embedded_idl") O.EmbeddedIdl = true;
     else if (Name == "raw_method_prefix") {
-      if (!need(1)) return false;
+      if (!need(1)) return;
       O.HasRawMethodPrefix = true;
       O.RawMethodPrefix = Args[0];
     } else if (Name == "high_method_prefix") {
-      if (!need(1)) return false;
+      if (!need(1)) return;
       O.HasHighMethodPrefix = true;
       O.HighMethodPrefix = Args[0];
     } else if (Name == "raw_property_prefixes") {
-      if (!need(3)) return false;
+      if (!need(3)) return;
       O.RawPropGet = Args[0]; O.RawPropPut = Args[1]; O.RawPropPutRef = Args[2];
     } else if (Name == "high_property_prefixes") {
-      if (!need(3)) return false;
+      if (!need(3)) return;
       O.HighPropGet = Args[0]; O.HighPropPut = Args[1]; O.HighPropPutRef = Args[2];
     } else if (Name == "exclude") {
-      if (!need(1)) return false;
+      if (!need(1)) return;
       O.Exclude.insert(O.Exclude.end(), Args.begin(), Args.end());
     } else if (Name == "rename") {
-      if (!need(2)) return false;
+      if (!need(2)) return;
       O.Renames.push_back({Args[0], Args[1]});
     } else if (Name == "inject_statement") {
-      if (!need(1)) return false;
+      if (!need(1)) return;
       O.InjectStatements.push_back(Args[0]);
-    } else if (Name == "auto_search" || Name == "include" ||
-               Name == "rename_search_namespace" || Name == "tlbid" ||
-               Name == "no_registry") {
-      (void)HasArgs; // accepted; resolution-only attributes
+    } else if (Name == "lcid") {
+      if (!need(1)) return;
+      O.HasLcid = true;
+      O.Lcid = strtoul(Args[0].c_str(), nullptr, 16);
+    } else if (Name == "tlbid") {
+      if (!need(1)) return;
+      O.TlbId = (unsigned)strtoul(Args[0].c_str(), nullptr, 10);
+    } else if (Name == "include") {
+      if (!need(1)) return;
+      O.Include.insert(O.Include.end(), Args.begin(), Args.end());
+    } else if (Name == "rename_search_namespace") {
+      // Cross-library resolution only; no effect on a library's own output.
+      if (!need(1)) return;
+    } else if (Name == "auto_search" || Name == "no_registry") {
+      // Cross-library resolution only; no effect on a library's own output.
     } else {
-      Err = "unknown #import attribute '" + Name + "'";
-      return false;
+      (void)HasArgs;
+      Issue.K = AttrIssue::Unknown;
+      Issue.Name = Name;
+      return;
     }
   }
 }
@@ -1967,7 +1997,8 @@ uint32_t fnv1a(const std::string &S) {
 } // namespace
 
 bool clang::typelib::resolveRegistered(const std::string &Spec,
-                                       std::string &Path, std::string &Display,
+                                       unsigned long Lcid, std::string &Path,
+                                       std::string &Display,
                                        std::string &Err) {
   HRESULT CI = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
   bool OK = false;
@@ -2037,7 +2068,7 @@ bool clang::typelib::resolveRegistered(const std::string &Spec,
     }
     BSTR P = nullptr;
     if (Maj != 0xFFFF && SUCCEEDED(QueryPathOfRegTypeLib(Lib, Maj, Min,
-                                                         LOCALE_NEUTRAL, &P))) {
+                                                         (LCID)Lcid, &P))) {
       Path = bstr(P);
       while (!Path.empty() && Path.back() == '\0')
         Path.pop_back();

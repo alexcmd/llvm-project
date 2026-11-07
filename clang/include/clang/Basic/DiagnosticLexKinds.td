@@ -464,7 +464,13 @@ def err_pp_import_typelib_not_found : Error<
   "cannot open type library file: '%0': %1">, DefaultFatal;
 def err_pp_import_typelib_failed : Error<
   "#import of type library '%0' failed: %1">;
-def err_pp_import_typelib_attr : Error<"%0">;
+// cl C4185 / C4186: the attribute and every one after it are ignored.
+def warn_pp_import_unknown_attr : Warning<
+  "ignoring unknown #import attribute '%0'">,
+  InGroup<MicrosoftImportAttribute>;
+def warn_pp_import_attr_args : Warning<
+  "#import attribute '%0' requires %1 arguments; ignored">,
+  InGroup<MicrosoftImportAttribute>;
 def ext_pp_include_search_ms : ExtWarn<
   "#include resolved using non-portable Microsoft search rules as: %0">,
   InGroup<MicrosoftInclude>;

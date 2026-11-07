@@ -12971,6 +12971,47 @@ void Sema::recordMSSizeTTemplateArgs(const Decl *Specialization,
   MSSizeTTemplateArgs[Key] = Bits;
 }
 
+/// UE-C4244-CAST-ORIGIN: the width cl 14.51 attributes to a value when it
+/// decides on C4244/C4267: a cast (explicit or implicit) between arithmetic
+/// types gives min(its width, the operand's), arithmetic and ?: the max of
+/// their operands, anything else its type's width (double 64, float 32).
+/// So (u64)((double)u32 / u32) or (u64)a * b with 32-bit a, b is 32 bits wide
+/// and its narrowing to 32 bits is silent, as with cl; (u64)(a + 1.0) or
+/// (u64)(i64)x is 64.
+static unsigned msOriginWidth(const ASTContext &Ctx, const Expr *E) {
+  E = E->IgnoreParens();
+  QualType T = E->getType();
+  auto Width = [&](QualType Q) -> unsigned {
+    if (Q->isRealFloatingType())
+      return Ctx.getTypeSize(Q);
+    if (Q->isIntegralOrUnscopedEnumerationType())
+      return Ctx.getIntWidth(Q);
+    return Ctx.getTypeSize(Q);
+  };
+  if (!T->isArithmeticType())
+    return Width(T);
+  if (const auto *CE = dyn_cast<CastExpr>(E)) {
+    const Expr *Sub = CE->getSubExpr();
+    if (Sub->getType()->isArithmeticType() && !Sub->getType()->isBooleanType())
+      return std::min(Width(T), msOriginWidth(Ctx, Sub));
+    return Width(T);
+  }
+  if (const auto *BO = dyn_cast<BinaryOperator>(E)) {
+    if (BO->isAdditiveOp() || BO->isMultiplicativeOp() || BO->isBitwiseOp())
+      return std::max(msOriginWidth(Ctx, BO->getLHS()),
+                      msOriginWidth(Ctx, BO->getRHS()));
+    return Width(T);
+  }
+  if (const auto *CO = dyn_cast<ConditionalOperator>(E))
+    return std::max(msOriginWidth(Ctx, CO->getTrueExpr()),
+                    msOriginWidth(Ctx, CO->getFalseExpr()));
+  if (const auto *UO = dyn_cast<UnaryOperator>(E))
+    if (UO->getOpcode() == UO_Minus || UO->getOpcode() == UO_Plus ||
+        UO->getOpcode() == UO_Not)
+      return msOriginWidth(Ctx, UO->getSubExpr());
+  return Width(T);
+}
+
 static void DiagnoseImpCast(Sema &S, const Expr *E, QualType SourceType,
                             QualType T, SourceLocation CContext, unsigned diag,
                             bool PruneControlFlow = false) {
@@ -13878,6 +13919,10 @@ void Sema::CheckImplicitConversion(Expr *E, QualType T, SourceLocation CC,
     // narrower integer without C4244, whatever its width (an operator on it
     // gives an ordinary 64-bit value, which is reported).
     if (MSNarrow64 && E->IgnoreParenImpCasts()->getSourceBitField())
+      return;
+    // UE-C4244-CAST-ORIGIN: a 64-bit value that cl traces back to at most the
+    // target's width (through casts and arithmetic) is not reported.
+    if (MSNarrow64 && msOriginWidth(Context, E) <= TargetRange.Width)
       return;
     if (MSNarrow64 && isMSSizeTExpr(E))
       return DiagnoseImpCast(*this, E, T, CC, diag::warn_impcast_size_t_ms,

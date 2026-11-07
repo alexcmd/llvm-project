@@ -6817,8 +6817,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
         V = V.drop_front();
       unsigned N;
       if (!V.getAsInteger(10, N))
-        if (auto G = diagGroupFromCLWarningID(N))
-          CLNamed.insert(DiagnosticIDs::getWarningOptionForGroup(*G));
+        for (diag::Group G : diagGroupsFromCLWarningID(N))
+          CLNamed.insert(DiagnosticIDs::getWarningOptionForGroup(G));
     }
     CLLevelsOff = CLLevel > 4;
   }
@@ -6835,13 +6835,26 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
       if (E.Level == 0 || E.Level > CLLevel) {
         Off.insert(E.Group);
         CmdArgs.push_back(Args.MakeArgString(Twine("-Wno-") + E.Group));
-      } else if (E.Parent && Off.contains(E.Parent)) {
+      } else if (E.Enable || (E.Parent && Off.contains(E.Parent))) {
         CmdArgs.push_back(Args.MakeArgString(Twine("-W") + E.Group));
       }
     }
   };
   if (!CLLevelsOff && !CLLevelArg)
     RenderCLLevels();
+
+  // UE-WE-LASTWINS: for one cl warning id the last of /we, /wd, /w<l>, /wo
+  // wins (cl 14.51). /w<l><n> is a warning when <l> is within the final /W
+  // level (whatever the order of the two), else off. It also clears an earlier
+  // /we, unless /WX is in effect: cl still reports it as an error then.
+  bool CLWarningsAsErrors = false;
+  for (const Arg *A : Args.filtered(options::OPT_W_Joined)) {
+    StringRef V = A->getValue();
+    if (V == "error")
+      CLWarningsAsErrors = true;
+    else if (V == "no-error")
+      CLWarningsAsErrors = false;
+  }
 
   for (const Arg *A : Args.filtered(options::OPT_W_Group, options::OPT__SLASH_wd,
                                     options::OPT__SLASH_we,
@@ -6886,18 +6899,21 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
       }
 
       // Unmapped ids are silent, as in cl.exe.
-      auto Group = diagGroupFromCLWarningID(WarningNumber);
-      if (!Group)
-        continue;
-      StringRef Name = DiagnosticIDs::getWarningOptionForGroup(*Group);
-      if (A->getOption().matches(options::OPT__SLASH_wd) || Level == 0) {
-        CmdArgs.push_back(Args.MakeArgString("-Wno-" + Name));
-      } else if (A->getOption().matches(options::OPT__SLASH_we)) {
-        CmdArgs.push_back(Args.MakeArgString("-Werror=" + Name));
-      } else {
-        // CLANG-CL-GAP(wo-warn-once): clang has no warn-once switch, so /wo
-        // enables the group as a normal warning.
-        CmdArgs.push_back(Args.MakeArgString("-W" + Name));
+      bool IsWL = A->getOption().matches(options::OPT__SLASH_w);
+      for (diag::Group Group : diagGroupsFromCLWarningID(WarningNumber)) {
+        StringRef Name = DiagnosticIDs::getWarningOptionForGroup(Group);
+        if (A->getOption().matches(options::OPT__SLASH_wd) || Level == 0 ||
+            (IsWL && !CLLevelsOff && Level > CLLevel)) {
+          CmdArgs.push_back(Args.MakeArgString("-Wno-" + Name));
+        } else if (A->getOption().matches(options::OPT__SLASH_we)) {
+          CmdArgs.push_back(Args.MakeArgString("-Werror=" + Name));
+        } else {
+          // CLANG-CL-GAP(wo-warn-once): clang has no warn-once switch, so /wo
+          // enables the group as a normal warning.
+          if (!CLWarningsAsErrors)
+            CmdArgs.push_back(Args.MakeArgString("-Wno-error=" + Name));
+          CmdArgs.push_back(Args.MakeArgString("-W" + Name));
+        }
       }
       continue;
     }

@@ -1515,9 +1515,9 @@ struct PragmaWarningHandler : public PragmaHandler {
           SV = diag::Severity::Ignored;
         if (SV != diag::Severity())
           for (int Id : Ids) {
-            if (auto Group = diagGroupFromCLWarningID(Id)) {
+            for (diag::Group Group : diagGroupsFromCLWarningID(Id)) {
               bool unknownDiag = PP.getDiagnostics().setSeverityForGroup(
-                  diag::Flavor::WarningOrError, *Group, SV, DiagLoc);
+                  diag::Flavor::WarningOrError, Group, SV, DiagLoc);
               assert(!unknownDiag &&
                      "wd table should only contain known diags");
               (void)unknownDiag;

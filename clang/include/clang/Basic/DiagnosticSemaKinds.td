@@ -4575,6 +4575,12 @@ def warn_impcast_nonnegative_result : Warning<
 def warn_impcast_integer_64_32 : Warning<
   "implicit conversion loses integer precision: %0 to %1">,
   InGroup<Shorten64To32>, DefaultIgnore;
+def warn_impcast_integer_64_32_ms : Warning<
+  "implicit conversion loses integer precision: %0 to %1">,
+  InGroup<ShortenInt64To32>, DefaultIgnore;
+def warn_impcast_size_t_ms : Warning<
+  "implicit conversion loses integer precision: %0 to %1">,
+  InGroup<ShortenSizeT>, DefaultIgnore;
 def warn_impcast_integer_precision_constant : Warning<
   "implicit conversion from %2 to %3 changes value from %0 to %1">,
   InGroup<ConstantConversion>;

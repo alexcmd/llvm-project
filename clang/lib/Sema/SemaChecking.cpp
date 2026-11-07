@@ -13874,6 +13874,11 @@ void Sema::CheckImplicitConversion(Expr *E, QualType T, SourceLocation CC,
     // through the size_t typedef, or the type of sizeof) C4267, any other
     // 64-to-32 one C4244. UE-C4267-CONDITIONAL: by the value's type after the
     // usual arithmetic conversions (isMSSizeTExpr).
+    // UE-C4244-BITFIELD: cl converts a 64-bit bit-field read as such to a
+    // narrower integer without C4244, whatever its width (an operator on it
+    // gives an ordinary 64-bit value, which is reported).
+    if (MSNarrow64 && E->IgnoreParenImpCasts()->getSourceBitField())
+      return;
     if (MSNarrow64 && isMSSizeTExpr(E))
       return DiagnoseImpCast(*this, E, T, CC, diag::warn_impcast_size_t_ms,
                              /* pruneControlFlow */ true);

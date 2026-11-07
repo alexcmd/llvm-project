@@ -160,6 +160,9 @@ private:
   // Storage for WinSdkDir/WinSdkVersion taken from manifest.json.
   std::string LayoutSdkDir, LayoutSdkVersion;
   bool BinRelativeLayout = false;
+  /// UE-MSCVER-SHIM: the VC toolchain was named by /vctoolsdir, /winsysroot
+  /// or the VC environment variables (not found by VS-instance discovery).
+  bool VCToolChainExplicit = false;
   // VFS-OVERLAY-AUTOLOAD: overlay file and its virtual include dir from the
   // openrt layout's manifest.json (empty: none).
   std::string OpenRTOverlay, OpenRTOverlayPrefix;

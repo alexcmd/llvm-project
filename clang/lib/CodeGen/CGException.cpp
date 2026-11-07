@@ -122,6 +122,8 @@ const EHPersonality
 EHPersonality::MSVC_except_handler = { "_except_handler3", nullptr };
 const EHPersonality
 EHPersonality::MSVC_C_specific_handler = { "__C_specific_handler", nullptr };
+const EHPersonality EHPersonality::MSVC_C_specific_handler_noexcept = {
+    "__C_specific_handler_noexcept", nullptr};
 const EHPersonality
 EHPersonality::MSVC_CxxFrameHandler3 = { "__CxxFrameHandler3", nullptr };
 const EHPersonality EHPersonality::MSVC_CxxFrameHandler4 = {
@@ -265,8 +267,27 @@ const EHPersonality &EHPersonality::get(CodeGenModule &CGM,
                      : getCPersonality(Target, CGOpts);
 }
 
+/// cl x64: a noexcept function (implicitly noexcept destructors too, but not
+/// throw() or __declspec(nothrow)) that uses __try gets
+/// __C_specific_handler_noexcept and no terminate scope: structured
+/// exceptions pass through it, the handler terminates on C++ exceptions.
+static bool isMSVCSEHNoexcept(const CodeGenModule &CGM, const Decl *D) {
+  const auto *FD = dyn_cast_or_null<FunctionDecl>(D);
+  if (!FD || !FD->usesSEHTry() ||
+      CGM.getTarget().getTriple().getArch() != llvm::Triple::x86_64 ||
+      !CGM.getTarget().getTriple().isWindowsMSVCEnvironment())
+    return false;
+  const auto *Proto = FD->getType()->getAs<FunctionProtoType>();
+  if (!Proto || Proto->canThrow() != CT_Cannot)
+    return false;
+  ExceptionSpecificationType EST = Proto->getExceptionSpecType();
+  return EST != EST_DynamicNone && EST != EST_NoThrow;
+}
+
 const EHPersonality &EHPersonality::get(CodeGenFunction &CGF) {
   const auto *FD = CGF.CurCodeDecl;
+  if (isMSVCSEHNoexcept(CGF.CGM, FD))
+    return MSVC_C_specific_handler_noexcept;
   // For outlined finallys and filters, use the SEH personality in case they
   // contain more SEH. This mostly only affects finallys. Filters could
   // hypothetically use gnu statement expressions to sneak in nested SEH.
@@ -610,6 +631,15 @@ void CodeGenFunction::EmitStartEHSpec(const Decl *D) {
       Filter->setFilter(I, EHType);
     }
   } else if (Proto->canThrow() == CT_Cannot) {
+    // cl x64: a function with __try has no terminate scope (noexcept: the
+    // personality enforces it, see isMSVCSEHNoexcept; throw() and
+    // __declspec(nothrow): not enforced).
+    if (FD->usesSEHTry() &&
+        getTarget().getTriple().getArch() == llvm::Triple::x86_64 &&
+        getTarget().getTriple().isWindowsMSVCEnvironment()) {
+      MSVCSEHNoTerminate = true;
+      return;
+    }
     // noexcept functions are simple terminate scopes.
     if (!getLangOpts().EHAsynch) { // -EHa: HW exception still can occur
       MSVCXXEH4NoUnwindBody = hasMSVCXXEH4NoUnwindBody(*this, FD);
@@ -702,6 +732,10 @@ void CodeGenFunction::EmitEndEHSpec(const Decl *D) {
     emitFilterDispatchBlock(*this, filterScope);
     EHStack.popFilter();
   } else if (Proto->canThrow() == CT_Cannot) {
+    if (MSVCSEHNoTerminate) {
+      MSVCSEHNoTerminate = false;
+      return;
+    }
     bool NoUnwindBody = MSVCXXEH4NoUnwindBody;
     MSVCXXEH4NoUnwindBody = false;
     if (EST != EST_NoThrow && useMSVCXXEH4NoexceptMetadata(*this))
@@ -1824,8 +1858,6 @@ struct PerformSEHFinally final : EHScopeStack::Cleanup {
     ASTContext &Context = CGF.getContext();
     CodeGenModule &CGM = CGF.CGM;
 
-    CallArgList Args;
-
     // Compute the two argument values.
     QualType ArgTys[2] = {Context.UnsignedCharTy, Context.VoidPtrTy};
     llvm::Value *FP = nullptr;
@@ -1851,8 +1883,42 @@ struct PerformSEHFinally final : EHScopeStack::Cleanup {
       llvm::Value *Load = CGF.Builder.CreateLoad(Addr, "cleanup.dest");
       llvm::Value *Zero = llvm::Constant::getNullValue(CGM.Int32Ty);
       IsForEH = CGF.Builder.CreateICmpNE(Load, Zero);
+
+      // cl x64: an abnormal exit (return/break/continue/goto) runs the
+      // __finally through _local_unwind. The call is marked for the backend,
+      // which emits it that way (X86AsmPrinter::emitSEHLocalUnwindCall); the
+      // outlined __finally stays out of line so its cleanup funclet keeps
+      // the call the backend looks for.
+      const llvm::Triple &T = CGM.getTarget().getTriple();
+      if (!CGF.IsOutlinedSEHHelper && T.getArch() == llvm::Triple::x86_64 &&
+          T.isWindowsMSVCEnvironment()) {
+        llvm::BasicBlock *LocalUnwind =
+            CGF.createBasicBlock("seh.finally.local_unwind");
+        llvm::BasicBlock *Direct = CGF.createBasicBlock("seh.finally.direct");
+        llvm::BasicBlock *Done = CGF.createBasicBlock("seh.finally.done");
+        CGF.Builder.CreateCondBr(IsForEH, LocalUnwind, Direct);
+        OutlinedFinally->addFnAttr(llvm::Attribute::NoInline);
+        CGF.EmitBlock(LocalUnwind);
+        emitCall(CGF, FP, llvm::ConstantInt::getTrue(CGF.getLLVMContext()),
+                 /*LocalUnwind=*/true);
+        CGF.EmitBranch(Done);
+        CGF.EmitBlock(Direct);
+        emitCall(CGF, FP, llvm::ConstantInt::getFalse(CGF.getLLVMContext()),
+                 /*LocalUnwind=*/false);
+        CGF.EmitBlock(Done);
+        return;
+      }
     }
 
+    emitCall(CGF, FP, IsForEH, /*LocalUnwind=*/false);
+  }
+
+  void emitCall(CodeGenFunction &CGF, llvm::Value *FP, llvm::Value *IsForEH,
+                bool LocalUnwind) {
+    ASTContext &Context = CGF.getContext();
+    CodeGenModule &CGM = CGF.CGM;
+    QualType ArgTys[2] = {Context.UnsignedCharTy, Context.VoidPtrTy};
+    CallArgList Args;
     Args.add(RValue::get(IsForEH), ArgTys[0]);
     Args.add(RValue::get(FP), ArgTys[1]);
 
@@ -1861,7 +1927,15 @@ struct PerformSEHFinally final : EHScopeStack::Cleanup {
         CGM.getTypes().arrangeBuiltinFunctionCall(Context.VoidTy, Args);
 
     auto Callee = CGCallee::forDirect(OutlinedFinally);
-    CGF.EmitCall(FnInfo, Callee, ReturnValueSlot(), Args);
+    llvm::CallBase *CB = nullptr;
+    CGF.EmitCall(FnInfo, Callee, ReturnValueSlot(), Args, &CB);
+    if (LocalUnwind && CB) {
+      CB->addFnAttr(llvm::Attribute::NoInline);
+      CB->addFnAttr(llvm::Attribute::get(CGF.getLLVMContext(),
+                                         "msvc-seh-local-unwind"));
+      if (auto *CI = dyn_cast<llvm::CallInst>(CB))
+        CI->setTailCallKind(llvm::CallInst::TCK_NoTail);
+    }
   }
 };
 } // end anonymous namespace

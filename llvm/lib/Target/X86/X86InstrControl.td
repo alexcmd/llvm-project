@@ -438,6 +438,10 @@ let isPseudo = 1, isCall = 1, isCodeGenOnly = 1,
     PseudoI<(outs), (ins i64imm:$rvfunc, i64i32imm_brtarget:$dst), []>,
             Requires<[In64BitMode]>;
 
+  def CALL64pcrel32_SEHLU :
+    PseudoI<(outs), (ins i64i32imm_brtarget:$dst), []>,
+            Requires<[In64BitMode]>;
+
   def CALL64r_ImpCall :
     PseudoI<(outs), (ins GR64_A:$dst), [(X86call GR64_A:$dst)]>,
             Requires<[In64BitMode,NotUseIndirectThunkCalls,ImportCallOptimizationEnabled]>;

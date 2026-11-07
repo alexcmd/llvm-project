@@ -707,6 +707,19 @@ void WinException::emitCSpecificHandlerTable(const MachineFunction *MF) {
 
   OS.emitLabel(TableBegin);
 
+  // _local_unwind call sites first: the runtime stops at the first entry that
+  // contains the resume target, and these must run before any enclosing one.
+  for (const SEHLocalUnwindSite &Site : FuncInfo.SEHLocalUnwindSites) {
+    AddComment("LabelStart");
+    OS.emitValue(getLabel(Site.Begin), 4);
+    AddComment("LabelEnd");
+    OS.emitValue(getLabel(Site.End), 4);
+    AddComment("FinallyFunclet");
+    OS.emitValue(create32bitRef(getMCSymbolForMBB(Asm, Site.Funclet)), 4);
+    AddComment("Null");
+    OS.emitValue(MCConstantExpr::create(0, Ctx), 4);
+  }
+
   // Iterate over all the invoke try ranges. Unlike MSVC, LLVM currently only
   // models exceptions from invokes. LLVM also allows arbitrary reordering of
   // the code, so our tables end up looking a bit different. Rather than

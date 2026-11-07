@@ -674,6 +674,9 @@ public:
   /// FH4 noexcept/__declspec(nothrow) function without a try block (cl /EHs):
   /// calls get no landing pads, so FuncInfo4 has no unwind map.
   bool MSVCXXEH4NoUnwindBody = false;
+  /// x64 function with __try and a non-throwing exception specification: no
+  /// terminate scope (cl).
+  bool MSVCSEHNoTerminate = false;
   llvm::SmallVector<char, 256> LifetimeExtendedCleanupStack;
 
   // A stack of cleanups which were added to EHStack but have to be deactivated

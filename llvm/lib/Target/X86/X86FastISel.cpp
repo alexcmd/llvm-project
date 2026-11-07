@@ -3200,6 +3200,11 @@ bool X86FastISel::fastLowerCall(CallLoweringInfo &CLI) {
   bool Is64Bit        = Subtarget->is64Bit();
   bool IsWin64        = Subtarget->isCallingConvWin64(CC);
 
+  // SEH abnormal-exit __finally call: lowered by SelectionDAG to
+  // CALL64pcrel32_SEHLU (_local_unwind, see X86AsmPrinter).
+  if (CB && CB->hasFnAttr("msvc-seh-local-unwind"))
+    return false;
+
   // If the return type is illegal, check if the ABI requires a type conversion
   // that FastISel cannot handle. Fall back to DAG ISel in such cases.
   // For example, bfloat is returned as f16 in XMM0, however FastISel would

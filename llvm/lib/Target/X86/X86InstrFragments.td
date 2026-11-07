@@ -293,6 +293,13 @@ def X86call_rvmarker  : SDNode<"X86ISD::CALL_RVMARKER",     SDT_X86Call,
                         [SDNPHasChain, SDNPOutGlue, SDNPOptInGlue,
                          SDNPVariadic]>;
 
+// Pseudo for a direct call to an outlined SEH __finally on an abnormal exit
+// of its __try (return/break/goto): emitted as a call to _local_unwind, as cl
+// does, so the runtime runs the __finally (see X86AsmPrinter).
+def X86call_sehlu  : SDNode<"X86ISD::CALL_SEHLU",     SDT_X86Call,
+                        [SDNPHasChain, SDNPOutGlue, SDNPOptInGlue,
+                         SDNPVariadic]>;
+
 // Pseudo for a call to a global address that must be called via a memory
 // address (i.e., not loaded into a register then called).
 def X86call_globaladdr  : SDNode<"X86ISD::CALL_GLOBALADDR",     SDT_X86Call,

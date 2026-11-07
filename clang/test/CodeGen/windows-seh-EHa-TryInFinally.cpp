@@ -50,10 +50,11 @@ int main() {
 // CHECK: invoke.cont1:
 // CHECK: %cleanup.dest = load i32, ptr %cleanup.dest.slot
 // CHECK: %1 = icmp ne i32 %cleanup.dest, 0
-// CHECK: %2 = zext i1 %1 to i8
-// CHECK: call void @"?fin$0@0@foo@@"(i8 noundef %2, ptr noundef %0)
+// CHECK: br i1 %1, label %seh.finally.local_unwind, label %seh.finally.direct
+// CHECK: notail call void @"?fin$0@0@foo@@"(i8 noundef 1, ptr noundef %0) #{{[0-9]+}}
+// CHECK: call void @"?fin$0@0@foo@@"(i8 noundef 0, ptr noundef %0)
 // CHECK: ehcleanup:
-// CHECK: call void @"?fin$0@0@foo@@"(i8 noundef 1, ptr noundef %4)
+// CHECK: call void @"?fin$0@0@foo@@"(i8 noundef 1, ptr noundef %{{[0-9]+}})
 void foo()
 {
   __try {
@@ -77,7 +78,7 @@ void foo()
 // CHECK: call void @"?fin$0@0@bar@@"
 // CHECK: %cleanup.dest2 = load i32, ptr %cleanup.dest.slot
 // CHECK: return:
-// CHECK: ret i32 11
+// CHECK: ret i32 {{11|%[0-9]+}}
 int bar()
 {
   int x;

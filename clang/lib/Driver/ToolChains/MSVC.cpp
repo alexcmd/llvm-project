@@ -592,9 +592,14 @@ MSVCToolChain::MSVCToolChain(const Driver &D, const llvm::Triple &Triple,
   // command prompt. Failing that, just try to find the newest Visual Studio
   // version we can and use its default VC toolchain.
   if (!BinRelativeLayout)
-    llvm::findVCToolChainViaCommandLine(getVFS(), VCToolsDir, VCToolsVersion,
-                                        WinSysRoot, VCToolChainPath,
-                                        VSLayout) ||
+    (VCToolChainExplicit =
+         llvm::findVCToolChainViaCommandLine(getVFS(), VCToolsDir,
+                                             VCToolsVersion, WinSysRoot,
+                                             VCToolChainPath, VSLayout) ||
+         (llvm::sys::Process::GetEnv("VCToolsInstallDir") ||
+          llvm::sys::Process::GetEnv("VCINSTALLDIR")) &&
+             llvm::findVCToolChainViaEnvironment(getVFS(), VCToolChainPath,
+                                                 VSLayout)) ||
         llvm::findVCToolChainViaEnvironment(getVFS(), VCToolChainPath,
                                             VSLayout) ||
         llvm::findVCToolChainViaSetupConfig(getVFS(), VCToolsVersion,
@@ -998,12 +1003,94 @@ void MSVCToolChain::AddClangCXXStdlibIncludeArgs(const ArgList &DriverArgs,
   // FIXME: There should probably be logic here to find libc++ on Windows.
 }
 
+// UE-MSCVER-SHIM: the cl version of a VC toolset dir: its own cl.exe (a
+// 19.x version resource; an openrt cl.exe is not one), else the cl.exe of the
+// toolset its include dir resolves to (a shim junctions include to the real
+// toolset), else the family from the dir name 14.NN.* with the build of that
+// family's reference cl (measured: 14.50.35717 -> 19.50.35739, 14.51.36231 ->
+// 19.51.36260).
+static VersionTuple msvcVersionOfToolset(llvm::vfs::FileSystem &VFS,
+                                         StringRef Root, bool FollowInclude) {
+  for (const char *Host : {"Hostx64\\x64", "Hostx86\\x86", "Hostx64\\x86",
+                           "Hostx86\\x64"}) {
+    SmallString<256> Bin(Root);
+    llvm::sys::path::append(Bin, "bin", Host);
+    SmallString<256> Exe(Bin);
+    llvm::sys::path::append(Exe, "cl.exe");
+    if (!VFS.exists(Exe))
+      continue;
+    VersionTuple V = getMSVCVersionFromExe(std::string(Bin));
+    if (V.getMajor() == 19)
+      return V;
+  }
+  if (FollowInclude) {
+    SmallString<256> Inc(Root), Real;
+    llvm::sys::path::append(Inc, "include");
+    if (!llvm::sys::fs::real_path(Inc, Real)) {
+      StringRef RealRoot = llvm::sys::path::parent_path(Real);
+      if (!RealRoot.equals_insensitive(Root)) {
+        VersionTuple V = msvcVersionOfToolset(VFS, RealRoot, false);
+        if (!V.empty())
+          return V;
+      }
+    }
+  }
+  StringRef Name = llvm::sys::path::filename(Root);
+  unsigned Minor;
+  if (Name.consume_front("14.") &&
+      !Name.take_until([](char C) { return C == '.'; }).getAsInteger(10, Minor)) {
+    if (Minor == 50)
+      return VersionTuple(19, 50, 35739);
+    if (Minor == 51)
+      return VersionTuple(19, 51, 36260);
+    return VersionTuple(19, Minor);
+  }
+  return {};
+}
+
+static bool isVCIncludeDir(llvm::vfs::FileSystem &VFS, StringRef Dir) {
+  SmallString<256> P(Dir);
+  llvm::sys::path::append(P, "vcruntime.h");
+  return VFS.exists(P);
+}
+
 VersionTuple MSVCToolChain::computeMSVCVersion(const Driver *D,
                                                const ArgList &Args) const {
   bool IsWindowsMSVC = getTriple().isWindowsMSVCEnvironment();
   VersionTuple MSVT = ToolChain::computeMSVCVersion(D, Args);
   if (MSVT.empty())
     MSVT = getTriple().getEnvironmentVersion();
+  // UE-MSCVER-SHIM: ahead of VS-instance discovery, (1) the toolset this
+  // driver is installed in as its cl.exe (<root>\bin\Host<a>\<b>, with
+  // <root>\include holding the VC headers: the UBT/AutoSDK shim layout), else
+  // (2) the toolset of the first explicit include dir with the VC headers
+  // (UBT: /X /external:I <toolset>\INCLUDE), unless /vctoolsdir, /winsysroot
+  // or the VC environment named a toolchain. cl 14.51 in UBT's clean
+  // environment reports its own version (1951 / 195136260).
+  if (MSVT.empty() && IsWindowsMSVC) {
+    SmallString<256> Root(getDriver().Dir);
+    StringRef Arch = llvm::sys::path::filename(Root);
+    StringRef Host = llvm::sys::path::filename(llvm::sys::path::parent_path(Root));
+    StringRef BinDir = llvm::sys::path::filename(
+        llvm::sys::path::parent_path(llvm::sys::path::parent_path(Root)));
+    if (!Arch.empty() && Host.starts_with_insensitive("host") &&
+        BinDir.equals_insensitive("bin")) {
+      StringRef TRoot = llvm::sys::path::parent_path(
+          llvm::sys::path::parent_path(llvm::sys::path::parent_path(Root)));
+      SmallString<256> Inc(TRoot);
+      llvm::sys::path::append(Inc, "include");
+      if (isVCIncludeDir(getVFS(), Inc))
+        MSVT = msvcVersionOfToolset(getVFS(), TRoot, true);
+    }
+    if (MSVT.empty() && !VCToolChainExplicit)
+      for (const Arg *A : Args.filtered(options::OPT_isystem, options::OPT_I,
+                                        options::OPT__SLASH_imsvc))
+        if (isVCIncludeDir(getVFS(), A->getValue())) {
+          MSVT = msvcVersionOfToolset(
+              getVFS(), llvm::sys::path::parent_path(A->getValue()), true);
+          break;
+        }
+  }
   if (MSVT.empty() && IsWindowsMSVC)
     MSVT =
         getMSVCVersionFromExe(getSubDirectoryPath(llvm::SubDirectoryType::Bin));

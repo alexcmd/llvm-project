@@ -1365,6 +1365,9 @@ def : Pat<(X86call_rvmarker (i64 tglobaladdr:$rvfunc), (i64 texternalsym:$dst)),
 def : Pat<(X86call_rvmarker (i64 tglobaladdr:$rvfunc), (i64 tglobaladdr:$dst)),
           (CALL64pcrel32_RVMARKER tglobaladdr:$rvfunc, tglobaladdr:$dst)>;
 
+def : Pat<(X86call_sehlu (i64 tglobaladdr:$dst)),
+          (CALL64pcrel32_SEHLU tglobaladdr:$dst)>;
+
 def : Pat<(X86imp_call (i64 tglobaladdr:$dst)),
           (CALL64pcrel32 tglobaladdr:$dst)>;
 

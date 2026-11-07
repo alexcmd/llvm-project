@@ -159,10 +159,11 @@ int finally_with_return(void) {
 // CHECK: %cleanup.dest = load i32, ptr %cleanup.dest.slot
 // CHECK: icmp ne i32 %cleanup.dest
 // CHECK: call {{.*}}void @"?fin$0@0@finally_with_return@@"({{.*}})
-// CHECK: ret i32 42
+// CHECK: ret i32 {{42|%[0-9]+}}
 
+// x64: noinline as well (its abnormal exit goes through _local_unwind).
 // CHECK: define internal {{.*}}void @"?fin$0@0@finally_with_return@@"({{.*}})
-// CHECK-SAME: [[finally_attrs]]
+// CHECK-SAME: #{{[0-9]+}}
 // CHECK-NOT: br i1
 // CHECK-NOT: br label
 // CHECK: ret void

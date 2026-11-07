@@ -116,6 +116,16 @@ struct ClrEHUnwindMapEntry {
   ClrHandlerType HandlerType;
 };
 
+/// x64 table SEH: a call to _local_unwind that runs one __finally (its cleanup
+/// funclet) for an abnormal exit of the __try (cl: return/break/goto). Its
+/// scope-table entry covers [Begin, End); End is the resume target, so the
+/// runtime runs the handler and continues there.
+struct SEHLocalUnwindSite {
+  MCSymbol *Begin = nullptr;
+  MCSymbol *End = nullptr;
+  const MachineBasicBlock *Funclet = nullptr;
+};
+
 struct WinEHFuncInfo {
   DenseMap<const Instruction *, int> EHPadStateMap;
   DenseMap<const FuncletPadInst *, int> FuncletBaseStateMap;
@@ -132,6 +142,7 @@ struct WinEHFuncInfo {
   SmallVector<WinEHTryBlockMapEntry, 4> TryBlockMap;
   SmallVector<SEHUnwindMapEntry, 4> SEHUnwindMap;
   SmallVector<ClrEHUnwindMapEntry, 4> ClrEHUnwindMap;
+  SmallVector<SEHLocalUnwindSite, 1> SEHLocalUnwindSites;
   int UnwindHelpFrameIdx = std::numeric_limits<int>::max();
   int PSPSymFrameIdx = std::numeric_limits<int>::max();
 

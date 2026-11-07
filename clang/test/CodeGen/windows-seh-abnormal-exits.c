@@ -3,8 +3,14 @@
 // CHECK: %[[src:[0-9-]+]] = call ptr @llvm.localaddress()
 // CHECK-NEXT: %cleanup.dest = load i32, ptr %cleanup.dest.slot, align 4
 // CHECK-NEXT: %[[src2:[0-9-]+]] = icmp ne i32 %cleanup.dest, 0
-// CHECK-NEXT: %[[src3:[0-9-]+]] = zext i1 %[[src2]] to i8
-// CHECK-NEXT: call void @"?fin$0@0@seh_abnormal_exits@@"(i8 noundef %[[src3]], ptr noundef %[[src]])
+// x64 (cl): an abnormal exit runs the __finally through _local_unwind (the
+// marked call), the normal one calls it directly.
+// CHECK-NEXT: br i1 %[[src2]], label %seh.finally.local_unwind, label %seh.finally.direct
+// CHECK: seh.finally.local_unwind:
+// CHECK-NEXT: notail call void @"?fin$0@0@seh_abnormal_exits@@"(i8 noundef 1, ptr noundef %[[src]]) #[[LU:[0-9]+]]
+// CHECK: seh.finally.direct:
+// CHECK-NEXT: call void @"?fin$0@0@seh_abnormal_exits@@"(i8 noundef 0, ptr noundef %[[src]])
+// CHECK: attributes #[[LU]] = { noinline "msvc-seh-local-unwind" }
 
 void seh_abnormal_exits(int *Counter) {
   for (int i = 0; i < 5; i++) {

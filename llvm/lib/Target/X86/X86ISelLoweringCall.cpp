@@ -2729,6 +2729,10 @@ X86TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     Chain = DAG.getNode(X86ISD::NT_CALL, dl, NodeTys, Ops);
   } else if (IsCFGuardCall) {
     Chain = DAG.getNode(X86ISD::CALL_GLOBALADDR, dl, NodeTys, Ops);
+  } else if (CLI.CB && CLI.CB->hasFnAttr("msvc-seh-local-unwind") &&
+             Subtarget.isTargetWin64() &&
+             Callee.getOpcode() == ISD::TargetGlobalAddress) {
+    Chain = DAG.getNode(X86ISD::CALL_SEHLU, dl, NodeTys, Ops);
   } else if (CLI.CB && objcarc::hasAttachedCallOpBundle(CLI.CB)) {
     // Calls with a "clang.arc.attachedcall" bundle are special. They should be
     // expanded to the call, directly followed by a special marker sequence and

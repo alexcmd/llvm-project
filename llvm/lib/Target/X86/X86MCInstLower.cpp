@@ -2599,6 +2599,10 @@ void X86AsmPrinter::emitInstruction(const MachineInstr *MI) {
                                 .addImm(MI->getOperand(0).getImm())
                                 .addReg(X86::NoRegister));
     return;
+  case X86::CALL64pcrel32_SEHLU:
+    emitSEHLocalUnwindCall(MI);
+    return;
+
   case X86::CALL64pcrel32:
     if (IndCSPrefix && MI->hasRegisterImplicitUseOperand(X86::R11))
       EmitAndCountInstruction(MCInstBuilder(X86::CS_PREFIX));
@@ -2775,6 +2779,88 @@ void X86AsmPrinter::emitCallInstruction(const llvm::MCInst &MCI) {
 // so we still need an additional NOP instruction.  The NOPs cannot be combined
 // into a longer NOP (which is ordinarily desirable) because then ICO would
 // split one instruction, producing a malformed instruction after the ICO call.
+/// Abnormal exit of a __try with __finally (cl x64): instead of calling the
+/// outlined __finally directly, run it through the runtime like cl does:
+///   lea/mov <establisher frame>, %rcx ; lea target(%rip), %rdx
+///   call _local_unwind ; nop ; target:
+/// The scope entry [Begin, target) names the __finally's cleanup funclet, so
+/// RtlUnwind to this frame calls it (abnormal termination) and resumes at
+/// target with the registers of a returned call. Without such a funclet, or
+/// with a base pointer, keep the direct call.
+void X86AsmPrinter::emitSEHLocalUnwindCall(const MachineInstr *MI) {
+  const MachineOperand &CalleeOp = MI->getOperand(0);
+  WinEHFuncInfo *FuncInfo = MF->getWinEHFuncInfo();
+  const X86RegisterInfo *RI = Subtarget->getRegisterInfo();
+  bool HasFP = Subtarget->getFrameLowering()->hasFP(*MF);
+  const MachineBasicBlock *Funclet = nullptr;
+  if (FuncInfo && CalleeOp.isGlobal() && !RI->hasBasePointer(*MF) &&
+      (!HasFP ||
+       FuncInfo->SEHSetFrameOffset != std::numeric_limits<int>::max())) {
+    const MachineBasicBlock *Cur = nullptr;
+    for (const MachineBasicBlock &MBB : *MF) {
+      if (MBB.isEHFuncletEntry())
+        Cur = MBB.isCleanupFuncletEntry() ? &MBB : nullptr;
+      if (!Cur || Funclet)
+        continue;
+      for (const MachineInstr &I : MBB)
+        if (I.isCall() && I.getNumOperands() && I.getOperand(0).isGlobal() &&
+            I.getOperand(0).getGlobal() == CalleeOp.getGlobal()) {
+          Funclet = Cur;
+          break;
+        }
+    }
+    if (Funclet && llvm::none_of(FuncInfo->SEHUnwindMap,
+                                 [&](const SEHUnwindMapEntry &UME) {
+                                   return UME.IsFinally &&
+                                          isa<MachineBasicBlock *>(UME.Handler) &&
+                                          cast<MachineBasicBlock *>(
+                                              UME.Handler) == Funclet;
+                                 }))
+      Funclet = nullptr;
+  }
+
+  if (!Funclet) {
+    X86MCInstLower MCInstLowering(*MF, *this);
+    MCInst TmpInst;
+    MCInstLowering.Lower(MI, TmpInst);
+    TmpInst.setOpcode(X86::CALL64pcrel32);
+    emitCallInstruction(TmpInst);
+    maybeEmitNopAfterCallForWindowsEH(MI);
+    return;
+  }
+
+  MCContext &Ctx = OutContext;
+  MCSymbol *Begin = Ctx.createTempSymbol("seh_lu_begin");
+  MCSymbol *Target = Ctx.createTempSymbol("seh_lu_target");
+  OutStreamer->emitLabel(Begin);
+  if (HasFP)
+    EmitAndCountInstruction(MCInstBuilder(X86::LEA64r)
+                                .addReg(X86::RCX)
+                                .addReg(RI->getFrameRegister(*MF))
+                                .addImm(1)
+                                .addReg(0)
+                                .addImm(-int64_t(FuncInfo->SEHSetFrameOffset))
+                                .addReg(0));
+  else
+    EmitAndCountInstruction(
+        MCInstBuilder(X86::MOV64rr).addReg(X86::RCX).addReg(X86::RSP));
+  EmitAndCountInstruction(MCInstBuilder(X86::LEA64r)
+                              .addReg(X86::RDX)
+                              .addReg(X86::RIP)
+                              .addImm(1)
+                              .addReg(0)
+                              .addExpr(MCSymbolRefExpr::create(Target, Ctx))
+                              .addReg(0));
+  MCInst Call = MCInstBuilder(X86::CALL64pcrel32)
+                    .addExpr(MCSymbolRefExpr::create(
+                        Ctx.getOrCreateSymbol("_local_unwind"), Ctx));
+  emitCallInstruction(Call);
+  EmitAndCountInstruction(MCInstBuilder(X86::NOOP));
+  OutStreamer->emitLabel(Target);
+  FuncInfo->SEHLocalUnwindSites.push_back({Begin, Target, Funclet});
+  MF->addEHContTarget(Target);
+}
+
 void X86AsmPrinter::maybeEmitNopAfterCallForWindowsEH(const MachineInstr *MI) {
   // We only need to insert NOPs after CALLs when targeting Windows on AMD64.
   // (Don't let the name fool you: Itanium refers to table-based exception

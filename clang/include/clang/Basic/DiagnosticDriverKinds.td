@@ -17,7 +17,8 @@ def warn_drv_ignoring_unknown_option : Warning<
 def warn_drv_cl_pd_requires_zc : Warning<
   "D9007 : '/PD' has no effect without '/Zc:preprocessor'">;
 // Exit codes differ from cl (GAP).
-def err_drv_cl_requires_argument : Error<"D8004 : '%0' is missing its value">;
+// CL-MSG-WORDING: cl 14.51 texts.
+def err_drv_cl_requires_argument : Error<"D8004 : '%0' requires an argument">;
 // CLANG-CL-GAP(Qspectre): accepted, no mitigation yet (tasks/compat/25). A
 // remark shown by default, so /WX does not turn it into an error.
 def remark_drv_cl_spectre_not_implemented : Remark<
@@ -26,16 +27,16 @@ def remark_drv_cl_spectre_not_implemented : Remark<
 def err_drv_cl_invalid_numeric_argument : Error<
   "D8021 : '%0' does not hold a valid numeric value">;
 def err_drv_cl_c1xx_unknown_flag : Error<
-  "fatal error C1007: switch '-%0' is not known to 'c1xx'">;
+  "c1xx: fatal error C1007: unrecognized flag '-%0' in 'c1xx'">;
 def err_drv_cl_p2_unknown_flag : Error<
-  "fatal error C1007: switch '-%0' is not known to 'p2'">;
+  "fatal error C1007: unrecognized flag '-%0' in 'p2'">;
 // Exit codes are set in Clang.cpp/driver.cpp.
 def warn_drv_cl_deprecated_option : Warning<
   "D9035 : option '%0' is deprecated and may be dropped in a later release">;
 def warn_drv_cl_invalid_warning_level : Warning<
   "D9014 : level '%0' is out of range for '/W'; using level '1'">;
 def err_drv_cl_c1_unknown_flag : Error<
-  "c1: fatal error C1007: switch '-%0' is not known to 'c1'">;
+  "c1: fatal error C1007: unrecognized flag '-%0' in 'c1'">;
 def err_drv_cl_c_no_zw : Error<"D8048 : C source '%0' cannot be built with the /ZW option">;
 def err_drv_cl_c_no_clr : Error<"D8045 : C source '%0' cannot be built with the /clr option">;
 def err_drv_cl_guard_no_include : Error<

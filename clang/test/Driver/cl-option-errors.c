@@ -28,13 +28,13 @@
 // RUN: not %clang_cl --target=x86_64-pc-windows-msvc -### /c /sourcelink -- %s 2>&1 | FileCheck --check-prefix=D8004-SL %s
 // RUN: not %clang_cl --target=x86_64-pc-windows-msvc -### /c /Ft -- %s 2>&1 | FileCheck --check-prefix=D8004-FT %s
 // RUN: not %clang_cl --target=x86_64-pc-windows-msvc -### /c /Yl -- %s 2>&1 | FileCheck --check-prefix=C1007-YL %s
-// D8004-W: D8004 : '/W' is missing its value
-// D8004-H: D8004 : '/H' is missing its value
-// D8004-V: D8004 : '/V' is missing its value
-// D8004-ZM: D8004 : '/Zm' is missing its value
-// D8004-SL: D8004 : '/sourcelink' is missing its value
-// D8004-FT: D8004 : '/Ft' is missing its value
-// C1007-YL: c1: fatal error C1007: switch '-Yl' is not known to 'c1'
+// D8004-W: D8004 : '/W' requires an argument
+// D8004-H: D8004 : '/H' requires an argument
+// D8004-V: D8004 : '/V' requires an argument
+// D8004-ZM: D8004 : '/Zm' requires an argument
+// D8004-SL: D8004 : '/sourcelink' requires an argument
+// D8004-FT: D8004 : '/Ft' requires an argument
+// C1007-YL: c1: fatal error C1007: unrecognized flag '-Yl' in 'c1'
 
 // C file only: /ZW and /clr are D8048 and D8045.
 // RUN: not %clang_cl --target=x86_64-pc-windows-msvc -### /c /ZW -- %s 2>&1 | FileCheck --check-prefix=D8048 %s

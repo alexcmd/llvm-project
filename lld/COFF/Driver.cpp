@@ -165,8 +165,9 @@ static bool handleSlashArgAsOption(COFFLinkerContext &ctx, StringRef arg) {
       ctx.optTable.ParseArgs(argv, missingIndex, missingCount);
   for (const opt::Arg *a : parsed)
     if (a->getOption().getID() != OPT_INPUT) {
-      llvm::errs() << "LINK : fatal error LNK1146: option '" << arg
-                   << "' is missing its value\n";
+      llvm::errs() << "LINK : fatal error LNK1146: no argument specified with "
+                      "option '"
+                   << arg << "'\n";
       exitLld(1146);
     }
   llvm::errs() << "LINK : warning LNK4044: skipping unknown option '" << arg
@@ -1949,8 +1950,8 @@ void LinkerDriver::linkerMain(ArrayRef<const char *> argsArr) {
   // value is LNK1146 as in link.exe.
   for (auto *arg : args.filtered(OPT_d2_opt))
     if (StringRef(arg->getValue()).empty()) {
-      llvm::errs() << "LINK : fatal error LNK1146: option '/d2:' is missing "
-                      "its value\n";
+      llvm::errs() << "LINK : fatal error LNK1146: no argument specified with "
+                      "option '/d2:'\n";
       exitLld(1146);
     }
 

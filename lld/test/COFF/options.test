@@ -70,8 +70,10 @@ SWAPNET: IMAGE_FILE_NET_RUN_FROM_SWAP
 # RUN: llvm-readobj --file-headers %t.exe | FileCheck -check-prefix=NOSWAPNET %s
 NOSWAPNET-NOT: IMAGE_FILE_NET_RUN_FROM_SWAP
 
+# openrt CL-MSG-WORDING: an empty value is link.exe's LNK1146.
 # RUN: not lld-link /out:%t.exe /entry:main /swaprun: %t.obj 2>&1 | \
-# RUN:     FileCheck -check-prefix=SWAPERR1 %s
+# RUN:     FileCheck -check-prefix=SWAPEMPTY %s
+# SWAPEMPTY: LINK : fatal error LNK1146: no argument specified with option '/swaprun:'
 # RUN: not lld-link /out:%t.exe /entry:main /swaprun:cd, %t.obj 2>&1 | \
 # RUN:     FileCheck -check-prefix=SWAPERR1 %s
 # RUN: not lld-link /out:%t.exe /entry:main /swaprun:,, %t.obj 2>&1 | \

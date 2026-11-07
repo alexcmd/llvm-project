@@ -1,0 +1,10 @@
+# openrt CL-MSG-WORDING: link.exe 14.51 rejects a known /option: with an empty
+# value: "LNK1146: no argument specified with option '<as written>'", exit
+# 1146, before anything else (lld-link asserted on /INCLUDE:).
+RUN: yaml2obj %p/Inputs/ret42.yaml -o %t.obj
+RUN: not lld-link /entry:main /out:%t.exe %t.obj /INCLUDE: 2>&1 | FileCheck --check-prefix=INC %s
+INC: LINK : fatal error LNK1146: no argument specified with option '/INCLUDE:'
+RUN: not lld-link /entry:main %t.obj /OUT: 2>&1 | FileCheck --check-prefix=OUT %s
+OUT: LINK : fatal error LNK1146: no argument specified with option '/OUT:'
+RUN: not lld-link /entry:main /out:%t.exe %t.obj -entry: 2>&1 | FileCheck --check-prefix=ENTRY %s
+ENTRY: LINK : fatal error LNK1146: no argument specified with option '-entry:'

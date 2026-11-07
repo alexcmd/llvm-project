@@ -83,6 +83,8 @@ clang::diagGroupFromCLWarningID(unsigned CLWarningID) {
   case 4625: Name = "defaulted-function-deleted"; break;
   case 4701: Name = "sometimes-uninitialized"; break;
   case 4723: Name = "division-by-zero"; break;
+  // UE-NARROWING-C4838: narrowing in a variable's aggregate initializer.
+  case 4838: Name = "microsoft-init-list-narrowing"; break;
   case 5030: Name = "unknown-attributes"; break;
   case 5038: Name = "reorder-ctor"; break;
   case 5054: Name = "deprecated-enum-enum-conversion"; break;

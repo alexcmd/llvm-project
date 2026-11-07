@@ -6860,6 +6860,15 @@ def ext_init_list_constant_narrowing : ExtWarn<
 def ext_init_list_constant_narrowing_const_reference : ExtWarn<
   ext_init_list_constant_narrowing.Summary>,
   InGroup<CXX11NarrowingConstReference>, DefaultError, SFINAEFailure;
+def warn_ms_init_list_type_narrowing : Warning<
+  ext_init_list_type_narrowing.Summary>,
+  InGroup<MicrosoftInitListNarrowing>;
+def warn_ms_init_list_variable_narrowing : Warning<
+  ext_init_list_variable_narrowing.Summary>,
+  InGroup<MicrosoftInitListNarrowing>;
+def warn_ms_init_list_constant_narrowing : Warning<
+  ext_init_list_constant_narrowing.Summary>,
+  InGroup<MicrosoftInitListNarrowing>;
 def warn_init_list_type_narrowing : Warning<
   "type %0 cannot be narrowed to %1 in initializer list in C++11">,
   InGroup<CXX11Narrowing>, DefaultIgnore;

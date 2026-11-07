@@ -7756,7 +7756,9 @@ static void DiagnoseNarrowingInInitList(Sema &S,
                                         const ImplicitConversionSequence &ICS,
                                         QualType PreNarrowingType,
                                         QualType EntityType,
-                                        const Expr *PostInit);
+                                        const Expr *PostInit,
+                                        bool MSAggregateVariable);
+static bool isMSAggregateElementOfVariable(const InitializedEntity &Entity);
 
 static void CheckC23ConstexprInitConversion(Sema &S, QualType FromType,
                                             QualType ToType, Expr *Init);
@@ -8403,7 +8405,8 @@ ExprResult InitializationSequence::Perform(Sema &S,
       if (Step->Kind == SK_ConversionSequenceNoNarrowing &&
           S.getLangOpts().CPlusPlus)
         DiagnoseNarrowingInInitList(S, *Step->ICS, SourceType, Entity.getType(),
-                                    CurInit.get());
+                                    CurInit.get(),
+                                    isMSAggregateElementOfVariable(Entity));
 
       break;
     }
@@ -9917,11 +9920,29 @@ void InitializationSequence::dump() const {
   dump(llvm::errs());
 }
 
+/// UE-NARROWING-C4838: an element (member or array element, at any depth) of
+/// an aggregate initializer of a variable. cl 14.51 reports narrowing there as
+/// warning C4838 (level 1, /wd4838), and as error C2397 for scalars, T{...}
+/// prvalues, return values, arguments, new, mem-initializers and default
+/// member initializers. CLANG-CL-GAP(c4838-constexpr): cl is silent for a
+/// constant floating value that converts exactly in a constexpr variable.
+static bool isMSAggregateElementOfVariable(const InitializedEntity &Entity) {
+  const InitializedEntity *E = &Entity;
+  bool Element = false;
+  while (E && (E->getKind() == InitializedEntity::EK_Member ||
+               E->getKind() == InitializedEntity::EK_ArrayElement)) {
+    Element = true;
+    E = E->getParent();
+  }
+  return Element && E && E->getKind() == InitializedEntity::EK_Variable;
+}
+
 static void DiagnoseNarrowingInInitList(Sema &S,
                                         const ImplicitConversionSequence &ICS,
                                         QualType PreNarrowingType,
                                         QualType EntityType,
-                                        const Expr *PostInit) {
+                                        const Expr *PostInit,
+                                        bool MSAggregateVariable) {
   const StandardConversionSequence *SCS = nullptr;
   switch (ICS.getKind()) {
   case ImplicitConversionSequence::StandardConversion:
@@ -9941,8 +9962,15 @@ static void DiagnoseNarrowingInInitList(Sema &S,
                       unsigned ConstRefDiagID, unsigned WarnDiagID) {
     unsigned DiagID;
     auto &L = S.getLangOpts();
-    if (L.CPlusPlus11 && !L.HLSL &&
-        (!L.MicrosoftExt || L.isCompatibleWithMSVC(LangOptions::MSVC2015)))
+    if (L.CPlusPlus11 && !L.HLSL && L.MSVCCompat && MSAggregateVariable &&
+        !IsConstRef && L.isCompatibleWithMSVC(LangOptions::MSVC2015))
+      DiagID = DefaultDiagID == diag::ext_init_list_type_narrowing
+                   ? diag::warn_ms_init_list_type_narrowing
+               : DefaultDiagID == diag::ext_init_list_constant_narrowing
+                   ? diag::warn_ms_init_list_constant_narrowing
+                   : diag::warn_ms_init_list_variable_narrowing;
+    else if (L.CPlusPlus11 && !L.HLSL &&
+             (!L.MicrosoftExt || L.isCompatibleWithMSVC(LangOptions::MSVC2015)))
       DiagID = IsConstRef ? ConstRefDiagID : DefaultDiagID;
     else
       DiagID = WarnDiagID;

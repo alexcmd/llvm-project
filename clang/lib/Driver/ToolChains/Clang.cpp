@@ -1049,7 +1049,10 @@ void Clang::AddPreprocessingOptions(Compilation &C, const JobAction &JA,
   // any flag, and its <ehdata.h> relies on them: on by default in cl mode,
   // opt-in elsewhere. Not for /E, /P: the types are not source text, so
   // preprocessed output leaves them out and gets them when it is compiled.
-  if (msPredeclareEHTypes(D, Args) && types::isCXX(Inputs[0].getType()) &&
+  // C translation units get the C subset (the __report_* functions).
+  if (msPredeclareEHTypes(D, Args) &&
+      (types::isCXX(Inputs[0].getType()) ||
+       types::isDerivedFromC(Inputs[0].getType())) &&
       !isa<PreprocessJobAction>(JA))
     CmdArgs.push_back("-fms-predeclare-eh-types");
 
@@ -6661,7 +6664,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   // FIXME: Support -fpreprocessed
   if (types::getPreprocessedType(InputType) != types::TY_INVALID) {
     AddPreprocessingOptions(C, JA, D, Args, CmdArgs, Output, Inputs);
-  } else if (InputType == types::TY_PP_CXX && msPredeclareEHTypes(D, Args)) {
+  } else if ((InputType == types::TY_PP_CXX || InputType == types::TY_PP_C) &&
+             msPredeclareEHTypes(D, Args)) {
     // Preprocessed C++ (/E, /P output) left the pre-injected types out.
     CmdArgs.push_back("-fms-predeclare-eh-types");
   }

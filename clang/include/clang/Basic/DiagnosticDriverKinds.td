@@ -33,6 +33,10 @@ def err_drv_cl_p2_unknown_flag : Error<
 // Exit codes are set in Clang.cpp/driver.cpp.
 def warn_drv_cl_deprecated_option : Warning<
   "D9035 : option '%0' is deprecated and may be dropped in a later release">;
+// CL-WARNING-NUMBER-RANGE: cl 14.51 takes 4000..5999 for /we /wd /wo /w<l>.
+def warn_drv_cl_invalid_warning_number : Warning<
+  "D9014 : invalid value '%0' for '%1'; assuming '5999'">,
+  InGroup<InvalidCommandLineArgument>;
 def warn_drv_cl_invalid_warning_level : Warning<
   "D9014 : level '%0' is out of range for '/W'; using level '1'">;
 def err_drv_cl_c1_unknown_flag : Error<

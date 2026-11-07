@@ -6985,6 +6985,18 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
         continue;
       }
 
+      // CL-WARNING-NUMBER-RANGE: outside 4000..5999 cl warns D9014 and takes
+      // 5999, which names no warning.
+      if (WarningNumber < 4000 || WarningNumber > 5999) {
+        std::string Spelling =
+            A->getOption().matches(options::OPT__SLASH_w)
+                ? ("/w" + Twine(Level)).str()
+                : A->getSpelling().str();
+        D.Diag(diag::warn_drv_cl_invalid_warning_number)
+            << Value << Spelling;
+        continue;
+      }
+
       // Unmapped ids are silent, as in cl.exe.
       bool IsWL = A->getOption().matches(options::OPT__SLASH_w);
       for (diag::Group Group : diagGroupsFromCLWarningID(WarningNumber)) {

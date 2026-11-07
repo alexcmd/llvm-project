@@ -450,7 +450,11 @@ def CXX98CompatPedantic : DiagGroup<"c++98-compat-pedantic",
                                      CXXPre26CompatPedantic]>;
 
 def CXX11NarrowingConstReference : DiagGroup<"c++11-narrowing-const-reference">;
-def CXX11Narrowing : DiagGroup<"c++11-narrowing", [CXX11NarrowingConstReference]>;
+// UE-NARROWING-C4838: MSVC compatibility, narrowing in an aggregate
+// initializer of a variable is cl's warning C4838 (an error elsewhere).
+def MicrosoftInitListNarrowing : DiagGroup<"microsoft-init-list-narrowing">;
+def CXX11Narrowing : DiagGroup<"c++11-narrowing", [CXX11NarrowingConstReference,
+                                                   MicrosoftInitListNarrowing]>;
 
 def CXX11WarnInconsistentOverrideDestructor :
   DiagGroup<"inconsistent-missing-destructor-override">;

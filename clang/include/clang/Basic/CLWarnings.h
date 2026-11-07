@@ -9,6 +9,7 @@
 #ifndef LLVM_CLANG_BASIC_CLWARNINGS_H
 #define LLVM_CLANG_BASIC_CLWARNINGS_H
 
+#include "llvm/ADT/SmallVector.h"
 #include <optional>
 
 namespace clang {
@@ -20,6 +21,15 @@ enum class Group;
 /// For cl.exe warning IDs that cleany map to clang diagnostic groups,
 /// returns the corresponding group. Else, returns an empty Optional.
 std::optional<diag::Group> diagGroupFromCLWarningID(unsigned);
+
+/// Every group a cl.exe warning id stands for: the one above plus the groups
+/// clang splits the same cl situation into (C5054: enum-enum arithmetic, named
+/// or anonymous, and enum comparison). Empty when unmapped.
+llvm::SmallVector<diag::Group, 4> diagGroupsFromCLWarningID(unsigned);
+
+/// The cl.exe warning id of a diagnostic group (the lowest id mapping to
+/// exactly this group), 0 if none.
+unsigned clWarningIDFromDiagGroup(diag::Group);
 
 /// CL-WARNING-DEFAULTS: a clang warning group that clang-cl turns on (by
 /// default, -Wall or -Wextra) and the lowest cl.exe /W level that reports the
@@ -33,6 +43,8 @@ struct CLWarningLevel {
   unsigned Level;
   const char *Parent;
   const char *Also;
+  /// The group is off by default in clang: turn it on from this level.
+  bool Enable = false;
 };
 
 /// The clang-only warnings clang-cl gates by /W level, parents first.

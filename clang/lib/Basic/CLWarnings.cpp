@@ -34,7 +34,9 @@ clang::diagGroupFromCLWarningID(unsigned CLWarningID) {
   case 4133: return diag::Group::IncompatiblePointerTypes;
   case 4141: return diag::Group::DuplicateDeclSpecifier;
   case 4189: return diag::Group::UnusedVariable;
-  case 4244: return diag::Group::Shorten64To32;
+  // UE-C4244-SHORTEN: 64-to-32 narrowing; from size_t it is C4267.
+  case 4244: return diag::Group::ShortenInt64To32;
+  case 4267: return diag::Group::ShortenSizeT;
   case 4245: return diag::Group::SignConversion;
   case 4311: return diag::Group::PointerToIntCast;
   case 4389: return diag::Group::SignCompare;
@@ -59,6 +61,8 @@ clang::diagGroupFromCLWarningID(unsigned CLWarningID) {
   case 4062: Name = "switch"; break;
   case 4099: Name = "mismatched-tags"; break;
   case 4102: Name = "unused-label"; break;
+  // UE-PRAGMA-PACK-C4103: #pragma pack changed across an #include.
+  case 4103: Name = "pragma-pack"; break;
   case 4131: Name = "deprecated-non-prototype"; break;
   case 4150: Name = "delete-incomplete"; break;
   case 4191: Name = "cast-function-type-mismatch"; break;
@@ -90,6 +94,34 @@ clang::diagGroupFromCLWarningID(unsigned CLWarningID) {
   if (Name)
     return DiagnosticIDs::getGroupForWarningOption(Name);
   return {};
+}
+
+llvm::SmallVector<diag::Group, 4>
+clang::diagGroupsFromCLWarningID(unsigned CLWarningID) {
+  llvm::SmallVector<diag::Group, 4> Groups;
+  if (auto G = diagGroupFromCLWarningID(CLWarningID))
+    Groups.push_back(*G);
+  // UE-WD5054: cl's C5054 is one id for what clang reports under three groups
+  // (named and anonymous enum arithmetic, enum comparison); measured with
+  // cl /std:c++20 /W4.
+  const char *Extra[3] = {};
+  if (CLWarningID == 5054) {
+    Extra[0] = "deprecated-anon-enum-enum-conversion";
+    Extra[1] = "deprecated-enum-compare";
+  }
+  for (const char *Name : Extra)
+    if (Name)
+      if (auto G = DiagnosticIDs::getGroupForWarningOption(Name))
+        Groups.push_back(*G);
+  return Groups;
+}
+
+unsigned clang::clWarningIDFromDiagGroup(diag::Group Group) {
+  for (unsigned ID = 4000; ID != 6000; ++ID)
+    for (diag::Group G : diagGroupsFromCLWarningID(ID))
+      if (G == Group)
+        return ID;
+  return 0;
 }
 
 // CL-WARNING-DEFAULTS: decided from the /W1../W4 and /Wall survey of probe TUs
@@ -156,6 +188,8 @@ static const CLWarningLevel CLLevels[] = {
     // /Zc:strictStrings (also from /permissive-) names the child group.
     {"writable-strings", 0, nullptr,
      "c++11-compat-deprecated-writable-strings"},
+    // UE-WD5054: cl has no counterpart of the ?: enum mismatch.
+    {"deprecated-enum-compare-conditional", 0, nullptr, nullptr},
     // Off: the cl.exe counterpart is off by default (enable via /w<l><n>).
     {"cast-function-type-mismatch", 0, nullptr, nullptr},
     {"comment", 0, nullptr, nullptr},
@@ -200,6 +234,7 @@ static const CLWarningLevel CLLevels[] = {
     {"delete-abstract-non-virtual-dtor", 4, nullptr, nullptr},
     {"deprecated-comma-subscript", 4, nullptr, nullptr},
     {"deprecated-enum-enum-conversion", 4, nullptr, nullptr},
+    {"deprecated-anon-enum-enum-conversion", 4, nullptr, nullptr},
     {"deprecated-non-prototype", 4, nullptr, nullptr},
     {"implicit-int", 4, nullptr, nullptr},
     {"microsoft-anon-tag", 4, nullptr, nullptr},
@@ -208,6 +243,9 @@ static const CLWarningLevel CLLevels[] = {
     {"sometimes-uninitialized", 4, nullptr, nullptr},
     {"unused-function", 4, nullptr, nullptr},
     {"unused-parameter", 4, nullptr, nullptr},
+    // UE-C4244-SHORTEN: off by default in clang, cl level 3 (C4244, C4267).
+    {"shorten-int64-to-32", 3, nullptr, nullptr, true},
+    {"shorten-size-t", 3, nullptr, nullptr, true},
 };
 
 const CLWarningLevel *clang::clWarningLevels(unsigned &Count) {

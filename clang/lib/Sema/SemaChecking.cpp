@@ -12891,6 +12891,28 @@ static void AnalyzeAssignment(Sema &S, BinaryOperator *E) {
 }
 
 /// Diagnose an implicit cast;  purely a helper for CheckImplicitConversion.
+/// UE-C4244-SHORTEN: whether \p T is written as size_t somewhere in its sugar
+/// (the typedef, a typedef or template argument naming it, or sizeof's type).
+static bool isSpelledSizeT(const ASTContext &Ctx, QualType T) {
+  for (unsigned Steps = 0; Steps != 64; ++Steps) {
+    const Type *Ty = T.getTypePtr();
+    if (const auto *TD = dyn_cast<TypedefType>(Ty))
+      if (TD->getDecl()->getName() == "size_t")
+        return true;
+    if (const auto *PS = dyn_cast<PredefinedSugarType>(Ty))
+      if (PS->getKind() == PredefinedSugarType::Kind::SizeT)
+        return true;
+    // CLANG-CL-GAP(c4267-template): cl keeps the size_t spelling of a
+    // template argument (C4267 in the instantiation); here the replacement
+    // type is canonical, so such a narrowing is reported as C4244.
+    QualType Next = T.getSingleStepDesugaredType(Ctx);
+    if (Next == T)
+      return false;
+    T = Next;
+  }
+  return false;
+}
+
 static void DiagnoseImpCast(Sema &S, const Expr *E, QualType SourceType,
                             QualType T, SourceLocation CContext, unsigned diag,
                             bool PruneControlFlow = false) {
@@ -13766,8 +13788,18 @@ void Sema::CheckImplicitConversion(Expr *E, QualType T, SourceLocation CC,
             *this, E, T, CC, diag::warn_impcast_integer_precision_on_negation);
     }
 
+    // UE-C4244-SHORTEN: cl numbers a narrowing from size_t (a type spelled
+    // through the size_t typedef, or the type of sizeof) C4267, any other
+    // 64-to-32 one C4244.
+    if (getLangOpts().MSVCCompat && Context.getIntWidth(E->getType()) == 64 &&
+        isSpelledSizeT(Context, E->getType()))
+      return DiagnoseImpCast(*this, E, T, CC, diag::warn_impcast_size_t_ms,
+                             /* pruneControlFlow */ true);
     if (TargetRange.Width == 32 && Context.getIntWidth(E->getType()) == 64)
-      return DiagnoseImpCast(*this, E, T, CC, diag::warn_impcast_integer_64_32,
+      return DiagnoseImpCast(*this, E, T, CC,
+                             getLangOpts().MSVCCompat
+                                 ? diag::warn_impcast_integer_64_32_ms
+                                 : diag::warn_impcast_integer_64_32,
                              /* pruneControlFlow */ true);
     return DiagnoseImpCast(*this, E, T, CC,
                            diag::warn_impcast_integer_precision);

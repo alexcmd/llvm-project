@@ -115,7 +115,13 @@ def CharacterConversion : DiagGroup<"character-conversion">;
 def DeprecatedOFast : DiagGroup<"deprecated-ofast">;
 def ObjCSignedCharBoolImplicitIntConversion :
   DiagGroup<"objc-signed-char-bool-implicit-int-conversion">;
-def Shorten64To32 : DiagGroup<"shorten-64-to-32">;
+// UE-C4244-SHORTEN: in MSVC-compatible mode the 64-to-32 narrowing is split
+// as cl numbers it: from size_t (to any narrower integer) is C4267, from any
+// other 64-bit integer C4244. Both stay under -Wshorten-64-to-32.
+def ShortenInt64To32 : DiagGroup<"shorten-int64-to-32">;
+def ShortenSizeT : DiagGroup<"shorten-size-t">;
+def Shorten64To32 : DiagGroup<"shorten-64-to-32",
+                              [ShortenInt64To32, ShortenSizeT]>;
 def ImplicitIntConversionOnNegation : DiagGroup<"implicit-int-conversion-on-negation">;
 def ImplicitIntConversion
     : DiagGroup<

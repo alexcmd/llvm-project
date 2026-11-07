@@ -671,6 +671,9 @@ public:
   /// potentially throwing operation is emitted, so true leaf functions keep
   /// their ordinary handler-free code generation.
   bool MSVCXXEH4Noexcept = false;
+  /// FH4 noexcept/__declspec(nothrow) function without a try block (cl /EHs):
+  /// calls get no landing pads, so FuncInfo4 has no unwind map.
+  bool MSVCXXEH4NoUnwindBody = false;
   llvm::SmallVector<char, 256> LifetimeExtendedCleanupStack;
 
   // A stack of cleanups which were added to EHStack but have to be deactivated
@@ -2233,7 +2236,7 @@ public:
   llvm::BasicBlock *getInvokeDest() {
     if (MSVCXXEH4Noexcept)
       activateMSVCXXEH4Noexcept();
-    if (!EHStack.requiresLandingPad())
+    if (MSVCXXEH4NoUnwindBody || !EHStack.requiresLandingPad())
       return nullptr;
     return getInvokeDestImpl();
   }

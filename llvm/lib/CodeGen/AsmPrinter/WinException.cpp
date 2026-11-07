@@ -87,15 +87,21 @@ void WinException::beginFunction(const MachineFunction *MF) {
 
   // Calls in a nounwind function can themselves acquire nounwind during IR
   // optimization even though FH4 is what enforces that contract. Test for a
-  // surviving non-intrinsic call rather than Instruction::mayThrow().
+  // surviving non-intrinsic call rather than Instruction::mayThrow(). A
+  // direct call to a function that is itself nounwind (extern "C" under /EHsc,
+  // noexcept) cannot throw into this frame; cl /O2 drops the record when only
+  // such calls remain, cl /Od keeps it for any call.
+  bool CountNounwindCallees = F.hasOptNone();
   bool IsFH4Noexcept =
       F.hasPersonalityFn() && F.hasFnAttribute(MSVCXXEH4NoexceptAttr) &&
       isMSVCXXEH4Personality(F.getPersonalityFn()) &&
-      llvm::any_of(F, [](const BasicBlock &BB) {
-        return llvm::any_of(BB, [](const Instruction &I) {
+      llvm::any_of(F, [&](const BasicBlock &BB) {
+        return llvm::any_of(BB, [&](const Instruction &I) {
           const auto *CB = dyn_cast<CallBase>(&I);
           const Function *Callee = CB ? CB->getCalledFunction() : nullptr;
-          return CB && (!Callee || !Callee->isIntrinsic());
+          return CB && (!Callee ||
+                        (!Callee->isIntrinsic() &&
+                         (CountNounwindCallees || !Callee->doesNotThrow())));
         });
       });
   bool forceEmitPersonality = F.hasPersonalityFn() &&
@@ -1067,6 +1073,11 @@ void WinException::emitCXXFrameHandler4Table(const MachineFunction *MF) {
     if (R.Funclet->isEHFuncletEntry())
       R.MaxState = 0;
     computeIP2StateTableForFunclet(MF, FuncInfo, R.Funclet, R.IPMap);
+    // cl never emits an empty IPtoStateMap4 for a function: a record with no
+    // state (a noexcept function whose calls all run in the null state) gets
+    // one null-state entry at the function start.
+    if (R.IPMap.empty() && !R.Funclet->isEHFuncletEntry())
+      R.IPMap.emplace_back(Asm->getFunctionBegin(), NullState);
     for (const auto &Entry : R.IPMap)
       R.MaxState = std::max(R.MaxState, Entry.second);
 

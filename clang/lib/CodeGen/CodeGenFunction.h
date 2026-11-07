@@ -4638,6 +4638,13 @@ public:
 
   void checkTargetFeatures(const CallExpr *E, const FunctionDecl *TargetDecl);
   void checkTargetFeatures(SourceLocation Loc, const FunctionDecl *TargetDecl);
+  /// UE-SSE42-MACRO-INTRIN (MSVC compatibility, x86): a target builtin from a
+  /// system header macro whose features the caller lacks is emitted in an
+  /// outlined always_inline function with those features
+  /// (CGMSOutlinedBuiltin.cpp). std::nullopt: emit it as usual.
+  std::optional<RValue> EmitMSOutlinedTargetBuiltin(GlobalDecl GD,
+                                                    unsigned BuiltinID,
+                                                    const CallExpr *E);
 
   llvm::CallInst *EmitRuntimeCall(llvm::FunctionCallee callee,
                                   const Twine &name = "");

@@ -7046,6 +7046,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
   // This is down here to avoid non-target specific builtins, however, if
   // generic builtins start to require generic target features then we
   // can move this up to the beginning of the function.
+  if (std::optional<RValue> R = EmitMSOutlinedTargetBuiltin(GD, BuiltinID, E))
+    return *R;
   checkTargetFeatures(E, FD);
 
   if (unsigned VectorWidth = getContext().BuiltinInfo.getRequiredVectorWidth(BuiltinID))

@@ -57,6 +57,8 @@ extern "C" void __cdecl _Init_thread_abort(int *const) {}
 struct OwnThrowInfo;
 extern "C" void _CxxThrowException(void *, const OwnThrowInfo *); // expected-warning {{incompatible redeclaration of library function '_CxxThrowException'}}
                                                                   // expected-note@* {{is a builtin with type}}
+extern "C" void _purecall(void); // expected-warning {{incompatible redeclaration of library function '_purecall'}}
+                                 // expected-note@* {{is a builtin with type}}
 void own_throw() { _CxxThrowException(0, (const OwnThrowInfo *)0); }
 
 // Exception specifications as cl has them.

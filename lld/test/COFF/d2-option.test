@@ -4,4 +4,7 @@
 RUN: yaml2obj %p/Inputs/ret42.yaml -o %t.obj
 RUN: lld-link /out:%t.exe /entry:main %t.obj /d2:-ExtendedWarningInfo /d2:xyzzy 2>&1 | count 0
 RUN: not lld-link /out:%t.exe /entry:main %t.obj /d2: 2>&1 | FileCheck %s
-CHECK: LNK1146
+CHECK: LINK : fatal error LNK1146: no argument specified with option '/d2:'
+# CL-MSG-WORDING: a bare known option (here /out) is the same message, as link.
+RUN: not lld-link /entry:main %t.obj /out 2>&1 | FileCheck --check-prefix=BARE %s
+BARE: LINK : fatal error LNK1146: no argument specified with option '/out'

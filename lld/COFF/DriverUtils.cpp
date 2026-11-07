@@ -852,6 +852,27 @@ opt::InputArgList ArgParser::parse(ArrayRef<const char *> argv) {
   if (missingCount)
     Fatal(ctx) << args.getArgString(missingIndex) << ": missing argument";
 
+  // CL-MSG-WORDING: link.exe 14.51 rejects every known /option: written with
+  // an empty value (/OUT:, /INCLUDE:, /ENTRY:, ...) before doing anything
+  // else: LNK1146, exit 1146. (lld-link used to take the empty value, which
+  // asserted on /INCLUDE:.) lld's own options keep their meaning of an empty
+  // value (-thinlto-remote-compiler:"" = unset).
+  for (opt::Arg *arg : args) {
+    StringRef name = arg->getOption().getName();
+    if (arg->getOption().getKind() == opt::Option::JoinedClass &&
+        name.ends_with(":") &&
+        !name.starts_with_insensitive("thinlto") &&
+        !name.starts_with_insensitive("lld") &&
+        !name.starts_with_insensitive("dtlto") &&
+        !name.starts_with_insensitive("mllvm") && arg->getNumValues() == 1 &&
+        StringRef(arg->getValue()).empty()) {
+      llvm::errs() << "LINK : fatal error LNK1146: no argument specified with "
+                      "option '"
+                   << args.getArgString(arg->getIndex()) << "'\n";
+      exitLld(1146);
+    }
+  }
+
   handleColorDiagnostics(ctx, args);
 
   for (opt::Arg *arg : args.filtered(OPT_UNKNOWN)) {

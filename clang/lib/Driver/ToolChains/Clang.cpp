@@ -6780,6 +6780,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     bool IsD1 = A->getOption().matches(options::OPT__SLASH_d1);
     if (A->getValue()[0] == '\0')
       D.Diag(diag::err_drv_cl_requires_argument) << A->getSpelling();
+    else if (IsD1 && Inputs[0].getType() == types::TY_C)
+      D.Diag(diag::err_drv_cl_c1_unknown_flag) << A->getValue(); // C front end
     else if (IsD1)
       D.Diag(diag::err_drv_cl_c1xx_unknown_flag) << A->getValue();
     else {

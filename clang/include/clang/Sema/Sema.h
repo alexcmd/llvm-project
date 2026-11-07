@@ -2807,6 +2807,13 @@ public:
   /// template parameter whose argument was first spelled that way.
   bool isMSSpelledSizeT(QualType T) const;
 
+  /// UE-C4267-CONDITIONAL: whether the value of \p E is size_t as cl sees it:
+  /// its type is spelled size_t, or it is a 64-bit unsigned result of
+  /// arithmetic, ?: or unary -/+/~ with a size_t operand (cl keeps size_t
+  /// through the usual arithmetic conversions, also against ptrdiff_t or a
+  /// plain unsigned __int64).
+  bool isMSSizeTExpr(const Expr *E) const;
+
   /// UE-C4267-TEMPLATE: cl keeps the spelling of the template arguments that
   /// first named a specialization (fa<size_t> then fa<unsigned long long>:
   /// C4267 in the body; the other order: C4244). Records, for a class or

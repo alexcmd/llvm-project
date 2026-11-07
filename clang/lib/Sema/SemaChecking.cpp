@@ -12930,6 +12930,31 @@ bool Sema::isMSSpelledSizeT(QualType T) const {
   return false;
 }
 
+bool Sema::isMSSizeTExpr(const Expr *E) const {
+  E = E->IgnoreParens();
+  if (isMSSpelledSizeT(E->getType()))
+    return true;
+  QualType T = E->getType();
+  if (!T->isUnsignedIntegerType() || Context.getIntWidth(T) != 64)
+    return false;
+  if (const auto *BO = dyn_cast<BinaryOperator>(E)) {
+    if (BO->isAdditiveOp() || BO->isMultiplicativeOp() ||
+        BO->isBitwiseOp() || BO->isShiftOp())
+      return isMSSizeTExpr(BO->getLHS()->IgnoreParenImpCasts()) ||
+             (!BO->isShiftOp() &&
+              isMSSizeTExpr(BO->getRHS()->IgnoreParenImpCasts()));
+    return false;
+  }
+  if (const auto *CO = dyn_cast<ConditionalOperator>(E))
+    return isMSSizeTExpr(CO->getTrueExpr()->IgnoreParenImpCasts()) ||
+           isMSSizeTExpr(CO->getFalseExpr()->IgnoreParenImpCasts());
+  if (const auto *UO = dyn_cast<UnaryOperator>(E))
+    if (UO->getOpcode() == UO_Minus || UO->getOpcode() == UO_Plus ||
+        UO->getOpcode() == UO_Not)
+      return isMSSizeTExpr(UO->getSubExpr()->IgnoreParenImpCasts());
+  return false;
+}
+
 void Sema::recordMSSizeTTemplateArgs(const Decl *Specialization,
                                      ArrayRef<TemplateArgument> SugaredArgs) {
   if (!getLangOpts().MSVCCompat || !Specialization)
@@ -13105,6 +13130,26 @@ static void AnalyzeCompoundAssignment(Sema &S, BinaryOperator *E) {
   const auto *RBT = cast<CompoundAssignOperator>(E)
                         ->getComputationResultType()
                         ->getAs<BuiltinType>();
+
+  // UE-C4267-CONDITIONAL: cl reports int op= <64-bit integer> as the
+  // narrowing it is: C4267 for a size_t right side, C4244 otherwise (not for
+  // a constant that fits).
+  if (S.getLangOpts().MSVCCompat && ResultBT && RBT && ResultBT->isInteger() &&
+      RBT->isInteger() && !ResultBT->isBooleanType() &&
+      S.Context.getIntWidth(QualType(RBT, 0)) == 64 &&
+      S.Context.getIntWidth(QualType(ResultBT, 0)) < 64 &&
+      !E->getRHS()->isValueDependent() &&
+      !E->getRHS()->isIntegerConstantExpr(S.Context) &&
+      !S.SourceMgr.isInSystemMacro(E->getOperatorLoc())) {
+    Expr *RHS = E->getRHS()->IgnoreParenImpCasts();
+    if (S.isMSSizeTExpr(RHS))
+      return DiagnoseImpCast(S, RHS, E->getLHS()->getType(),
+                             E->getOperatorLoc(), diag::warn_impcast_size_t_ms);
+    if (S.Context.getIntWidth(QualType(ResultBT, 0)) == 32)
+      return DiagnoseImpCast(S, RHS, E->getLHS()->getType(),
+                             E->getOperatorLoc(),
+                             diag::warn_impcast_integer_64_32_ms);
+  }
 
   // The below checks assume source is floating point.
   if (!ResultBT || !RBT || !RBT->isFloatingPoint()) return;
@@ -13815,17 +13860,21 @@ void Sema::CheckImplicitConversion(Expr *E, QualType T, SourceLocation CC,
     if (SourceMgr.isInSystemMacro(CC))
       return;
 
+    // UE-C4267-CONDITIONAL: cl reports a negated 64-bit value like any other
+    // (C4267/C4244), not as a separate negation case.
+    bool MSNarrow64 =
+        getLangOpts().MSVCCompat && Context.getIntWidth(E->getType()) == 64;
     if (const auto *UO = dyn_cast<UnaryOperator>(E)) {
-      if (UO->getOpcode() == UO_Minus)
+      if (UO->getOpcode() == UO_Minus && !MSNarrow64)
         return DiagnoseImpCast(
             *this, E, T, CC, diag::warn_impcast_integer_precision_on_negation);
     }
 
     // UE-C4244-SHORTEN: cl numbers a narrowing from size_t (a type spelled
     // through the size_t typedef, or the type of sizeof) C4267, any other
-    // 64-to-32 one C4244.
-    if (getLangOpts().MSVCCompat && Context.getIntWidth(E->getType()) == 64 &&
-        isMSSpelledSizeT(E->getType()))
+    // 64-to-32 one C4244. UE-C4267-CONDITIONAL: by the value's type after the
+    // usual arithmetic conversions (isMSSizeTExpr).
+    if (MSNarrow64 && isMSSizeTExpr(E))
       return DiagnoseImpCast(*this, E, T, CC, diag::warn_impcast_size_t_ms,
                              /* pruneControlFlow */ true);
     if (TargetRange.Width == 32 && Context.getIntWidth(E->getType()) == 64)
@@ -13951,6 +14000,20 @@ static void CheckConditionalOperand(Sema &S, Expr *E, QualType T,
 static void CheckConditionalOperator(Sema &S, AbstractConditionalOperator *E,
                                      SourceLocation CC, QualType T) {
   AnalyzeImplicitConversions(S, E->getCond(), E->getQuestionLoc());
+
+  // UE-C4267-CONDITIONAL: cl checks a 64-bit ?: result narrowed to a smaller
+  // integer once, by the result's type (size_t when either arm is size_t:
+  // C4267, else C4244), not arm by arm.
+  if (S.getLangOpts().MSVCCompat && isa<ConditionalOperator>(E) &&
+      E->getType()->isIntegerType() && T->isIntegerType() &&
+      !E->getType()->isBooleanType() && !T->isBooleanType() &&
+      S.Context.getIntWidth(E->getType()) == 64 &&
+      S.Context.getIntWidth(T) < 64) {
+    AnalyzeImplicitConversions(S, E->getTrueExpr(), CC);
+    AnalyzeImplicitConversions(S, E->getFalseExpr(), CC);
+    S.CheckImplicitConversion(E, T, CC);
+    return;
+  }
 
   Expr *TrueExpr = E->getTrueExpr();
   if (auto *BCO = dyn_cast<BinaryConditionalOperator>(E))

@@ -1010,11 +1010,11 @@ VersionTuple MSVCToolChain::computeMSVCVersion(const Driver *D,
   if (MSVT.empty() &&
       Args.hasFlag(options::OPT_fms_extensions, options::OPT_fno_ms_extensions,
                    IsWindowsMSVC)) {
-    // -fms-compatibility-version=19.33 is default, aka 2022, 17.3
-    // NOTE: when changing this value, also update
-    // clang/docs/CommandGuide/clang.rst and clang/docs/UsersManual.md
-    // accordingly.
-    MSVT = VersionTuple(19, 33);
+    // UE-MSCVER-NOENV: with no toolset found (UBT's clean environment, no
+    // VC vars, no cl.exe on PATH) report the reference cl the openrt
+    // toolchain matches, as cl itself does: 19.51.36260 (_MSC_VER 1951,
+    // _MSC_FULL_VER 195136260). Upstream default: 19.33.
+    MSVT = VersionTuple(19, 51, 36260);
   }
   return MSVT;
 }

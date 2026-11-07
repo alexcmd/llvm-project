@@ -1433,7 +1433,9 @@ void Writer::createExportTable() {
   }
   ctx.forEachActiveSymtab([&](SymbolTable &symtab) {
     if (symtab.edataStart) {
-      if (symtab.hadExplicitExports)
+      // LIB-DEF-FROMOBJ: link.exe takes the export table of a .exp input
+      // (link /LIB /DEF) silently over the objects' /EXPORT directives.
+      if (symtab.hadExplicitExports && ctx.config.mingw)
         Warn(ctx) << "literal .edata sections override exports";
     } else if (!symtab.exports.empty()) {
       std::vector<Chunk *> edataChunks;

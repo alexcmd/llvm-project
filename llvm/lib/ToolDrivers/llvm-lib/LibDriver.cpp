@@ -12,6 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/ToolDrivers/llvm-lib/LibDriver.h"
+#include "LibImplib.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringSet.h"
 #include "llvm/BinaryFormat/COFF.h"
@@ -313,6 +314,130 @@ static void appendFile(std::vector<NewArchiveMember> &Members,
   Members.emplace_back(MB);
 }
 
+// link.exe /LIB reads a '/' argument that is not an existing file as an
+// option: LNK4044, ignored (probed with link and lib 14.51.36231).
+static bool isUnknownSlashOption(StringRef Arg) {
+  if (!Arg.starts_with("/") || sys::fs::exists(Arg))
+    return false;
+  llvm::errs() << "LINK : warning LNK4044: unrecognized option '" << Arg
+               << "'; ignored\n";
+  return true;
+}
+
+// LIB-DEF-FROMOBJ: link /LIB /DEF[:file] [/NAME:dll] [/EXPORT:x] objs...
+// writes <out>.lib (import library) and <out>.exp (exports object). Exports:
+// the .def EXPORTS, the objects' /EXPORT directives and /EXPORT options. DLL
+// name: .def LIBRARY, else /NAME, else <out stem>.dll. Output: /OUT, else the
+// first object's stem. Machine: /MACHINE, else the objects, else x64 with
+// LNK4068 (as link.exe).
+static int linkStyleImportLibrary(opt::InputArgList &Args,
+                                  COFF::MachineTypes LibMachine,
+                                  std::string OutputPath) {
+  std::vector<COFFShortExport> Exports;
+  std::string DllName;
+  if (auto *A = Args.getLastArg(OPT_deffile)) {
+    std::unique_ptr<MemoryBuffer> MB = openFile(A->getValue());
+    if (!MB)
+      return 1;
+    COFF::MachineTypes DefMachine = LibMachine == COFF::IMAGE_FILE_MACHINE_UNKNOWN
+                                        ? COFF::IMAGE_FILE_MACHINE_AMD64
+                                        : LibMachine;
+    if (MB->getBufferSize()) {
+      Expected<COFFModuleDefinition> Def =
+          parseCOFFModuleDefinition(*MB, DefMachine, /*MingwDef=*/false);
+      if (!Def) {
+        llvm::errs() << "error parsing definition\n"
+                     << toString(Def.takeError()) << "\n";
+        return 1;
+      }
+      Exports = std::move(Def->Exports);
+      DllName = Def->OutputFile;
+    }
+  }
+
+  BumpPtrAllocator Alloc;
+  StringSaver Saver(Alloc);
+  std::vector<StringRef> SearchPaths = getSearchPaths(&Args, Saver);
+  std::vector<std::unique_ptr<MemoryBuffer>> MBs;
+  std::string FirstInput;
+  for (auto *Arg : Args.filtered(OPT_INPUT)) {
+    std::string Path = findInputFile(Arg->getValue(), SearchPaths);
+    if (Path.empty()) {
+      if (isUnknownSlashOption(Arg->getValue()))
+        continue;
+      llvm::errs() << Arg->getValue() << ": no such file or directory\n";
+      return 1;
+    }
+    ErrorOr<std::unique_ptr<MemoryBuffer>> MOrErr = MemoryBuffer::getFile(
+        Path, /*IsText=*/false, /*RequiresNullTerminator=*/false);
+    fatalOpenError(errorCodeToError(MOrErr.getError()), Path);
+    MemoryBufferRef MBRef = (*MOrErr)->getMemBufferRef();
+    if (FirstInput.empty())
+      FirstInput = Path;
+    if (identify_magic(MBRef.getBuffer()) == file_magic::coff_object) {
+      if (LibMachine == COFF::IMAGE_FILE_MACHINE_UNKNOWN) {
+        if (Expected<COFF::MachineTypes> M = getCOFFFileMachine(MBRef))
+          LibMachine = *M;
+        else
+          consumeError(M.takeError());
+      }
+      if (Error E = libimplib::collectDirectiveExports(MBRef, Exports)) {
+        llvm::errs() << Path << ": " << toString(std::move(E)) << "\n";
+        return 1;
+      }
+    }
+    MBs.push_back(std::move(*MOrErr));
+  }
+  for (auto *A : Args.filtered(OPT_export)) {
+    COFFShortExport E;
+    if (Error Err = libimplib::parseExportSpec(A->getValue(), E)) {
+      llvm::errs() << toString(std::move(Err)) << "\n";
+      return 1;
+    }
+    Exports.push_back(std::move(E));
+  }
+  if (LibMachine == COFF::IMAGE_FILE_MACHINE_UNKNOWN) {
+    llvm::errs() << "LINK : warning LNK4068: /MACHINE not specified; "
+                    "defaulting to X64\n";
+    LibMachine = COFF::IMAGE_FILE_MACHINE_AMD64;
+  }
+
+  if (OutputPath.empty()) {
+    SmallString<128> P(FirstInput.empty()
+                           ? (DllName.empty() ? std::string("a.lib") : DllName)
+                           : FirstInput);
+    if (!FirstInput.empty() || !DllName.empty())
+      sys::path::replace_extension(P, ".lib");
+    OutputPath = std::string(P);
+  }
+  if (DllName.empty()) {
+    if (auto *A = Args.getLastArg(OPT_name)) {
+      DllName = A->getValue();
+    } else {
+      SmallString<128> P(sys::path::filename(OutputPath));
+      sys::path::replace_extension(P, ".dll");
+      DllName = std::string(P);
+    }
+  }
+
+  libimplib::finalizeExports(Exports);
+  SmallString<128> ExpPath(OutputPath);
+  sys::path::replace_extension(ExpPath, ".exp");
+  llvm::outs() << "   Creating library " << OutputPath << " and object "
+                 << ExpPath << "\n";
+  if (Error E = writeImportLibrary(DllName, OutputPath, Exports, LibMachine,
+                                   /*MinGW=*/false)) {
+    llvm::errs() << OutputPath << ": " << toString(std::move(E)) << "\n";
+    return 1;
+  }
+  if (Error E = libimplib::writeExportsObject(ExpPath, DllName, Exports,
+                                              LibMachine)) {
+    llvm::errs() << ExpPath << ": " << toString(std::move(E)) << "\n";
+    return 1;
+  }
+  return 0;
+}
+
 int llvm::libDriverMain(ArrayRef<const char *> ArgsArr) {
   BumpPtrAllocator Alloc;
   StringSaver Saver(Alloc);
@@ -366,6 +491,13 @@ int llvm::libDriverMain(ArrayRef<const char *> ArgsArr) {
     LibMachineSource =
         std::string(" (from '/machine:") + Arg->getValue() + "' flag)";
   }
+
+  // LIB-DEF-FROMOBJ: link.exe semantics for bare /DEF, or /DEF:file together
+  // with objects or /EXPORT. A /DEF:file alone keeps the llvm-lib path below.
+  if (Args.hasArg(OPT_deffile_bare) ||
+      (Args.hasArg(OPT_deffile) &&
+       (Args.hasArgNoClaim(OPT_INPUT) || Args.hasArg(OPT_export))))
+    return linkStyleImportLibrary(Args, LibMachine, OutputPath);
 
   // create an import library
   if (Args.hasArg(OPT_deffile)) {
@@ -467,6 +599,8 @@ int llvm::libDriverMain(ArrayRef<const char *> ArgsArr) {
     // Find a file
     std::string Path = findInputFile(Arg->getValue(), SearchPaths);
     if (Path.empty()) {
+      if (isUnknownSlashOption(Arg->getValue()))
+        continue;
       llvm::errs() << Arg->getValue() << ": no such file or directory\n";
       return 1;
     }

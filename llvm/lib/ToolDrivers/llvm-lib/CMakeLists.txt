@@ -12,6 +12,7 @@ add_public_tablegen_target(LibOptionsTableGen)
 
 add_llvm_component_library(LLVMLibDriver
   LibDriver.cpp
+  LibImplib.cpp
 
   DEPENDS
   intrinsics_gen

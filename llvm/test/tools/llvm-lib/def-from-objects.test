@@ -1,0 +1,67 @@
+# openrt LIB-DEF-FROMOBJ (UnrealBuildTool's modular import libraries):
+# link /LIB /DEF [/NAME:x.dll] objs... writes an import library and an exports
+# object from the objects' /EXPORT directives (link.exe 14.51). UBT's other
+# options are accepted and ignored.
+
+RUN: rm -rf %t && split-file %s %t && cd %t
+RUN: llvm-mc -triple=x86_64-windows-msvc -filetype=obj -o mod.obj mod.s
+RUN: llvm-lib /NOLOGO /errorReport:prompt /MACHINE:x64 /SUBSYSTEM:CONSOLE \
+RUN:   /experimental:deterministic /DEF /NAME:mod.dll /IGNORE:4221 \
+RUN:   /NODEFAULTLIB /d2:-ExtendedWarningInfo /OUT:mod.lib mod.obj | FileCheck --check-prefix=MSG %s
+MSG: Creating library mod.lib and object mod.exp
+
+RUN: llvm-nm --print-armap mod.lib | FileCheck --check-prefix=LIB %s
+RUN: llvm-nm --print-armap mod.lib | FileCheck --check-prefix=NODATA %s
+LIB-DAG: __IMPORT_DESCRIPTOR_mod in mod.dll
+LIB-DAG: __imp_data_sym in mod.dll
+LIB-DAG: __imp_func in mod.dll
+LIB-DAG: {{^}}func in mod.dll
+NODATA-NOT: {{^}}data_sym in
+RUN: llvm-readobj --coff-imports --symbols --relocs mod.exp | FileCheck --check-prefix=EXP %s
+EXP: Name: .edata
+EXP: Name: szName
+EXP: Name: rgpv
+EXP: Name: $N00001
+EXP: Name: data_sym
+EXP-NEXT: Value: 0
+EXP-NEXT: Section: IMAGE_SYM_UNDEFINED
+EXP: Name: func
+
+# The DLL linked with the .exp exports what the objects asked for.
+RUN: lld-link /dll /noentry /nodefaultlib mod.obj mod.exp /out:mod.dll 2>&1 | count 0
+RUN: llvm-readobj --coff-exports mod.dll | FileCheck --check-prefix=DLL %s
+DLL: Name: data_sym
+DLL: Name: func
+
+# Without /NAME the DLL is named after the output; without /OUT the output
+# after the first object. /DEF:file adds its EXPORTS; LIBRARY names the DLL.
+RUN: llvm-lib /DEF /OUT:other.lib mod.obj
+RUN: llvm-nm --print-armap other.lib | FileCheck --check-prefix=OTHER %s
+OTHER-DAG: __imp_func in other.dll
+RUN: llvm-lib /DEF:x.def /NAME:ignored.dll /OUT:withdef.lib mod.obj
+RUN: llvm-nm --print-armap withdef.lib | FileCheck --check-prefix=WITHDEF %s
+WITHDEF-DAG: __imp_deffn in lib.dll
+WITHDEF-DAG: __imp_func in lib.dll
+
+# Unknown /options are LNK4044 and ignored, in either mode.
+RUN: llvm-lib /NOLOGO /FOO /OUT:plain.lib mod.obj 2>&1 | FileCheck --check-prefix=UNK %s
+UNK: warning LNK4044: unrecognized option '/FOO'; ignored
+RUN: llvm-ar t plain.lib | FileCheck --check-prefix=PLAIN %s
+PLAIN: mod.obj
+
+#--- mod.s
+        .text
+        .globl func
+func:
+        retq
+        .data
+        .globl data_sym
+data_sym:
+        .long 7
+        .section .drectve,"yni"
+        .ascii " /EXPORT:func /EXPORT:data_sym,DATA"
+
+#--- x.def
+LIBRARY lib.dll
+EXPORTS
+  deffn

@@ -1056,8 +1056,32 @@ void Clang::AddPreprocessingOptions(Compilation &C, const JobAction &JA,
       !isa<PreprocessJobAction>(JA))
     CmdArgs.push_back("-fms-predeclare-eh-types");
 
+  // UE-INTRIN-EXPLICIT-VCINC: UnrealBuildTool passes /X /external:I <VC
+  // include>. That dir would come ahead of the builtin header dir, so its
+  // <intrin.h>/<immintrin.h> declare the intrinsics as plain functions (left
+  // as undefined externals at link) and clang-only sub-headers (<shaintrin.h>)
+  // find the wrong <immintrin.h>. In cl mode the builtin dir is therefore put
+  // right before the first explicit system dir that has an intrin.h, which is
+  // the order clang-cl uses for %INCLUDE%. It goes in as -isystem (cc1 puts
+  // every -internal-isystem after the -isystem dirs); the toolchain's later
+  // -internal-isystem copy is a duplicate and is dropped by header search.
+  bool BuiltinIncFirst = D.IsCLMode() &&
+                         getToolChain().getTriple().isWindowsMSVCEnvironment() &&
+                         !Args.hasArg(options::OPT_nostdinc) &&
+                         !Args.hasArg(options::OPT_nobuiltininc);
   bool RenderedImplicitInclude = false;
   for (const Arg *A : Args.filtered(options::OPT_clang_i_Group)) {
+    if (BuiltinIncFirst && A->getOption().matches(options::OPT_isystem)) {
+      SmallString<128> Intrin(A->getValue());
+      llvm::sys::path::append(Intrin, "intrin.h");
+      if (D.getVFS().exists(Intrin)) {
+        SmallString<128> P(D.ResourceDir);
+        llvm::sys::path::append(P, "include");
+        CmdArgs.push_back("-isystem");
+        CmdArgs.push_back(Args.MakeArgString(P));
+        BuiltinIncFirst = false;
+      }
+    }
     if (A->getOption().matches(options::OPT_include) &&
         D.getProbePrecompiled()) {
       // Handling of gcc-style gch precompiled headers.

@@ -12892,8 +12892,10 @@ static void AnalyzeAssignment(Sema &S, BinaryOperator *E) {
 
 /// Diagnose an implicit cast;  purely a helper for CheckImplicitConversion.
 /// UE-C4244-SHORTEN: whether \p T is written as size_t somewhere in its sugar
-/// (the typedef, a typedef or template argument naming it, or sizeof's type).
-static bool isSpelledSizeT(const ASTContext &Ctx, QualType T) {
+/// (the typedef, a typedef naming it, or sizeof's type); UE-C4267-TEMPLATE:
+/// or a template parameter whose argument was first spelled size_t.
+bool Sema::isMSSpelledSizeT(QualType T) const {
+  const ASTContext &Ctx = Context;
   for (unsigned Steps = 0; Steps != 64; ++Steps) {
     const Type *Ty = T.getTypePtr();
     if (const auto *TD = dyn_cast<TypedefType>(Ty))
@@ -12902,15 +12904,46 @@ static bool isSpelledSizeT(const ASTContext &Ctx, QualType T) {
     if (const auto *PS = dyn_cast<PredefinedSugarType>(Ty))
       if (PS->getKind() == PredefinedSugarType::Kind::SizeT)
         return true;
-    // CLANG-CL-GAP(c4267-template): cl keeps the size_t spelling of a
-    // template argument (C4267 in the instantiation); here the replacement
-    // type is canonical, so such a narrowing is reported as C4244.
+    if (const auto *ST = dyn_cast<SubstTemplateTypeParmType>(Ty))
+      if (!ST->getPackIndex() && ST->getIndex() < 64 && ST->getAssociatedDecl()) {
+        const Decl *AD = ST->getAssociatedDecl()->getCanonicalDecl();
+        // A function template's parameters are associated with the template
+        // itself: the specialization is the function being instantiated.
+        if (const auto *FTD = dyn_cast<FunctionTemplateDecl>(AD))
+          for (const DeclContext *DC = CurContext; DC; DC = DC->getParent())
+            if (const auto *FD = dyn_cast<FunctionDecl>(DC))
+              if (FD->getPrimaryTemplate() &&
+                  FD->getPrimaryTemplate()->getCanonicalDecl() == FTD) {
+                AD = FD->getCanonicalDecl();
+                break;
+              }
+        auto It = MSSizeTTemplateArgs.find(AD);
+        if (It != MSSizeTTemplateArgs.end() &&
+            (It->second >> ST->getIndex()) & 1)
+          return true;
+      }
     QualType Next = T.getSingleStepDesugaredType(Ctx);
     if (Next == T)
       return false;
     T = Next;
   }
   return false;
+}
+
+void Sema::recordMSSizeTTemplateArgs(const Decl *Specialization,
+                                     ArrayRef<TemplateArgument> SugaredArgs) {
+  if (!getLangOpts().MSVCCompat || !Specialization)
+    return;
+  const Decl *Key = Specialization->getCanonicalDecl();
+  if (MSSizeTTemplateArgs.count(Key))
+    return; // the first spelling stays, as in cl
+  uint64_t Bits = 0;
+  for (unsigned I = 0, N = std::min<size_t>(SugaredArgs.size(), 64); I != N;
+       ++I)
+    if (SugaredArgs[I].getKind() == TemplateArgument::Type &&
+        isMSSpelledSizeT(SugaredArgs[I].getAsType()))
+      Bits |= uint64_t(1) << I;
+  MSSizeTTemplateArgs[Key] = Bits;
 }
 
 static void DiagnoseImpCast(Sema &S, const Expr *E, QualType SourceType,
@@ -13792,7 +13825,7 @@ void Sema::CheckImplicitConversion(Expr *E, QualType T, SourceLocation CC,
     // through the size_t typedef, or the type of sizeof) C4267, any other
     // 64-to-32 one C4244.
     if (getLangOpts().MSVCCompat && Context.getIntWidth(E->getType()) == 64 &&
-        isSpelledSizeT(Context, E->getType()))
+        isMSSpelledSizeT(E->getType()))
       return DiagnoseImpCast(*this, E, T, CC, diag::warn_impcast_size_t_ms,
                              /* pruneControlFlow */ true);
     if (TargetRange.Width == 32 && Context.getIntWidth(E->getType()) == 64)

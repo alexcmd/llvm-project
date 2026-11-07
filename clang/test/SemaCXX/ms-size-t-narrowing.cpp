@@ -12,7 +12,7 @@
 // from any other 64-bit integer -Wshorten-int64-to-32 (cl C4244), as cl 14.51
 // numbers them. -Wshorten-64-to-32 covers both; without MSVC compatibility
 // it is one warning as upstream.
-// CLANG-CL-GAP(c4267-constant): cl also reports a constant sizeof that fits.
+// Like cl 14.51, a constant sizeof that fits is not diagnosed (measured).
 
 typedef unsigned long long size_t;
 typedef unsigned long long uint64_t;

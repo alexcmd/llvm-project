@@ -46,6 +46,12 @@ extern "C" void __dyn_tls_on_demand_init(void) noexcept;
 extern "C" __declspec(thread) int _Init_thread_epoch;
 extern "C" __declspec(thread) bool __tls_guard;
 
+// cl also accepts a redeclaration or definition without the noexcept of a
+// predeclared function (the openrt runtime defines them that way); it stays
+// noexcept.
+extern "C" void __cdecl _Init_thread_header(int *const);
+extern "C" void __cdecl _Init_thread_abort(int *const) {}
+
 // Exception specifications as cl has them.
 static_assert(noexcept(_Init_thread_header(0)), "");
 static_assert(noexcept(__dyn_tls_on_demand_init()), "");

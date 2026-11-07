@@ -400,6 +400,13 @@ bool Sema::CheckEquivalentExceptionSpec(FunctionDecl *Old, FunctionDecl *New) {
     // when declaring a replaceable global allocation function.
     DiagID = diag::ext_missing_exception_specification;
     ReturnValueOnError = false;
+  } else if (getLangOpts().MSVCCompat &&
+             getSourceManager().isWrittenInBuiltinFile(
+                 Old->getFirstDecl()->getLocation())) {
+    // A function cl predeclares (-fms-predeclare-eh-types, e.g.
+    // _Init_thread_header noexcept) may be redeclared or defined without its
+    // exception specification; cl accepts that silently and keeps it.
+    return false;
   } else if (ESI.Type == EST_NoThrow) {
     // Don't emit any warning for missing 'nothrow' in MSVC.
     if (getLangOpts().MSVCCompat) {

@@ -26,6 +26,7 @@
 #include "clang/Frontend/FrontendActions.h"
 #include "clang/Frontend/FrontendPluginRegistry.h"
 #include "clang/Frontend/LogDiagnosticPrinter.h"
+#include "clang/Frontend/SARIFLogConsumer.h"
 #include "clang/Frontend/SARIFDiagnosticPrinter.h"
 #include "clang/Frontend/SerializedDiagnosticPrinter.h"
 #include "clang/Frontend/TextDiagnosticPrinter.h"
@@ -389,6 +390,17 @@ IntrusiveRefCntPtr<DiagnosticsEngine> CompilerInstance::createDiagnostics(
 
   if (!Opts.DiagnosticSerializationFile.empty())
     SetupSerializedDiagnostics(Opts, *Diags, Opts.DiagnosticSerializationFile);
+
+  // UE-EXPLOG-SARIF: chain in the SARIF log writer, if requested.
+  if (!Opts.DiagnosticSARIFFile.empty()) {
+    auto Log = createSARIFLogConsumer(Opts.DiagnosticSARIFFile);
+    if (Diags->ownsClient())
+      Diags->setClient(
+          new ChainedDiagnosticConsumer(Diags->takeClient(), std::move(Log)));
+    else
+      Diags->setClient(
+          new ChainedDiagnosticConsumer(Diags->getClient(), std::move(Log)));
+  }
 
   // Configure our handling of diagnostics.
   ProcessWarningOptions(*Diags, Opts, VFS);

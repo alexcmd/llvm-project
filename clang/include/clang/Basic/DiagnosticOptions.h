@@ -117,6 +117,10 @@ public:
   /// The file to serialize diagnostics to (non-appending).
   std::string DiagnosticSerializationFile;
 
+  /// The file to write a SARIF log of the diagnostics to, besides the normal
+  /// output (clang-cl /experimental:log).
+  std::string DiagnosticSARIFFile;
+
   /// Path for the file that defines diagnostic suppression mappings.
   std::string DiagnosticSuppressionMappingsFile;
 

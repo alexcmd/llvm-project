@@ -450,3 +450,6 @@ def gap_flag_dynamicdeopt_allowicf : F<"DYNAMICDEOPT-ALLOWICF">;  // LLD-GAP(ign
 def gap_flag_exportpadmin : F<"EXPORTPADMIN">;  // LLD-GAP(ignored)
 def gap_p_linkreprotarget : P_priv<"LINKREPROTARGET">;  // LLD-GAP(ignored)
 def gap_p_pdbinject : P_priv<"PDBINJECT">;  // LLD-GAP(ignored)
+// link.exe hands /d2:<x> to the LTCG code generator and accepts any value
+// silently (UBT: /d2:-ExtendedWarningInfo); bare /d2 or /d2: is LNK1146.
+def d2_opt : P_priv<"d2">;

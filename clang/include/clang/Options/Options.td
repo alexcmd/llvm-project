@@ -9263,6 +9263,8 @@ def _SLASH_d1reportTime : CLIgnoredFlag<"d1reportTime">;
 def _SLASH_d1reportSingleClassLayout : CLIgnoredJoined<"d1reportSingleClassLayout">;
 def _SLASH_d2Fastcap : CLIgnoredFlag<"d2Fastcap">;
 def _SLASH_d2cgsummary : CLIgnoredFlag<"d2cgsummary">;
+// UE-D2-EXTWARN: UnrealBuildTool passes it on every compile; cl is silent.
+def _SLASH_d2ExtendedWarningInfo : CLIgnoredFlag<"d2ExtendedWarningInfo">;
 // cl crashes (C1001) on /d2Zi; accepted, the crash is not reproduced.
 // CLANG-CL-GAP(d2Zi-ice): cl.exe crashes (C1001) on /d2Zi; accepted here.
 def _SLASH_d2Zi : CLIgnoredFlag<"d2Zi">;

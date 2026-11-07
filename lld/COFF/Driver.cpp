@@ -1945,6 +1945,15 @@ void LinkerDriver::linkerMain(ArrayRef<const char *> argsArr) {
     Err(ctx) << "'" << arg->getAsString(args)
              << "' is not supported by lld-link";
 
+  // /d2:<x> is for the LTCG code generator: accepted and ignored; an empty
+  // value is LNK1146 as in link.exe.
+  for (auto *arg : args.filtered(OPT_d2_opt))
+    if (StringRef(arg->getValue()).empty()) {
+      llvm::errs() << "LINK : fatal error LNK1146: option '/d2:' is missing "
+                      "its value\n";
+      exitLld(1146);
+    }
+
   // Handle /force or /force:unresolved
   if (args.hasArg(OPT_force, OPT_force_unresolved))
     config->forceUnresolved = true;

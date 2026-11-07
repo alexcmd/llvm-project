@@ -6735,6 +6735,14 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     }
   }
 
+  // UE-DX-IMPLVIRT: /dx<name> is silent in cl (UBT passes
+  // /dximplicitlyinstantiatevirtualfunction-); a bare /dx is D8004.
+  for (const Arg *A : Args.filtered(options::OPT__SLASH_dx)) {
+    A->claim();
+    if (A->getValue()[0] == '\0')
+      D.Diag(diag::err_drv_cl_requires_argument) << A->getSpelling();
+  }
+
   // cl.exe: an unknown /d1 name is C1007 from c1xx, an unknown /d2 name C1007
   // from p2; a bare name is D8004 (probes_cl_decisions.md section 1). Known
   // spellings have their own defs in Options.td and never reach here.
@@ -6797,6 +6805,16 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   unsigned CLLevel = 1;
   bool CLLevelsOff = !D.IsCLMode() || Args.hasArg(options::OPT_w);
   llvm::StringSet<> CLNamed;
+  // UE-ZC-STRICTSTRINGS-OFF: /Zc:strictStrings makes the string literal to
+  // char * conversion an error (C2440 in cl); /permissive- implies it, and
+  // /Zc:strictStrings- or /permissive after it turn it off again.
+  bool CLStrictStrings = false;
+  if (const Arg *A = Args.getLastArg(options::OPT__SLASH_Zc_strictStrings,
+                                     options::OPT__SLASH_Zc_strictStrings_))
+    CLStrictStrings =
+        A->getOption().matches(options::OPT__SLASH_Zc_strictStrings);
+  if (CLStrictStrings)
+    CLNamed.insert("writable-strings");
   if (!CLLevelsOff) {
     for (const Arg *A : Args.filtered(options::OPT_W_Group, options::OPT__SLASH_wd,
                                       options::OPT__SLASH_we,
@@ -6923,6 +6941,9 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     }
     A->render(Args, CmdArgs);
   }
+
+  if (CLStrictStrings)
+    CmdArgs.push_back("-Werror=writable-strings");
 
   Args.AddAllArgs(CmdArgs, options::OPT_Wsystem_headers_in_module_EQ);
 

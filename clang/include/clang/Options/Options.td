@@ -9457,9 +9457,12 @@ def _SLASH_Zc_char8_t : CLFlag<"Zc:char8_t">,
 def _SLASH_Zc_char8_t_ : CLFlag<"Zc:char8_t-">,
   HelpText<"Disable char8_t from c++2a">,
   Alias<fno_char8__t>;
+// UE-ZC-STRICTSTRINGS-OFF: last of /Zc:strictStrings[-] and /permissive[-]
+// (which imply it on and off) wins, as in cl (Clang.cpp).
 def _SLASH_Zc_strictStrings : CLFlag<"Zc:strictStrings">,
-  HelpText<"Treat string literals as const">, Alias<W_Joined>,
-  AliasArgs<["error=c++11-compat-deprecated-writable-strings"]>;
+  HelpText<"Treat string literals as const (error on conversion to char *)">;
+def _SLASH_Zc_strictStrings_ : CLFlag<"Zc:strictStrings-">,
+  HelpText<"Allow string literal to char * conversion (default)">;
 def _SLASH_Zc_threadSafeInit : CLFlag<"Zc:threadSafeInit">,
   HelpText<"Enable thread-safe initialization of static variables">,
   Alias<fthreadsafe_statics>;
@@ -9830,6 +9833,8 @@ def _SLASH_Bt : CLFlag<"Bt">;
 def _SLASH_Bt_plus : CLFlag<"Bt+">;
 def _SLASH_clr : CLJoined<"clr">;
 def _SLASH_d1 : CLJoined<"d1">;
+// UE-DX-IMPLVIRT: cl accepts any /dx<name> silently; bare /dx is D8004.
+def _SLASH_dx : CLJoined<"dx">;
 def _SLASH_d2 : CLJoined<"d2">;
 def _SLASH_doc : CLJoined<"doc">;
 def _SLASH_dynamicdeopt : CLJoined<"dynamicdeopt">;

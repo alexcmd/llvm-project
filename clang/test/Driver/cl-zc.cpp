@@ -59,11 +59,14 @@
 // KERNEL-X64-AVX512: error: invalid argument '/arch:AVX512' not allowed with '/kernel'
 
 // RUN: %clang_cl /c -### -- %s 2>&1 | FileCheck -check-prefix=STRICTSTRINGS-DEFAULT %s
-// STRICTSTRINGS-DEFAULT-NOT: -Werror=c++11-compat-deprecated-writable-strings
+// STRICTSTRINGS-DEFAULT-NOT: -Werror=writable-strings
 // RUN: %clang_cl /c -### /Zc:strictStrings -- %s 2>&1 | FileCheck -check-prefix=STRICTSTRINGS-ON %s
-// STRICTSTRINGS-ON: -Werror=c++11-compat-deprecated-writable-strings
-// RUN: %clang_cl /c -### /Zc:strictStrings- -- %s 2>&1 | FileCheck -check-prefix=STRICTSTRINGS-OFF %s
-// STRICTSTRINGS-OFF: argument unused during compilation
+// STRICTSTRINGS-ON: -Werror=writable-strings
+// openrt UE-ZC-STRICTSTRINGS-OFF: /Zc:strictStrings- is a real option (cl is
+// silent on it), and it turns an earlier /Zc:strictStrings off.
+// RUN: %clang_cl /c -### /Zc:strictStrings /Zc:strictStrings- -- %s 2>&1 | FileCheck -check-prefix=STRICTSTRINGS-OFF %s
+// STRICTSTRINGS-OFF-NOT: argument unused during compilation
+// STRICTSTRINGS-OFF-NOT: -Werror=writable-strings
 
 
 // RUN: %clang_cl /c -### /Zc:foobar -- %s 2>&1 | FileCheck -check-prefix=FOOBAR-ON %s

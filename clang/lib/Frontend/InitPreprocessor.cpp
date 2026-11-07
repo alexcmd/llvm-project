@@ -1669,6 +1669,124 @@ struct _s__RTTIClassHierarchyDescriptor {
 #endif)");
 }
 
+/// The functions, variables and std names the Microsoft compiler declares in
+/// every translation unit without any header (cl 14.51, observed with
+/// redeclaration, noexcept, noreturn and address-of probes per /std level):
+///  - C and C++: the __report_* failure functions (noreturn).
+///  - C++: the EH/RTTI/thread-safe-statics/TLS runtime entry points (extern
+///    "C"; noexcept only where cl has it), the vector iterator helpers under
+///    their ABI names (the eh ones external, the others defined inline as cl
+///    does), std::nullptr_t, std::align_val_t (C++17, opaque so <new> can
+///    still define it) and struct __s_GUID.
+/// x86 uses __stdcall and __thiscall where cl does.
+static void AddMSPredeclaredRuntimeNames(MacroBuilder &Builder,
+                                         const TargetInfo &TI,
+                                         const LangOptions &LangOpts) {
+  bool X86 = TI.getTriple().getArch() == llvm::Triple::x86;
+  Builder.append("#ifndef __clang_ms_predeclared_runtime_names\n"
+                 "#define __clang_ms_predeclared_runtime_names 1");
+  if (!LangOpts.CPlusPlus) {
+    Builder.append(R"(__declspec(noreturn) void __cdecl __report_rangecheckfailure(void);
+__declspec(noreturn) void __cdecl __report_securityfailure(unsigned long);
+__declspec(noreturn) void __cdecl __report_securityfailureEx(unsigned long, unsigned long, void **);
+#endif)");
+    return;
+  }
+  StringRef NX = LangOpts.CPlusPlus11 ? " noexcept" : " throw()";
+  StringRef NXF = LangOpts.CPlusPlus11 ? " noexcept(false)" : "";
+  StringRef SC = X86 ? "__stdcall" : "__cdecl";  // iterators, _CxxThrowException
+  StringRef TC = X86 ? "__thiscall" : "__cdecl"; // iterator callbacks
+  Builder.append(Twine(R"(extern "C" {
+__declspec(noreturn) void __cdecl __std_terminate(void);
+int __cdecl _purecall(void);
+void *__cdecl __RTDynamicCast(void *, long, void *, void *, int))") + NXF + R"(;
+void *__cdecl __RTtypeid(void *))" + NXF + R"(;
+void *__cdecl __RTCastToVoid(void *))" + NXF + R"(;
+__declspec(noreturn) void )" + SC + R"( _CxxThrowException(void *, _ThrowInfo *))" + NXF + R"(;
+__declspec(noreturn) void __cdecl __report_rangecheckfailure(void);
+__declspec(noreturn) void __cdecl __report_securityfailure(unsigned long);
+__declspec(noreturn) void __cdecl __report_securityfailureEx(unsigned long, unsigned long, void **);
+void __cdecl __CxxUnregisterExceptionObject(void *, int);
+int __cdecl __CxxRegisterExceptionObject(void *, void *);
+int __cdecl __CxxDetectRethrow(void *);
+int __cdecl __CxxExceptionFilter(void *, void *, int, void *);
+int __cdecl __CxxQueryExceptionSize(void);
+int __cdecl atexit(void(__cdecl *)(void));
+void __cdecl _Init_thread_header(int *))" + NX + R"(;
+void __cdecl _Init_thread_footer(int *))" + NX + R"(;
+void __cdecl _Init_thread_abort(int *))" + NX + R"(;
+extern __declspec(thread) int _Init_thread_epoch;
+void __cdecl __dyn_tls_on_demand_init(void))" + NX + R"(;
+extern __declspec(thread) bool __tls_guard;
+})");
+  // Vector iterators: Microsoft ABI names ("eh vector constructor iterator",
+  // ...). The eh ones live in the runtime; the plain ones are emitted by the
+  // compiler into every object that uses them.
+  struct Iter {
+    const char *Name, *Params, *Label64, *Label32, *Body;
+  };
+  static const Iter Iters[] = {
+      {"__ehvec_ctor", "void *, SZ, SZ, void(TC *)(void *), void(TC *)(void *)",
+       "??_L@YAXPEAX_K1P6AX0@Z2@Z", "??_L@YGXPAXIIP6EX0@Z1@Z", nullptr},
+      {"__ehvec_dtor", "void *, SZ, SZ, void(TC *)(void *)",
+       "??_M@YAXPEAX_K1P6AX0@Z@Z", "??_M@YGXPAXIIP6EX0@Z@Z", nullptr},
+      {"__ehvec_ctor_vb", "void *, SZ, SZ, void(TC *)(void *), void(TC *)(void *)",
+       "??_N@YAXPEAX_K1P6AX0@Z2@Z", "??_N@YGXPAXIIP6EX0@Z1@Z", nullptr},
+      {"__ehvec_copy_ctor", "void *, void *, SZ, SZ, void(TC *)(void *, void *), void(TC *)(void *)",
+       "??__C@YAXPEAX0_K1P6AX00@ZP6AX0@Z@Z", "??__C@YGXPAX0IIP6EX00@ZP6EX0@Z@Z", nullptr},
+      {"__ehvec_copy_ctor_vb", "void *, void *, SZ, SZ, void(TC *)(void *, void *), void(TC *)(void *)",
+       "??__D@YAXPEAX0_K1P6AX00@ZP6AX0@Z@Z", "??__D@YGXPAX0IIP6EX00@ZP6EX0@Z@Z", nullptr},
+      {"__vec_ctor", "void *p, SZ s, SZ n, void *(TC *f)(void *)",
+       "??_H@YAXPEAX_K1P6APEAX0@Z@Z", "??_H@YGXPAXIIP6EPAX0@Z@Z",
+       "for (SZ i = 0; i != n; ++i) f((char *)p + i * s);"},
+      {"__vec_dtor", "void *p, SZ s, SZ n, void(TC *f)(void *)",
+       "??_I@YAXPEAX_K1P6AX0@Z@Z", "??_I@YGXPAXIIP6EX0@Z@Z",
+       "for (SZ i = n; i != 0; --i) f((char *)p + (i - 1) * s);"},
+      {"__vec_ctor_vb", "void *p, SZ s, SZ n, void *(TC *f)(void *)",
+       "??_J@YAXPEAX_K1P6APEAX0@Z@Z", "??_J@YGXPAXIIP6EPAX0@Z@Z",
+       "for (SZ i = 0; i != n; ++i) f((char *)p + i * s);"},
+      {"__vec_copy_ctor", "void *d, void *p, SZ s, SZ n, void *(TC *f)(void *, void *)",
+       "??__G@YAXPEAX0_K1P6APEAX00@Z@Z", "??__G@YGXPAX0IIP6EPAX00@Z@Z",
+       "for (SZ i = 0; i != n; ++i) f((char *)d + i * s, (char *)p + i * s);"},
+      {"__vec_copy_ctor_vb", "void *d, void *p, SZ s, SZ n, void *(TC *f)(void *, void *)",
+       "??__H@YAXPEAX0_K1P6APEAX00@Z@Z", "??__H@YGXPAX0IIP6EPAX00@Z@Z",
+       "for (SZ i = 0; i != n; ++i) f((char *)d + i * s, (char *)p + i * s);"},
+  };
+  // size_t spelled out: preprocessed input (-fpreprocessed) does not expand
+  // macros such as __SIZE_TYPE__ in the predefines.
+  std::string SizeT = TargetInfo::getTypeName(TI.getSizeType());
+  auto Subst = [&](std::string S) {
+    for (size_t Pos; (Pos = S.find("TC")) != std::string::npos;)
+      S.replace(Pos, 2, TC.str());
+    for (size_t Pos; (Pos = S.find("SZ")) != std::string::npos;)
+      S.replace(Pos, 2, SizeT);
+    return S;
+  };
+  for (const Iter &I : Iters) {
+    std::string Params = Subst(I.Params);
+    std::string Head = (Twine(I.Body ? "inline " : "") + "void " + SC + " " +
+                        I.Name + "(" + Params + ")")
+                           .str();
+    Builder.append(Head + " __asm__(\"" + (X86 ? I.Label32 : I.Label64) +
+                   "\");");
+    if (I.Body)
+      Builder.append(Head + " { " + Subst(I.Body) + " }");
+  }
+  Builder.append("namespace std {");
+  if (LangOpts.CPlusPlus11)
+    Builder.append("typedef decltype(nullptr) nullptr_t;");
+  if (LangOpts.CPlusPlus17)
+    Builder.append("enum class align_val_t : " + SizeT + ";");
+  Builder.append(R"(}
+struct __s_GUID {
+  unsigned long Data1;
+  unsigned short Data2;
+  unsigned short Data3;
+  unsigned char Data4[8];
+};
+#endif)");
+}
+
 /// InitializePreprocessor - Initialize the preprocessor getting it and the
 /// environment ready to process a single file.
 void clang::InitializePreprocessor(Preprocessor &PP,
@@ -1748,6 +1866,8 @@ void clang::InitializePreprocessor(Preprocessor &PP,
   // The Microsoft C++ EH/RTTI types, ahead of -imacros and -include files.
   if (InitOpts.MSPredeclareEHTypes && LangOpts.CPlusPlus)
     AddMSPredeclaredEHTypes(Builder, PP.getTargetInfo());
+  if (InitOpts.MSPredeclareEHTypes)
+    AddMSPredeclaredRuntimeNames(Builder, PP.getTargetInfo(), LangOpts);
 
   // If -imacros are specified, include them now.  These are processed before
   // any -include directives.

@@ -1,7 +1,8 @@
 // The C++ EH and RTTI types the Microsoft compiler pre-injects are declared
 // for C++ inputs: by default in cl mode, with
-// -fms-predeclare-eh-types elsewhere; ahead of user /FI includes; not in C and
-// not when only preprocessing.
+// -fms-predeclare-eh-types elsewhere; ahead of user /FI includes; not when only
+// preprocessing. C inputs get the flag too, for the runtime names cl declares
+// in C (ms-predeclared-runtime-names.cpp); the EH types stay C++ only.
 
 // RUN: %clang_cl --target=x86_64-pc-windows-msvc /TP /FIuser.h -### -c -- %s \
 // RUN:   2>&1 | FileCheck --check-prefix=ON %s
@@ -18,8 +19,6 @@
 // RUN: %clang_cl --target=x86_64-pc-windows-msvc -fms-predeclare-eh-types \
 // RUN:   -fno-ms-predeclare-eh-types /TP -### -c -- %s 2>&1 \
 // RUN:   | FileCheck --check-prefix=OFF %s
-// RUN: %clang_cl --target=x86_64-pc-windows-msvc /TC -### -c -- %s 2>&1 \
-// RUN:   | FileCheck --check-prefix=OFF %s
 // RUN: %clang_cl --target=x86_64-pc-windows-msvc /TP /E -### -- %s 2>&1 \
 // RUN:   | FileCheck --check-prefix=OFF %s
 // RUN: %clang_cl --target=x86_64-pc-windows-msvc /TP /P -### -- %s 2>&1 \
@@ -34,3 +33,9 @@
 // RUN: %clang_cl --target=x86_64-pc-windows-msvc -### -c -- %t/a.ii 2>&1 \
 // RUN:   | FileCheck --check-prefix=ON-PP %s
 // ON-PP: "-fms-predeclare-eh-types"
+// RUN: echo > %t/a.i
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc -### -c -- %t/a.i 2>&1 \
+// RUN:   | FileCheck --check-prefix=ON-PP %s
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc /TC -### -c -- %s 2>&1 \
+// RUN:   | FileCheck --check-prefix=ON-C %s
+// ON-C: "-fms-predeclare-eh-types"

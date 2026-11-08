@@ -3607,9 +3607,10 @@ defm ms_clang_identity : BoolFOption<"ms-clang-identity",
   PreprocessorOpts<"MSClangIdentity">, DefaultTrue,
   PosFlag<SetTrue, [], [ClangOption, CLOption],
           "Predefine the clang identity macros (__clang__, __llvm__, ...; "
-          "default)">,
+          "default except in cl mode)">,
   NegFlag<SetFalse, [], [ClangOption, CLOption, CC1Option],
-          "Do not predefine the clang identity macros, as cl.exe">>;
+          "Do not predefine the clang identity macros, as cl.exe (default "
+          "in cl mode)">>;
 defm openrt_overlay : BoolOptionWithoutMarshalling<"f", "openrt-overlay",
   PosFlag<SetTrue, [], [ClangOption, CLOption],
           "Use the VFS overlay declared by the openrt layout around the "

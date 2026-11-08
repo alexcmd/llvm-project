@@ -594,4 +594,11 @@ _InterlockedCompareExchange64_HLERelease(__int64 volatile *_Destination,
 
 #endif /* defined(_MSC_VER) && __has_extension(gnu_asm) */
 
+/* openrt CL-IDENTITY: cl's SVML intrinsics, without the clang identity macros
+   (the cl branches of code that calls them). */
+#if defined(_MSC_VER) && !defined(__clang__) && defined(__x86_64__) &&        \
+    !defined(__arm64ec__)
+#include <svmlintrin.h>
+#endif
+
 #endif /* __IMMINTRIN_H */

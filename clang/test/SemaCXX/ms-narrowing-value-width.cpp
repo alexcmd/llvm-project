@@ -2,8 +2,8 @@
 // RUN:   -std=c++17 -fsyntax-only -verify -Wshorten-64-to-32 %s
 
 // openrt UE-C4244-VALUE-RANGE: cl 14.51 decides C4244/C4267 on a 64-bit value
-// by a structural value width (no folding beyond literals): literal = its
-// bits; & min; | ^ + - * ?: max; / left; % right; >> c left - c; << and >> by
+// by a structural value width: an integral constant expression = the bits
+// of its value; & min; | ^ + - * ?: max; / left; % right; >> c left - c; << and >> by
 // a variable: left; casts min(target, operand); enum its underlying type.
 // Measured on 60+ forms; the narrowing is reported only when that width is
 // above the target's.

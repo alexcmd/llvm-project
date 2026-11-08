@@ -201,6 +201,9 @@ static const CLWarningLevel CLLevels[] = {
     {"microsoft-unqualified-friend", 0, nullptr, nullptr},
     {"microsoft-cast", 0, nullptr, nullptr},
     {"invalid-unevaluated-string", 0, nullptr, nullptr},
+    // UE-NOISE (r32): 'this' (or a reference's address) in a bool context;
+    // cl is silent on 'this' and reports the address only as C4800 (off).
+    {"undefined-bool-conversion", 0, nullptr, nullptr},
     // UE-WD5054: cl has no counterpart of the ?: enum mismatch.
     {"deprecated-enum-compare-conditional", 0, nullptr, nullptr},
     // Off: the cl.exe counterpart is off by default (enable via /w<l><n>).

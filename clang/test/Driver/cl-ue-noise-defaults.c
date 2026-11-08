@@ -10,6 +10,8 @@
 // CHECK-DAG: "-Wno-microsoft-unqualified-friend"
 // CHECK-DAG: "-Wno-microsoft-cast"
 // CHECK-DAG: "-Wno-invalid-unevaluated-string"
+// r32: 'this' in a bool context (cl silent; a reference's address is C4800, off).
+// CHECK-DAG: "-Wno-undefined-bool-conversion"
 
 // RUN: %clang_cl --target=x86_64-pc-windows-msvc /c -### /W4 /w14548 -- %s 2>&1 \
 // RUN:   | FileCheck --check-prefix=C4548 %s

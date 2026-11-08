@@ -2807,6 +2807,16 @@ public:
   /// template parameter whose argument was first spelled that way.
   bool isMSSpelledSizeT(QualType T) const;
 
+  /// UE-XM-VECTOR-OPS: cl's __m64/__m128*/__m256*/__m512* are unions there,
+  /// so it accepts user operators on them (DirectXMath's XMVECTOR operators).
+  /// With -fms-extensions and without the clang identity macros (the cl
+  /// branches of such headers), these vector types take user operators too.
+  bool isMSOperatorVectorType(QualType T) const;
+  /// Some function in \p Fns takes \p NumArgs arguments, one of them of
+  /// such a vector type.
+  bool hasMSVectorOperatorCandidate(const UnresolvedSetImpl &Fns,
+                                    unsigned NumArgs) const;
+
   /// UE-C4267-CONDITIONAL: whether the value of \p E is size_t as cl sees it:
   /// its type is spelled size_t, or it is a 64-bit unsigned result of
   /// arithmetic, ?: or unary -/+/~ with a size_t operand (cl keeps size_t

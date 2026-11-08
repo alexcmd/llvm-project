@@ -23,6 +23,7 @@
 #include "clang/Basic/Specifiers.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Lex/Preprocessor.h"
+#include "clang/Lex/PreprocessorOptions.h"
 #include "clang/Sema/Designator.h"
 #include "clang/Sema/EnterExpressionEvaluationContext.h"
 #include "clang/Sema/Initialization.h"
@@ -409,6 +410,10 @@ class InitListChecker {
   void CheckMatrixType(const InitializedEntity &Entity, InitListExpr *IList,
                        QualType DeclType, unsigned &Index,
                        InitListExpr *StructuredList, unsigned &StructuredIndex);
+  void CheckMSByteVectorInit(const InitializedEntity &Entity,
+                             InitListExpr *IList, QualType DeclType,
+                             unsigned &Index, InitListExpr *StructuredList,
+                             unsigned &StructuredIndex);
   void CheckVectorType(const InitializedEntity &Entity,
                        InitListExpr *IList, QualType DeclType, unsigned &Index,
                        InitListExpr *StructuredList,
@@ -1925,6 +1930,76 @@ void InitListChecker::CheckMatrixType(const InitializedEntity &Entity,
   }
 }
 
+// UE-M128I-INIT: cl's __m128i, __m256i and __m512i are unions whose first
+// member is a char array (16, 32, 64 bytes), so a braced initializer gives
+// the bytes (cl 14.51: {1, 2, 3} is bytes 1 2 3 0..., constant-evaluable,
+// brace elision takes up to the byte count). clang's types are vectors of
+// long long. Without the clang identity macros (the cl branches of code
+// using them), MSVC compatibility initializes a type spelled __m128i,
+// __m256i or __m512i (through any typedefs) as such a char vector,
+// reinterpreted.
+static bool isMSByteVectorInit(Sema &S, QualType T) {
+  if (!S.getLangOpts().MSVCCompat || S.PP.getPreprocessorOpts().MSClangIdentity)
+    return false;
+  const auto *VT = T->getAs<VectorType>();
+  if (!VT || VT->getVectorKind() != VectorKind::Generic ||
+      !VT->getElementType()->isIntegerType() ||
+      S.Context.getTypeSize(VT->getElementType()) != 64)
+    return false;
+  for (QualType Cur = T;;) {
+    const auto *TT = Cur->getAs<TypedefType>();
+    if (!TT)
+      return false;
+    StringRef Name = TT->getDecl()->getName();
+    if (Name == "__m128i" || Name == "__m256i" || Name == "__m512i")
+      return true;
+    Cur = TT->getDecl()->getUnderlyingType();
+  }
+}
+
+void InitListChecker::CheckMSByteVectorInit(const InitializedEntity &Entity,
+                                            InitListExpr *IList,
+                                            QualType DeclType, unsigned &Index,
+                                            InitListExpr *StructuredList,
+                                            unsigned &StructuredIndex) {
+  ASTContext &Ctx = SemaRef.Context;
+  unsigned Bytes = Ctx.getTypeSize(DeclType) / Ctx.getCharWidth();
+  QualType ByteVec = Ctx.getVectorType(Ctx.CharTy, Bytes, VectorKind::Generic);
+  unsigned N = std::min(Bytes, IList->getNumInits() - Index);
+  SmallVector<Expr *, 64> Elts(IList->inits().slice(Index, N));
+  auto *Sub = new (Ctx) InitListExpr(Ctx, Elts.front()->getBeginLoc(), Elts,
+                                     Elts.back()->getEndLoc(),
+                                     /*isExplicit=*/true);
+  Sub->setType(Ctx.VoidTy); // unchecked, as from ActOnInitList
+  InitializedEntity TmpEntity = InitializedEntity::InitializeTemporary(ByteVec);
+  InitializationKind Kind = InitializationKind::CreateDirectList(
+      Sub->getBeginLoc(), Sub->getBeginLoc(), Sub->getEndLoc());
+  Expr *SubE = Sub;
+  MultiExprArg SubArgs(&SubE, 1);
+  InitializationSequence Seq(SemaRef, TmpEntity, Kind, SubArgs);
+  Index += N;
+  if (Seq.Failed()) {
+    if (!VerifyOnly)
+      Seq.Diagnose(SemaRef, TmpEntity, Kind, SubArgs);
+    hadError = true;
+    return;
+  }
+  if (VerifyOnly) {
+    UpdateStructuredListElement(StructuredList, StructuredIndex,
+                                getDummyInit());
+    return;
+  }
+  ExprResult R = Seq.Perform(SemaRef, TmpEntity, Kind, SubArgs);
+  if (R.isInvalid()) {
+    hadError = true;
+    return;
+  }
+  Expr *Cast = ImplicitCastExpr::Create(Ctx, DeclType, CK_BitCast, R.get(),
+                                        nullptr, VK_PRValue,
+                                        FPOptionsOverride());
+  UpdateStructuredListElement(StructuredList, StructuredIndex, Cast);
+}
+
 void InitListChecker::CheckVectorType(const InitializedEntity &Entity,
                                       InitListExpr *IList, QualType DeclType,
                                       unsigned &Index,
@@ -1947,6 +2022,12 @@ void InitListChecker::CheckVectorType(const InitializedEntity &Entity,
     // If the initializing element is a vector, try to copy-initialize
     // instead of breaking it apart (which is doomed to failure anyway).
     Expr *Init = IList->getInit(Index);
+    if ((isa<InitListExpr>(Init) || !Init->getType()->isVectorType()) &&
+        isMSByteVectorInit(SemaRef, DeclType)) {
+      CheckMSByteVectorInit(Entity, IList, DeclType, Index, StructuredList,
+                            StructuredIndex);
+      return;
+    }
     if (!isa<InitListExpr>(Init) && Init->getType()->isVectorType()) {
       ExprResult Result;
       if (VerifyOnly) {

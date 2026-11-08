@@ -11983,8 +11983,11 @@ VectorExprEvaluator::VisitInitListExpr(const InitListExpr *E) {
     if (CountInits < NumInits
         && E->getInit(CountInits)->getType()->isVectorType()) {
       APValue v;
+      // UE-M128I-INIT: the nested vector reported why it failed (or it only
+      // depends on values not known yet, e.g. the parameters of a constexpr
+      // function being checked): do not call the whole list invalid.
       if (!EvaluateVector(E->getInit(CountInits), v, Info))
-        return Error(E);
+        return false;
       unsigned vlen = v.getVectorLength();
       for (unsigned j = 0; j < vlen; j++)
         Elements.push_back(v.getVectorElt(j));

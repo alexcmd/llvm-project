@@ -18171,7 +18171,11 @@ ExprResult TreeTransform<Derived>::RebuildCXXOperatorCallExpr(
     // -> is never a builtin operation.
     return SemaRef.BuildOverloadedArrowExpr(nullptr, First, OpLoc);
   } else if (Second == nullptr || isPostIncDec) {
-    if (!First->getType()->isOverloadableType() ||
+    // UE-XM-VECTOR-OPS: user operators on MS vector types, as cl.
+    bool MSVectorOverload = getSema().isMSOperatorVectorType(First->getType()) &&
+                            getSema().hasMSVectorOperatorCandidate(
+                                Functions, isPostIncDec ? 2 : 1);
+    if ((!First->getType()->isOverloadableType() && !MSVectorOverload) ||
         (Op == OO_Amp && getSema().isQualifiedMemberAccess(First))) {
       // The argument is not of overloadable type, or this is an expression
       // of the form &Class::member, so try to create a built-in unary
@@ -18182,9 +18186,13 @@ ExprResult TreeTransform<Derived>::RebuildCXXOperatorCallExpr(
       return getSema().CreateBuiltinUnaryOp(OpLoc, Opc, First);
     }
   } else {
+    bool MSVectorOverload =
+        (getSema().isMSOperatorVectorType(First->getType()) ||
+         getSema().isMSOperatorVectorType(Second->getType())) &&
+        getSema().hasMSVectorOperatorCandidate(Functions, 2);
     if (!First->isTypeDependent() && !Second->isTypeDependent() &&
         !First->getType()->isOverloadableType() &&
-        !Second->getType()->isOverloadableType()) {
+        !Second->getType()->isOverloadableType() && !MSVectorOverload) {
       // Neither of the arguments is type-dependent or has an overloadable
       // type, so try to create a built-in binary operation.
       BinaryOperatorKind Opc = BinaryOperator::getOverloadedOpcode(Op);

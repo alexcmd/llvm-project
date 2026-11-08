@@ -19040,6 +19040,7 @@ void Sema::MarkFunctionReferenced(SourceLocation Loc, FunctionDecl *Func,
             // enclosing class); MSVC compatibility defines it at the next
             // use instead, as cl (the call sites of that default argument).
             if (getLangOpts().MSVCCompat &&
+                !Constructor->getParent()->getTemplateInstantiationPattern() &&
                 llvm::any_of(Constructor->getParent()->fields(),
                              [](const FieldDecl *F) {
                                return F->hasInClassInitializer() &&

@@ -14164,7 +14164,10 @@ bool SpecialMemberExceptionSpecInfo::visitField(FieldDecl *FD) {
     // the enclosing class) before the class's default member initializers are
     // parsed. cl accepts it; MSVC compatibility takes such an initializer as
     // not throwing instead of reporting it.
-    if (!E && S.getLangOpts().MSVCCompat)
+    // (Not for a template instantiation: its initializers are instantiated
+    // on demand.)
+    if (!E && S.getLangOpts().MSVCCompat &&
+        !cast<CXXRecordDecl>(FD->getParent())->getTemplateInstantiationPattern())
       return false;
     if (!E)
       // FIXME: It's a little wasteful to build and throw away a

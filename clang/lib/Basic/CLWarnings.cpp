@@ -77,6 +77,8 @@ clang::diagGroupFromCLWarningID(unsigned CLWarningID) {
   case 4463: Name = "bitfield-constant-conversion"; break;
   case 4471: Name = "microsoft-enum-forward-reference"; break;
   case 4505: Name = "unused-function"; break;
+  // UE-NOISE: expression before comma has no effect (off by default in cl).
+  case 4548: Name = "unused-comma-left-operand"; break;
   case 4554: Name = "shift-op-parentheses"; break;
   case 4595: Name = "inline-new-delete"; break;
   case 4596: Name = "microsoft-extra-qualification"; break;
@@ -190,6 +192,15 @@ static const CLWarningLevel CLLevels[] = {
     // /Zc:strictStrings (also from /permissive-) names the child group.
     {"writable-strings", 0, nullptr,
      "c++11-compat-deprecated-writable-strings"},
+    // UE-NOISE: cl 14.51 is silent on these (measured on minimal repros; the
+    // UnrealEditor build: cl 0 warnings, openrt 18256 + 1772 + 1743 + 686
+    // + 26 + 6 of them).
+    {"implicit-exception-spec-mismatch", 0, nullptr, nullptr},
+    {"extra-qualification", 0, nullptr, nullptr},
+    {"unused-comma-left-operand", 0, nullptr, nullptr},
+    {"microsoft-unqualified-friend", 0, nullptr, nullptr},
+    {"microsoft-cast", 0, nullptr, nullptr},
+    {"invalid-unevaluated-string", 0, nullptr, nullptr},
     // UE-WD5054: cl has no counterpart of the ?: enum mismatch.
     {"deprecated-enum-compare-conditional", 0, nullptr, nullptr},
     // Off: the cl.exe counterpart is off by default (enable via /w<l><n>).

@@ -14159,6 +14159,13 @@ bool SpecialMemberExceptionSpecInfo::visitField(FieldDecl *FD) {
   if (CSM == CXXSpecialMemberKind::DefaultConstructor &&
       FD->hasInClassInitializer()) {
     Expr *E = FD->getInClassInitializer();
+    // UE-NSDMI-DEFAULT-ARG (r34): the implicit default constructor of a
+    // nested class is used (T() as a default argument of a member function of
+    // the enclosing class) before the class's default member initializers are
+    // parsed. cl accepts it; MSVC compatibility takes such an initializer as
+    // not throwing instead of reporting it.
+    if (!E && S.getLangOpts().MSVCCompat)
+      return false;
     if (!E)
       // FIXME: It's a little wasteful to build and throw away a
       // CXXDefaultInitExpr here.

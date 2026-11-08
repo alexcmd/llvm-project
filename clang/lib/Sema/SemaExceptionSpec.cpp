@@ -977,6 +977,15 @@ bool Sema::CheckOverridingFunctionExceptionSpec(const CXXMethodDecl *New,
     return false;
   }
 
+  // UE-NOTHROW-OVERRIDE (r31, COM STDMETHOD_): cl 14.51 does not treat
+  // __declspec(nothrow) on the overridden function as an exception
+  // specification: an overrider without one is silent (an explicit throw() or
+  // noexcept on the base is C2694 there).
+  if (getLangOpts().MSVCCompat &&
+      Old->getType()->castAs<FunctionProtoType>()->getExceptionSpecType() ==
+          EST_NoThrow)
+    return false;
+
   unsigned DiagID = diag::err_override_exception_spec;
   if (getLangOpts().MSVCCompat)
     DiagID = diag::ext_override_exception_spec;

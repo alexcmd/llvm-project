@@ -1202,8 +1202,11 @@ def NSReturnsMismatch : DiagGroup<"nsreturns-mismatch">;
 
 def IndependentClassAttribute : DiagGroup<"IndependentClass-attribute">;
 def UnknownAttributes : DiagGroup<"unknown-attributes">;
+// UE-DECLSPEC-LEFT: __declspec ahead of the class key, cl's C4091 (level 1).
+def DeclspecAttributeIgnored : DiagGroup<"declspec-attribute-ignored">;
 def IgnoredAttributes : DiagGroup<"ignored-attributes",
-                                  [DllexportExplicitInstantiation]>;
+                                  [DllexportExplicitInstantiation,
+                                   DeclspecAttributeIgnored]>;
 def Attributes : DiagGroup<"attributes", [UnknownAttributes,
                                           IgnoredAttributes]>;
 def UnknownSanitizers : DiagGroup<"unknown-sanitizers">;

@@ -3902,7 +3902,7 @@ def warn_type_attribute_deprecated_on_decl : Warning<
 def warn_declspec_attribute_ignored : Warning<
   "attribute %0 is ignored, place it after "
   "\"%select{class|struct|interface|union|enum|enum class|enum struct}1\" to apply attribute to "
-  "type declaration">, InGroup<IgnoredAttributes>;
+  "type declaration">, InGroup<DeclspecAttributeIgnored>;
 def err_declspec_keyword_has_no_effect : Error<
   "%0 cannot appear here, place it after "
   "\"%select{class|struct|interface|union|enum}1\" to apply it to the "

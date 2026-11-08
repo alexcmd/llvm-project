@@ -1089,7 +1089,8 @@ static bool shouldAddReversedEqEq(Sema &S, SourceLocation OpLoc,
     S.LookupQualifiedName(Members, RHSRec);
     Members.suppressAccessDiagnostics();
     for (NamedDecl *Op : Members)
-      if (FunctionsCorrespond(S.Context, EqFD, Op->getAsFunction()))
+      if (FunctionsCorrespond(S.Context, EqFD,
+                              Op->getUnderlyingDecl()->getAsFunction()))
         return false;
     return true;
   }
@@ -9017,10 +9018,13 @@ void Sema::AddMemberOperatorCandidates(OverloadedOperatorKind Op,
     for (LookupResult::iterator Oper = Operators.begin(),
                                 OperEnd = Operators.end();
          Oper != OperEnd; ++Oper) {
-      if (Oper->getAsFunction() &&
-          PO == OverloadCandidateParamOrder::Reversed &&
+      // UE-REVERSED-OPERATOR (r33): an operator== a derived class re-exposes
+      // with a using-declaration is found as its UsingShadowDecl; the P2468
+      // operator!= search still applies to the function it names (as cl).
+      FunctionDecl *OperFD = Oper->getUnderlyingDecl()->getAsFunction();
+      if (OperFD && PO == OverloadCandidateParamOrder::Reversed &&
           !CandidateSet.getRewriteInfo().shouldAddReversed(
-              *this, {Args[1], Args[0]}, Oper->getAsFunction()))
+              *this, {Args[1], Args[0]}, OperFD))
         continue;
       AddMethodCandidate(Oper.getPair(), Args[0]->getType(),
                          Args[0]->Classify(Context), Args.slice(1),

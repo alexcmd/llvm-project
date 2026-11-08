@@ -2107,6 +2107,48 @@ static ExprResult BuiltinIsWithinLifetime(Sema &S, CallExpr *TheCall) {
   return TheCall;
 }
 
+// CL-IDENTITY: __builtin_ms_is_pointer_interconvertible_with_class(T *, mp)
+// and __builtin_ms_is_corresponding_member(T1 *, T2 *, mp1, mp2), what the cl
+// traits parse to. As cl: complete class types, and each member pointer
+// names a data member of exactly its class (cl deduces the class from it).
+static ExprResult BuiltinMSMemberPointerTrait(Sema &S, CallExpr *TheCall,
+                                              bool Corresponding) {
+  unsigned NumTypes = Corresponding ? 2 : 1;
+  if (S.checkArgCount(TheCall, 2 * NumTypes))
+    return ExprError();
+  TheCall->setType(S.Context.BoolTy);
+  StringRef Name = Corresponding ? "__is_corresponding_member"
+                                 : "__is_pointer_interconvertible_with_class";
+  for (unsigned I = 0; I != 2 * NumTypes; ++I) {
+    ExprResult Arg = S.DefaultLvalueConversion(TheCall->getArg(I));
+    if (Arg.isInvalid())
+      return ExprError();
+    TheCall->setArg(I, Arg.get());
+  }
+  for (unsigned I = 0; I != NumTypes; ++I) {
+    Expr *Tag = TheCall->getArg(I);
+    Expr *MP = TheCall->getArg(NumTypes + I);
+    QualType T = Tag->getType()->getPointeeType();
+    if (T.isNull() || !T->isRecordType() ||
+        S.RequireCompleteType(Tag->getExprLoc(), T,
+                              diag::err_incomplete_type)) {
+      S.Diag(Tag->getExprLoc(), diag::err_ms_member_pointer_trait_arg)
+          << Name << 0 << QualType() << T;
+      return ExprError();
+    }
+    const auto *MPT = MP->getType()->getAs<MemberPointerType>();
+    if (!MPT || !MPT->isMemberDataPointer() ||
+        !S.Context.hasSameUnqualifiedType(
+            S.Context.getCanonicalTagType(MPT->getMostRecentCXXRecordDecl()),
+            T)) {
+      S.Diag(MP->getExprLoc(), diag::err_ms_member_pointer_trait_arg)
+          << Name << 1 << T << MP->getType();
+      return ExprError();
+    }
+  }
+  return TheCall;
+}
+
 static ExprResult BuiltinTriviallyRelocate(Sema &S, CallExpr *TheCall) {
   if (S.checkArgCount(TheCall, 3))
     return ExprError();
@@ -3216,9 +3258,14 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
     return BuiltinLaunder(*this, TheCall);
   case Builtin::BI__builtin_is_within_lifetime:
     return BuiltinIsWithinLifetime(*this, TheCall);
+  case Builtin::BI__builtin_ms_is_pointer_interconvertible_with_class:
+    return BuiltinMSMemberPointerTrait(*this, TheCall, /*Corresponding=*/false);
+  case Builtin::BI__builtin_ms_is_corresponding_member:
+    return BuiltinMSMemberPointerTrait(*this, TheCall, /*Corresponding=*/true);
   case Builtin::BI__builtin_trivially_relocate:
     return BuiltinTriviallyRelocate(*this, TheCall);
-  case Builtin::BI__builtin_clear_padding: {
+  case Builtin::BI__builtin_clear_padding:
+  case Builtin::BI__builtin_zero_non_value_bits: {
     if (checkArgCount(TheCall, 1))
       return ExprError();
 

@@ -4754,6 +4754,10 @@ private:
   /// Parse a __builtin_bit_cast(T, E), used to implement C++2a std::bit_cast.
   ExprResult ParseBuiltinBitCast();
 
+  /// CL-IDENTITY: __is_pointer_interconvertible_with_class(T, mp) and
+  /// __is_corresponding_member(T1, T2, mp1, mp2) (Microsoft).
+  ExprResult ParseMSMemberPointerTrait();
+
   //===--------------------------------------------------------------------===//
   // C++ 5.2p1: C++ Type Identification
 

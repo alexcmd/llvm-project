@@ -24,6 +24,18 @@ let Header = "intrin.h", Languages = "ALL_MS_LANGUAGES", Attributes = [NoThrow, 
   def _umul128 : X86LibBuiltin<"unsigned long long int(unsigned long long int, unsigned long long int, unsigned long long int *)">;
 }
 
+// CL-IDENTITY: 128-by-64 division as cl emits it (one div/idiv; #DE when the
+// quotient does not fit). _udiv128 comes with <intrin0.h>, _div128 with
+// <intrin.h> (cl 14.51).
+let Header = "intrin.h", Languages = "ALL_MS_LANGUAGES", Attributes = [NoThrow, Const, RequireDeclaration] in {
+  def _tzcnt_u64 : X86LibBuiltin<"unsigned long long int(unsigned long long int)">;
+}
+
+let Header = "intrin.h", Languages = "ALL_MS_LANGUAGES", Attributes = [NoThrow, RequireDeclaration] in {
+  def _udiv128 : X86LibBuiltin<"unsigned long long int(unsigned long long int, unsigned long long int, unsigned long long int, unsigned long long int *)">;
+  def _div128 : X86LibBuiltin<"long long int(long long int, long long int, long long int, long long int *)">;
+}
+
 let Header = "intrin.h", Languages = "ALL_MS_LANGUAGES", Attributes = [NoThrow, RequireDeclaration] in {
   def __faststorefence : X86LibBuiltin<"void()">;
 }

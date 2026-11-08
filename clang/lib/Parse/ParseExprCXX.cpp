@@ -3702,6 +3702,72 @@ Parser::ParseCXXAmbiguousParenExpression(ParenParseOption &ExprType,
   return Result;
 }
 
+// CL-IDENTITY: cl's member pointer traits become calls of the builtins
+// __builtin_ms_is_pointer_interconvertible_with_class((T *)nullptr, mp) and
+// __builtin_ms_is_corresponding_member((T1 *)nullptr, (T2 *)nullptr, mp1,
+// mp2): the null pointers carry the class types through template
+// instantiation; the builtins are checked and folded like the cl traits
+// (constant member pointers only, as cl).
+ExprResult Parser::ParseMSMemberPointerTrait() {
+  bool Corresponding = Tok.is(tok::kw___is_corresponding_member);
+  const char *Name = Corresponding
+                         ? "__is_corresponding_member"
+                         : "__is_pointer_interconvertible_with_class";
+  SourceLocation KWLoc = ConsumeToken();
+  BalancedDelimiterTracker T(*this, tok::l_paren);
+  if (T.expectAndConsume(diag::err_expected_lparen_after, Name))
+    return ExprError();
+
+  unsigned NumTypes = Corresponding ? 2 : 1;
+  SmallVector<Expr *, 4> Args;
+  bool Invalid = false;
+  for (unsigned I = 0; I != NumTypes; ++I) {
+    TypeResult Ty = ParseTypeName();
+    if (Ty.isInvalid() || ExpectAndConsume(tok::comma)) {
+      SkipUntil(tok::r_paren, StopAtSemi);
+      return ExprError();
+    }
+    TypeSourceInfo *TSI = nullptr;
+    QualType QT = Actions.GetTypeFromParser(Ty.get(), &TSI);
+    ASTContext &Ctx = Actions.getASTContext();
+    TypeSourceInfo *PtrTSI =
+        Ctx.getTrivialTypeSourceInfo(Ctx.getPointerType(QT), KWLoc);
+    ExprResult Null = Actions.ActOnCXXNullPtrLiteral(KWLoc);
+    ExprResult Tag = Actions.BuildCXXNamedCast(
+        KWLoc, tok::kw_static_cast, PtrTSI, Null.get(), SourceRange(KWLoc),
+        SourceRange(KWLoc));
+    if (Tag.isInvalid())
+      Invalid = true;
+    else
+      Args.push_back(Tag.get());
+  }
+  for (unsigned I = 0; I != NumTypes; ++I) {
+    ExprResult E = ParseAssignmentExpression();
+    if (E.isInvalid() || (I + 1 != NumTypes && ExpectAndConsume(tok::comma))) {
+      SkipUntil(tok::r_paren, StopAtSemi);
+      return ExprError();
+    }
+    Args.push_back(E.get());
+  }
+  if (T.consumeClose() || Invalid)
+    return ExprError();
+
+  CXXScopeSpec SS;
+  UnqualifiedId Id;
+  Id.setIdentifier(&PP.getIdentifierTable().get(
+                       Corresponding
+                           ? "__builtin_ms_is_corresponding_member"
+                           : "__builtin_ms_is_pointer_interconvertible_with_class"),
+                   KWLoc);
+  ExprResult Fn = Actions.ActOnIdExpression(
+      getCurScope(), SS, SourceLocation(), Id, /*HasTrailingLParen=*/true,
+      /*IsAddressOfOperand=*/false);
+  if (Fn.isInvalid())
+    return ExprError();
+  return Actions.ActOnCallExpr(getCurScope(), Fn.get(), T.getOpenLocation(),
+                               Args, T.getCloseLocation());
+}
+
 ExprResult Parser::ParseBuiltinBitCast() {
   SourceLocation KWLoc = ConsumeToken();
 

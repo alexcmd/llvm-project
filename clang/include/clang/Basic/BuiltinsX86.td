@@ -4172,6 +4172,13 @@ let Features = "raoint", Attributes = [NoThrow] in {
   def axor32 : X86Builtin<"void(void *, signed int)">;
 }
 
+// CL-IDENTITY: cl's <intrin0.h> declares _tzcnt_u32 (its <vector> and
+// <memory_resource> call it with nothing else included); same code as
+// __builtin_ia32_tzcnt_u32.
+let Header = "intrin.h", Languages = "ALL_MS_LANGUAGES", Attributes = [NoThrow, Const, RequireDeclaration] in {
+  def _tzcnt_u32 : X86LibBuiltin<"unsigned int(unsigned int)">;
+}
+
 let Header = "intrin.h", Languages = "ALL_MS_LANGUAGES", Attributes = [NoThrow, RequireDeclaration] in {
   def _BitScanForward : X86LibBuiltin<"unsigned char(msuint32_t *, msuint32_t)">;
   def _BitScanReverse : X86LibBuiltin<"unsigned char(msuint32_t *, msuint32_t)">;

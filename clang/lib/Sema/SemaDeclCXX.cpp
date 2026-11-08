@@ -675,7 +675,14 @@ bool Sema::MergeCXXFunctionDecl(FunctionDecl *New, FunctionDecl *Old,
   // C++11 [dcl.constexpr]p1: If any declaration of a function or function
   // template has a constexpr specifier then all its declarations shall
   // contain the constexpr specifier.
-  if (New->getConstexprKind() != Old->getConstexprKind()) {
+  // CL-IDENTITY: cl's <intrin0.inl.h> redeclares a builtin (e.g.
+  // __builtin_assume_aligned) constexpr; cl accepts it and the builtin keeps
+  // its meaning. So does MSVC compatibility, for a declaration without body.
+  bool MSConstexprBuiltinRedecl =
+      getLangOpts().MSVCCompat && Old->isImplicit() && Old->getBuiltinID() &&
+      New->isConstexpr() && !New->doesThisDeclarationHaveABody();
+  if (New->getConstexprKind() != Old->getConstexprKind() &&
+      !MSConstexprBuiltinRedecl) {
     Diag(New->getLocation(), diag::err_constexpr_redecl_mismatch)
         << New << static_cast<int>(New->getConstexprKind())
         << static_cast<int>(Old->getConstexprKind());

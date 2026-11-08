@@ -3043,6 +3043,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
           *this, E, Intrinsic::atan2,
           Intrinsic::experimental_constrained_atan2));
 
+    case Builtin::BI__ceil:
+    case Builtin::BI__ceilf:
     case Builtin::BIceil:
     case Builtin::BIceilf:
     case Builtin::BIceill:
@@ -3056,6 +3058,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
                                    Intrinsic::ceil,
                                    Intrinsic::experimental_constrained_ceil));
 
+    case Builtin::BI__copysign:
+    case Builtin::BI__copysignf:
     case Builtin::BIcopysign:
     case Builtin::BIcopysignf:
     case Builtin::BIcopysignl:
@@ -3140,6 +3144,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
       return RValue::get(
           emitBuiltinWithOneOverloadedType<1>(*this, E, Intrinsic::fabs));
 
+    case Builtin::BI__floor:
+    case Builtin::BI__floorf:
     case Builtin::BIfloor:
     case Builtin::BIfloorf:
     case Builtin::BIfloorl:
@@ -3318,6 +3324,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
                                    Intrinsic::rint,
                                    Intrinsic::experimental_constrained_rint));
 
+    case Builtin::BI__round:
+    case Builtin::BI__roundf:
     case Builtin::BIround:
     case Builtin::BIroundf:
     case Builtin::BIroundl:
@@ -3429,6 +3437,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
       return RValue::get(emitUnaryMaybeConstrainedFPBuiltin(
           *this, E, Intrinsic::tanh, Intrinsic::experimental_constrained_tanh));
 
+    case Builtin::BI__trunc:
+    case Builtin::BI__truncf:
     case Builtin::BItrunc:
     case Builtin::BItruncf:
     case Builtin::BItruncl:
@@ -5464,7 +5474,15 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
 
     return RValue::get(Ptr);
   }
-  case Builtin::BI__builtin_clear_padding: {
+  case Builtin::BI__builtin_ms_is_pointer_interconvertible_with_class:
+  case Builtin::BI__builtin_ms_is_corresponding_member:
+    // CL-IDENTITY: folded above when the member pointers are constants; cl
+    // has no code for the other case either (an unresolved helper symbol).
+    CGM.ErrorUnsupported(E, "cl member pointer trait on a non-constant "
+                            "member pointer");
+    return RValue::get(llvm::ConstantInt::getFalse(getLLVMContext()));
+  case Builtin::BI__builtin_clear_padding:
+  case Builtin::BI__builtin_zero_non_value_bits: {
     Address Src = EmitPointerWithAlignment(E->getArg(0));
     auto PointeeTy = E->getArg(0)->getType()->getPointeeType();
     PaddingClearer clearer{*this};

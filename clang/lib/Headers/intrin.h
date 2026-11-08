@@ -235,6 +235,9 @@ unsigned __int64 _shrx_u64(unsigned __int64, unsigned int);
 __int64 __mulh(__int64, __int64);
 unsigned __int64 __umulh(unsigned __int64, unsigned __int64);
 __int64 _mul128(__int64, __int64, __int64 *);
+/* CL-IDENTITY: cl's <intrin.h> also has it. */
+__int64 _div128(__int64 _HighDividend, __int64 _LowDividend, __int64 _Divisor,
+                __int64 *_Remainder);
 
 #endif /* __x86_64__ */
 

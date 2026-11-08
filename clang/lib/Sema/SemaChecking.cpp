@@ -13904,14 +13904,18 @@ void Sema::CheckImplicitConversion(Expr *E, QualType T, SourceLocation CC,
       IntRange::forTargetOfCanonicalType(Context, Source);
   IntRange TargetRange = IntRange::forTargetOfCanonicalType(Context, Target);
 
-  // UE-C4244-VALUE-RANGE: for a non-constant 64-bit integer value, whether it
-  // is narrowed is cl's value width (msOriginWidth), not clang's value range
-  // (cl reports x / 0x100000000 and is silent on x & ((1ull << n) - 1)).
+  // UE-C4244-VALUE-RANGE: for a non-constant 64-bit integer value, cl's value
+  // width (msOriginWidth) also decides whether it is narrowed (cl is silent on
+  // x & ((1ull << n) - 1)). The smaller of it and clang's value range is used:
+  // a false C4244 is an error under UBT's /we4244, a missed one is not.
+  // CLANG-CL-GAP(c4244-range-safe): cl reports x / 0x100000000, clang's range
+  // proves it fits, so openrt is silent there.
   unsigned SourceWidthForNarrowing = LikelySourceRange->Width;
   if (getLangOpts().MSVCCompat && Source->isIntegerType() &&
       Target->isIntegerType() && Context.getIntWidth(E->getType()) == 64 &&
       !E->isValueDependent() && !E->isIntegerConstantExpr(Context))
-    SourceWidthForNarrowing = msOriginWidth(Context, E);
+    SourceWidthForNarrowing =
+        std::min(SourceWidthForNarrowing, msOriginWidth(Context, E));
 
   if (SourceWidthForNarrowing > TargetRange.Width) {
     // Check if target is a wrapping OBT - if so, don't warn about constant

@@ -1232,8 +1232,11 @@ def UnusedResult : DiagGroup<"unused-result">;
 def PotentiallyEvaluatedExpression : DiagGroup<"potentially-evaluated-expression">;
 def UnevaluatedExpression : DiagGroup<"unevaluated-expression",
                                       [PotentiallyEvaluatedExpression]>;
+// UE-NOISE: cl numbers this one C4548, off by default (UE: 1743 hits).
+def UnusedCommaLeftOperand : DiagGroup<"unused-comma-left-operand">;
 def UnusedValue : DiagGroup<"unused-value", [UnusedComparison, UnusedResult,
-                                             UnevaluatedExpression]>;
+                                             UnevaluatedExpression,
+                                             UnusedCommaLeftOperand]>;
 def UnusedConstVariable : DiagGroup<"unused-const-variable">;
 def UnusedVariable : DiagGroup<"unused-variable",
                                [UnusedConstVariable]>;

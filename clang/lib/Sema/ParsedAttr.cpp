@@ -150,6 +150,13 @@ bool ParsedAttr::hasCustomParsing() const {
 }
 
 bool ParsedAttr::diagnoseAppertainsTo(Sema &S, const Decl *D) const {
+  // UE-NOISE: cl 14.51 ignores __declspec(dllexport/dllimport) on an enum
+  // silently (measured); clang's -Wignored-attributes said it only applies to
+  // functions, variables and classes. Dropped without a warning here.
+  if (S.getLangOpts().MSVCCompat &&
+      (getKind() == AT_DLLExport || getKind() == AT_DLLImport) &&
+      isa<EnumDecl>(D))
+    return false;
   return getInfo().diagAppertainsToDecl(S, *this, D);
 }
 

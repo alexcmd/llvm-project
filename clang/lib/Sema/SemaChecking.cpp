@@ -12971,45 +12971,82 @@ void Sema::recordMSSizeTTemplateArgs(const Decl *Specialization,
   MSSizeTTemplateArgs[Key] = Bits;
 }
 
-/// UE-C4244-CAST-ORIGIN: the width cl 14.51 attributes to a value when it
-/// decides on C4244/C4267: a cast (explicit or implicit) between arithmetic
-/// types gives min(its width, the operand's), arithmetic and ?: the max of
-/// their operands, anything else its type's width (double 64, float 32).
-/// So (u64)((double)u32 / u32) or (u64)a * b with 32-bit a, b is 32 bits wide
-/// and its narrowing to 32 bits is silent, as with cl; (u64)(a + 1.0) or
-/// (u64)(i64)x is 64.
+/// UE-C4244-CAST-ORIGIN, UE-C4244-VALUE-RANGE: the width cl 14.51 attributes
+/// to a value when it decides on C4244/C4267 (no constant folding beyond
+/// literals; measured on 60+ forms):
+///   integer literal: the bits of its value;  cast: min(its width, operand);
+///   & : min;  | ^ + - * ?: : max;  / : left;  % : right;
+///   >> c (constant): left - c;  << (any count) or >> by a variable: left;
+///   ~ - + : operand;  bit-field: its width;  anything else: its type's width
+///   (enum: the underlying type, bool 1, double 64, float 32).
+/// So (u64)((double)u32 / u32), x & 0xFFFF, x & ((1ull << n) - 1), x >> 32,
+/// x % u32, u32 * (x >> 63) are at most 32 bits wide and their narrowing to
+/// 32 bits is silent, as with cl, so is (u64)u32 << 4; x & 0x1FFFFFFFF,
+/// x >> 31, x / 2, x % u64, x - (x & 0xFF), (u64)(a + 1.0) are not.
 static unsigned msOriginWidth(const ASTContext &Ctx, const Expr *E) {
   E = E->IgnoreParens();
   QualType T = E->getType();
   auto Width = [&](QualType Q) -> unsigned {
     if (Q->isRealFloatingType())
       return Ctx.getTypeSize(Q);
+    if (const auto *ET = Q->getAs<EnumType>())
+      if (ET->getDecl()->getDefinition())
+        return Ctx.getIntWidth(ET->getDecl()->getDefinition()->getIntegerType());
     if (Q->isIntegralOrUnscopedEnumerationType())
       return Ctx.getIntWidth(Q);
     return Ctx.getTypeSize(Q);
   };
-  if (!T->isArithmeticType())
-    return Width(T);
+  unsigned TW = Width(T);
+  if (!T->isArithmeticType() && !T->isEnumeralType())
+    return TW;
+  if (const auto *IL = dyn_cast<IntegerLiteral>(E))
+    return std::max(1u, IL->getValue().getActiveBits());
+  if (const auto *CL = dyn_cast<CharacterLiteral>(E))
+    return std::max(1u, (unsigned)llvm::bit_width(CL->getValue()));
+  if (const FieldDecl *FD = E->getSourceBitField())
+    return std::min(TW, FD->getBitWidthValue());
   if (const auto *CE = dyn_cast<CastExpr>(E)) {
-    const Expr *Sub = CE->getSubExpr();
-    if (Sub->getType()->isArithmeticType() && !Sub->getType()->isBooleanType())
-      return std::min(Width(T), msOriginWidth(Ctx, Sub));
-    return Width(T);
+    QualType ST = CE->getSubExpr()->getType();
+    if (ST->isArithmeticType() || ST->isEnumeralType())
+      return std::min(TW, msOriginWidth(Ctx, CE->getSubExpr()));
+    return TW;
   }
   if (const auto *BO = dyn_cast<BinaryOperator>(E)) {
-    if (BO->isAdditiveOp() || BO->isMultiplicativeOp() || BO->isBitwiseOp())
-      return std::max(msOriginWidth(Ctx, BO->getLHS()),
-                      msOriginWidth(Ctx, BO->getRHS()));
-    return Width(T);
+    unsigned L = msOriginWidth(Ctx, BO->getLHS());
+    auto ConstRHS = [&]() -> std::optional<uint64_t> {
+      if (std::optional<llvm::APSInt> V =
+              BO->getRHS()->getIntegerConstantExpr(Ctx))
+        if (!V->isNegative())
+          return V->getLimitedValue();
+      return std::nullopt;
+    };
+    switch (BO->getOpcode()) {
+    case BO_And:
+      return std::min({TW, L, msOriginWidth(Ctx, BO->getRHS())});
+    case BO_Or: case BO_Xor: case BO_Add: case BO_Sub: case BO_Mul:
+      return std::min(TW, std::max(L, msOriginWidth(Ctx, BO->getRHS())));
+    case BO_Div:
+      return std::min(TW, L);
+    case BO_Rem:
+      return std::min(TW, msOriginWidth(Ctx, BO->getRHS()));
+    case BO_Shr:
+      if (std::optional<uint64_t> C = ConstRHS())
+        return *C >= L ? 1u : (unsigned)(L - *C);
+      return std::min(TW, L);
+    case BO_Shl:
+      return std::min(TW, L);
+    default:
+      return TW;
+    }
   }
   if (const auto *CO = dyn_cast<ConditionalOperator>(E))
-    return std::max(msOriginWidth(Ctx, CO->getTrueExpr()),
-                    msOriginWidth(Ctx, CO->getFalseExpr()));
+    return std::min(TW, std::max(msOriginWidth(Ctx, CO->getTrueExpr()),
+                                 msOriginWidth(Ctx, CO->getFalseExpr())));
   if (const auto *UO = dyn_cast<UnaryOperator>(E))
     if (UO->getOpcode() == UO_Minus || UO->getOpcode() == UO_Plus ||
         UO->getOpcode() == UO_Not)
-      return msOriginWidth(Ctx, UO->getSubExpr());
-  return Width(T);
+      return std::min(TW, msOriginWidth(Ctx, UO->getSubExpr()));
+  return TW;
 }
 
 static void DiagnoseImpCast(Sema &S, const Expr *E, QualType SourceType,
@@ -13181,7 +13218,10 @@ static void AnalyzeCompoundAssignment(Sema &S, BinaryOperator *E) {
       S.Context.getIntWidth(QualType(ResultBT, 0)) < 64 &&
       !E->getRHS()->isValueDependent() &&
       !E->getRHS()->isIntegerConstantExpr(S.Context) &&
-      !S.SourceMgr.isInSystemMacro(E->getOperatorLoc())) {
+      !S.SourceMgr.isInSystemMacro(E->getOperatorLoc()) &&
+      // UE-C4244-VALUE-RANGE: by the right side's value width, as cl.
+      msOriginWidth(S.Context, E->getRHS()) >
+          S.Context.getIntWidth(QualType(ResultBT, 0))) {
     Expr *RHS = E->getRHS()->IgnoreParenImpCasts();
     if (S.isMSSizeTExpr(RHS))
       return DiagnoseImpCast(S, RHS, E->getLHS()->getType(),
@@ -13857,7 +13897,16 @@ void Sema::CheckImplicitConversion(Expr *E, QualType T, SourceLocation CC,
       IntRange::forTargetOfCanonicalType(Context, Source);
   IntRange TargetRange = IntRange::forTargetOfCanonicalType(Context, Target);
 
-  if (LikelySourceRange->Width > TargetRange.Width) {
+  // UE-C4244-VALUE-RANGE: for a non-constant 64-bit integer value, whether it
+  // is narrowed is cl's value width (msOriginWidth), not clang's value range
+  // (cl reports x / 0x100000000 and is silent on x & ((1ull << n) - 1)).
+  unsigned SourceWidthForNarrowing = LikelySourceRange->Width;
+  if (getLangOpts().MSVCCompat && Source->isIntegerType() &&
+      Target->isIntegerType() && Context.getIntWidth(E->getType()) == 64 &&
+      !E->isValueDependent() && !E->isIntegerConstantExpr(Context))
+    SourceWidthForNarrowing = msOriginWidth(Context, E);
+
+  if (SourceWidthForNarrowing > TargetRange.Width) {
     // Check if target is a wrapping OBT - if so, don't warn about constant
     // conversion as this type may be used intentionally with implicit
     // truncation, especially during assignments.

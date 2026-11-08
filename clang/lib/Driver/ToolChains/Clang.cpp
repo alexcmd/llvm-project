@@ -834,9 +834,9 @@ static bool gchProbe(const Driver &D, StringRef Path) {
 }
 
 // CL-IDENTITY: cl.exe has none of the clang identity macros (__clang__,
-// __llvm__, ...); -fno-ms-clang-identity leaves them out. Staged: cl mode
-// keeps them by default until the cl-path gaps are closed (CLModeIdentity).
-static constexpr bool CLModeIdentity = true;
+// __llvm__, ...); -fno-ms-clang-identity leaves them out, the cl mode
+// default (CLModeIdentity); /clang:-fms-clang-identity brings them back.
+static constexpr bool CLModeIdentity = false;
 static bool msClangIdentity(const Driver &D, const ArgList &Args) {
   return Args.hasFlag(options::OPT_fms_clang_identity,
                       options::OPT_fno_ms_clang_identity,

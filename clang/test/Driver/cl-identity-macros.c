@@ -1,12 +1,12 @@
 // openrt CL-IDENTITY: cl defines none of the clang identity macros;
-// /clang:-fno-ms-clang-identity leaves them out (cl mode keeps them by default
-// for now, CLModeIdentity). Without them, as cl 14.51, clang-cl predefines _MSVC_WARNING_LEVEL (the final /W level as
+// clang-cl leaves them out unless /clang:-fms-clang-identity; the clang driver
+// keeps them. Without them, as cl 14.51, clang-cl predefines _MSVC_WARNING_LEVEL (the final /W level as
 // a long: 0L for /W0 and /w, 100L for /Wall, 1L by default) and _MSVC_MT
 // for /MT only.
 
-// RUN: %clang_cl --target=x86_64-pc-windows-msvc /c -### /clang:-fno-ms-clang-identity -- %s 2>&1 \
-// RUN:   | FileCheck --check-prefixes=NOID,W1,MT %s
 // RUN: %clang_cl --target=x86_64-pc-windows-msvc /c -### -- %s 2>&1 \
+// RUN:   | FileCheck --check-prefixes=NOID,W1,MT %s
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc /c -### /clang:-fms-clang-identity -- %s 2>&1 \
 // RUN:   | FileCheck --check-prefix=ID %s
 // RUN: %clang_cl --target=x86_64-pc-windows-msvc /c -### -fno-ms-clang-identity -fms-clang-identity -- %s 2>&1 \
 // RUN:   | FileCheck --check-prefix=ID %s
@@ -23,17 +23,17 @@
 // W1-DAG: "-D_MSVC_WARNING_LEVEL=1L"
 // MT-DAG: "-D_MSVC_MT=1"
 
-// RUN: %clang_cl --target=x86_64-pc-windows-msvc /c -### -fno-ms-clang-identity /W4 /MD -- %s 2>&1 \
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc /c -### /W4 /MD -- %s 2>&1 \
 // RUN:   | FileCheck --check-prefixes=W4,NOMT %s
-// RUN: %clang_cl --target=x86_64-pc-windows-msvc /c -### -fno-ms-clang-identity /W2 /W4 /MTd -- %s 2>&1 \
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc /c -### /W2 /W4 /MTd -- %s 2>&1 \
 // RUN:   | FileCheck --check-prefixes=W4,NOMT %s
-// RUN: %clang_cl --target=x86_64-pc-windows-msvc /c -### -fno-ms-clang-identity /W3 /MDd -- %s 2>&1 \
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc /c -### /W3 /MDd -- %s 2>&1 \
 // RUN:   | FileCheck --check-prefixes=W3,NOMT %s
-// RUN: %clang_cl --target=x86_64-pc-windows-msvc /c -### -fno-ms-clang-identity /Wall -- %s 2>&1 \
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc /c -### /Wall -- %s 2>&1 \
 // RUN:   | FileCheck --check-prefix=WALL %s
-// RUN: %clang_cl --target=x86_64-pc-windows-msvc /c -### -fno-ms-clang-identity /W0 -- %s 2>&1 \
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc /c -### /W0 -- %s 2>&1 \
 // RUN:   | FileCheck --check-prefix=W0 %s
-// RUN: %clang_cl --target=x86_64-pc-windows-msvc /c -### -fno-ms-clang-identity /W4 /w -- %s 2>&1 \
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc /c -### /W4 /w -- %s 2>&1 \
 // RUN:   | FileCheck --check-prefix=W0 %s
 // W4: "-D_MSVC_WARNING_LEVEL=4L"
 // W3: "-D_MSVC_WARNING_LEVEL=3L"

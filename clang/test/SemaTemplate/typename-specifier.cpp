@@ -231,7 +231,12 @@ template <typename> struct S { typedef int type; };
 template <typename T> void f();
 template <int N> void f();
 
-// expected-error@+1 {{missing 'typename' prior to dependent type name 'S<int>::type'}}
+#ifndef MSVC
+// expected-error@+5 {{missing 'typename' prior to dependent type name 'S<int>::type'}}
+#else
+// openrt UE-MISSING-TYPENAME (r35): cl takes it as a functional cast.
+// expected-warning@+2 {{missing 'typename' prior to dependent type name 'S<int>::type'}}
+#endif
 template <typename T> void g() { f</*typename*/ S<T>::type(int())>(); }
 
 // Adding typename does fix the diagnostic.

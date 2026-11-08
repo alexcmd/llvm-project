@@ -2814,6 +2814,16 @@ public:
   /// plain unsigned __int64).
   bool isMSSizeTExpr(const Expr *E) const;
 
+  /// UE-TEMPLATE-NONDEP-DIAG: cl reports a conversion or sign-compare warning
+  /// in template code at its first instantiation, once per (location,
+  /// warning, source and target type): a non-dependent one once, a dependent
+  /// one once per type. True when this one was already reported (MSVC
+  /// compatibility, inside a template instantiation).
+  bool msTemplateDiagSeen(SourceLocation Loc, unsigned DiagID, QualType A,
+                          QualType B);
+  llvm::DenseSet<std::tuple<unsigned, unsigned, void *, void *>>
+      MSTemplateDiagsSeen;
+
   /// UE-C4267-TEMPLATE: cl keeps the spelling of the template arguments that
   /// first named a specialization (fa<size_t> then fa<unsigned long long>:
   /// C4267 in the body; the other order: C4244). Records, for a class or

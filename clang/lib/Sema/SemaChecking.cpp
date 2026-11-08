@@ -12695,6 +12695,9 @@ static void AnalyzeComparison(Sema &S, BinaryOperator *E) {
       return;
   }
 
+  if (S.msTemplateDiagSeen(E->getOperatorLoc(), diag::warn_mixed_sign_comparison,
+                          LHS->getType(), RHS->getType()))
+    return; // UE-TEMPLATE-NONDEP-DIAG: once, as cl
   S.DiagRuntimeBehavior(E->getOperatorLoc(), E,
                         S.PDiag(diag::warn_mixed_sign_comparison)
                             << LHS->getType() << RHS->getType()
@@ -13067,6 +13070,8 @@ static void DiagnoseImpCast(Sema &S, const Expr *E, QualType SourceType,
     SourceType = S.getASTContext().removeAddrSpaceQualType(SourceType);
   if (T.hasAddressSpace())
     T = S.getASTContext().removeAddrSpaceQualType(T);
+  if (S.msTemplateDiagSeen(E->getExprLoc(), diag, SourceType, T))
+    return; // UE-TEMPLATE-NONDEP-DIAG: once, as cl
   if (PruneControlFlow) {
     S.DiagRuntimeBehavior(E->getExprLoc(), E,
                           S.PDiag(diag)
@@ -14696,9 +14701,31 @@ bool Sema::CheckOverflowBehaviorTypeConversion(Expr *E, QualType T,
   return false;
 }
 
+bool Sema::msTemplateDiagSeen(SourceLocation Loc, unsigned DiagID, QualType A,
+                              QualType B) {
+  if (!getLangOpts().MSVCCompat || !inTemplateInstantiation())
+    return false;
+  return !MSTemplateDiagsSeen
+              .insert({Loc.getRawEncoding(), DiagID,
+                       A.isNull() ? nullptr
+                                  : A.getCanonicalType().getAsOpaquePtr(),
+                       B.isNull() ? nullptr
+                                  : B.getCanonicalType().getAsOpaquePtr()})
+              .second;
+}
+
 void Sema::CheckImplicitConversions(Expr *E, SourceLocation CC) {
   // Don't diagnose in unevaluated contexts.
   if (isUnevaluatedContext())
+    return;
+
+  // UE-TEMPLATE-NONDEP-DIAG: cl reports conversion and sign-compare warnings
+  // in template code only when the template is instantiated (a header that is
+  // only included compiles clean under /we4244); the instantiation repeats
+  // these checks, so in MSVC compatibility the template definition is not
+  // checked.
+  if (getLangOpts().MSVCCompat && CurContext->isDependentContext() &&
+      !inTemplateInstantiation())
     return;
 
   // Don't diagnose for value- or type-dependent expressions.

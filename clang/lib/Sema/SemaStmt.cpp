@@ -228,12 +228,35 @@ static bool DiagnoseNoDiscard(Sema &S, const NamedDecl *OffendingDecl,
 
 namespace {
 
+// UE-NOISE: the expression statement is an operator cl's C4552 names.
+static bool isMSUnusedOperator(const Expr *E) {
+  if (const auto *FE = dyn_cast<FullExpr>(E))
+    E = FE->getSubExpr();
+  if (const auto *BT = dyn_cast<CXXBindTemporaryExpr>(E))
+    E = BT->getSubExpr();
+  E = E->IgnoreImpCasts();
+  if (const auto *UO = dyn_cast<UnaryOperator>(E))
+    switch (UO->getOpcode()) {
+    case UO_Plus:
+    case UO_Minus:
+    case UO_Not:
+    case UO_LNot:
+      return true;
+    default:
+      return false;
+    }
+  if (const auto *BO = dyn_cast<BinaryOperator>(E))
+    return !BO->isAssignmentOp() && !BO->isCommaOp() && !BO->isLogicalOp();
+  return false;
+}
+
 // Diagnoses unused expressions that call functions marked [[nodiscard]],
 // [[gnu::warn_unused_result]] and similar.
 // Additionally, a DiagID can be provided to emit a warning in additional
 // contexts (such as for an unused LHS of a comma expression)
 void DiagnoseUnused(Sema &S, const Expr *E, std::optional<unsigned> DiagID) {
   bool NoDiscardOnly = !DiagID.has_value();
+  const Expr *StmtE = E;
 
   // If we are in an unevaluated expression context, then there can be no unused
   // results because the results aren't expected to be used in the first place.
@@ -396,6 +419,14 @@ void DiagnoseUnused(Sema &S, const Expr *E, std::optional<unsigned> DiagID) {
   // type of the left operand could be used for SFINAE, so technically it is
   // *used*.
   if (DiagID == diag::warn_unused_comma_left_operand && S.isSFINAEContext())
+    return;
+
+  // UE-NOISE (r32): cl reports an unused result by default only for an
+  // operator: unary + - ! ~ or a binary operator other than = op= , && ||
+  // (C4552, level 1). Any other expression statement ('b;', '*p;', 's.x;',
+  // '(i + 1);', 'c ? x : y;', casts) is C4555 (off by default) or silent.
+  if (S.getLangOpts().MSVCCompat && *DiagID == diag::warn_unused_expr &&
+      !isMSUnusedOperator(StmtE))
     return;
 
   S.DiagIfReachable(Loc, llvm::ArrayRef<const Stmt *>(E),

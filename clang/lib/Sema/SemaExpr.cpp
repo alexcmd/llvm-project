@@ -19054,6 +19054,17 @@ void Sema::MarkFunctionReferenced(SourceLocation Loc, FunctionDecl *Func,
             if (Constructor->isTrivial() &&
                 !Constructor->hasAttr<DLLExportAttr>())
               return;
+            // UE-NSDMI-DEFAULT-ARG (r34): used before its class's default
+            // member initializers are parsed (a default argument of the
+            // enclosing class); MSVC compatibility defines it at the next
+            // use instead, as cl (the call sites of that default argument).
+            if (getLangOpts().MSVCCompat &&
+                llvm::any_of(Constructor->getParent()->fields(),
+                             [](const FieldDecl *F) {
+                               return F->hasInClassInitializer() &&
+                                      !F->getInClassInitializer();
+                             }))
+              return;
             DefineImplicitDefaultConstructor(Loc, Constructor);
           } else if (Constructor->isCopyConstructor()) {
             DefineImplicitCopyConstructor(Loc, Constructor);

@@ -16709,6 +16709,142 @@ static bool getBuiltinAlignArguments(const CallExpr *E, EvalInfo &Info,
   return true;
 }
 
+// CL-IDENTITY: helpers of the cl member pointer traits
+// (__is_pointer_interconvertible_with_class, __is_corresponding_member),
+// measured against cl 14.51: standard-layout classes only; a member is
+// pointer-interconvertible with its class when it sits at offset 0;
+// corresponding members are at the same place of the common initial
+// sequence (bit-fields of equal width, [[no_unique_address]] on both or
+// neither, layout-compatible types).
+static bool msHasFields(const CXXRecordDecl *RD) {
+  if (!RD->field_empty())
+    return true;
+  for (const CXXBaseSpecifier &B : RD->bases())
+    if (const CXXRecordDecl *BR = B.getType()->getAsCXXRecordDecl())
+      if (msHasFields(BR))
+        return true;
+  return false;
+}
+
+// The class of a standard-layout hierarchy that holds all the fields.
+static const CXXRecordDecl *msFieldOwner(const CXXRecordDecl *RD) {
+  while (RD->field_empty()) {
+    const CXXRecordDecl *Next = nullptr;
+    for (const CXXBaseSpecifier &B : RD->bases())
+      if (const CXXRecordDecl *BR = B.getType()->getAsCXXRecordDecl())
+        if (msHasFields(BR)) {
+          Next = BR;
+          break;
+        }
+    if (!Next)
+      break;
+    RD = Next;
+  }
+  return RD;
+}
+
+// Offset of the non-virtual base Base inside Derived (false: not a base).
+static bool msBaseOffset(const ASTContext &Ctx, const CXXRecordDecl *Derived,
+                         const CXXRecordDecl *Base, CharUnits &Off) {
+  if (Derived->getCanonicalDecl() == Base->getCanonicalDecl()) {
+    Off = CharUnits::Zero();
+    return true;
+  }
+  const ASTRecordLayout &L = Ctx.getASTRecordLayout(Derived);
+  for (const CXXBaseSpecifier &B : Derived->bases()) {
+    const CXXRecordDecl *BR = B.getType()->getAsCXXRecordDecl();
+    CharUnits Inner;
+    if (BR && !B.isVirtual() && msBaseOffset(Ctx, BR, Base, Inner)) {
+      Off = L.getBaseClassOffset(BR) + Inner;
+      return true;
+    }
+  }
+  return false;
+}
+
+static bool msLayoutCompatible(const ASTContext &Ctx, QualType A, QualType B);
+
+static bool msCommonInitialMember(const ASTContext &Ctx, const FieldDecl *A,
+                                  const FieldDecl *B) {
+  if (A->isBitField() != B->isBitField() ||
+      (A->isBitField() && A->getBitWidthValue() != B->getBitWidthValue()))
+    return false;
+  if (A->hasAttr<NoUniqueAddressAttr>() != B->hasAttr<NoUniqueAddressAttr>())
+    return false;
+  return msLayoutCompatible(Ctx, A->getType(), B->getType());
+}
+
+static bool msLayoutCompatible(const ASTContext &Ctx, QualType A, QualType B) {
+  A = A.getCanonicalType().getUnqualifiedType();
+  B = B.getCanonicalType().getUnqualifiedType();
+  if (Ctx.hasSameType(A, B))
+    return true;
+  if (const auto *EA = A->getAsEnumDecl())
+    if (const auto *EB = B->getAsEnumDecl())
+      return Ctx.hasSameType(EA->getIntegerType(), EB->getIntegerType());
+  const CXXRecordDecl *RA = A->getAsCXXRecordDecl();
+  const CXXRecordDecl *RB = B->getAsCXXRecordDecl();
+  if (!RA || !RB || !RA->hasDefinition() || !RB->hasDefinition() ||
+      RA->isUnion() != RB->isUnion() || !RA->isStandardLayout() ||
+      !RB->isStandardLayout())
+    return false;
+  RA = msFieldOwner(RA);
+  RB = msFieldOwner(RB);
+  auto IA = RA->field_begin(), IB = RB->field_begin();
+  for (; IA != RA->field_end() && IB != RB->field_end(); ++IA, ++IB)
+    if (!msCommonInitialMember(Ctx, *IA, *IB))
+      return false;
+  return IA == RA->field_end() && IB == RB->field_end();
+}
+
+static bool msIsPointerInterconvertibleWithClass(EvalInfo &Info,
+                                                 const CallExpr *E,
+                                                 bool &Result) {
+  MemberPtr MP;
+  if (!EvaluateMemberPointer(E->getArg(1), MP, Info))
+    return false;
+  const CXXRecordDecl *T = E->getArg(0)->getType()->getPointeeCXXRecordDecl();
+  Result = false;
+  if (!T || !T->hasDefinition() || !T->isStandardLayout() || !MP.getDecl() ||
+      MP.isDerivedMember())
+    return true;
+  CharUnits BaseOff;
+  if (!msBaseOffset(Info.Ctx, T, MP.getContainingRecord(), BaseOff))
+    return true;
+  Result = BaseOff.isZero() && Info.Ctx.getFieldOffset(MP.getDecl()) == 0;
+  return true;
+}
+
+static bool msIsCorrespondingMember(EvalInfo &Info, const CallExpr *E,
+                                    bool &Result) {
+  MemberPtr M1, M2;
+  if (!EvaluateMemberPointer(E->getArg(2), M1, Info) ||
+      !EvaluateMemberPointer(E->getArg(3), M2, Info))
+    return false;
+  const CXXRecordDecl *T1 = E->getArg(0)->getType()->getPointeeCXXRecordDecl();
+  const CXXRecordDecl *T2 = E->getArg(1)->getType()->getPointeeCXXRecordDecl();
+  Result = false;
+  if (!T1 || !T2 || !T1->hasDefinition() || !T2->hasDefinition() ||
+      !T1->isStandardLayout() || !T2->isStandardLayout() || !M1.getDecl() ||
+      !M2.getDecl() || M1.isDerivedMember() || M2.isDerivedMember())
+    return true;
+  const auto *F1 = dyn_cast<FieldDecl>(M1.getDecl());
+  const auto *F2 = dyn_cast<FieldDecl>(M2.getDecl());
+  const CXXRecordDecl *O1 = msFieldOwner(T1), *O2 = msFieldOwner(T2);
+  if (!F1 || !F2 || F1->getParent() != O1 || F2->getParent() != O2)
+    return true;
+  auto I1 = O1->field_begin(), I2 = O2->field_begin();
+  for (; I1 != O1->field_end() && I2 != O2->field_end(); ++I1, ++I2) {
+    if (!msCommonInitialMember(Info.Ctx, *I1, *I2))
+      break;
+    if (*I1 == F1 || *I2 == F2) {
+      Result = *I1 == F1 && *I2 == F2;
+      break;
+    }
+  }
+  return true;
+}
+
 bool IntExprEvaluator::VisitBuiltinCallExpr(const CallExpr *E,
                                             unsigned BuiltinOp) {
   auto EvalTestOp = [&](llvm::function_ref<bool(const APInt &, const APInt &)>
@@ -17030,6 +17166,15 @@ bool IntExprEvaluator::VisitBuiltinCallExpr(const CallExpr *E,
     if (auto result = EvaluateBuiltinIsWithinLifetime(*this, E))
       return Success(*result, E);
     return false;
+
+  case Builtin::BI__builtin_ms_is_pointer_interconvertible_with_class: {
+    bool R;
+    return msIsPointerInterconvertibleWithClass(Info, E, R) && Success(R, E);
+  }
+  case Builtin::BI__builtin_ms_is_corresponding_member: {
+    bool R;
+    return msIsCorrespondingMember(Info, E, R) && Success(R, E);
+  }
 
   case Builtin::BI__builtin_ctz:
   case Builtin::BI__builtin_ctzl:
@@ -21327,6 +21472,12 @@ public:
 
     case Builtin::BI__builtin_operator_delete:
       return HandleOperatorDeleteCall(Info, E);
+
+    case Builtin::BI__builtin_zero_non_value_bits: {
+      // CL-IDENTITY: a constant-evaluated object has no padding bits to
+      // clear; only the argument is evaluated.
+      return EvaluateIgnoredValue(Info, E->getArg(0));
+    }
 
     default:
       return false;

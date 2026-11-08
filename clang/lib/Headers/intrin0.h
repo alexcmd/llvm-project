@@ -47,6 +47,11 @@ unsigned char _InterlockedCompareExchange128_rel(__int64 volatile *_Destination,
 #if defined(__x86_64__) && !defined(__arm64ec__)
 unsigned __int64 _umul128(unsigned __int64, unsigned __int64,
                           unsigned __int64 *);
+/* CL-IDENTITY: cl's <intrin0.h> also has these. */
+unsigned __int64 _udiv128(unsigned __int64 _HighDividend,
+                          unsigned __int64 _LowDividend,
+                          unsigned __int64 _Divisor,
+                          unsigned __int64 *_Remainder);
 unsigned __int64 __shiftleft128(unsigned __int64 _LowPart,
                                 unsigned __int64 _HighPart,
                                 unsigned char _Shift);
@@ -57,6 +62,17 @@ unsigned __int64 __shiftright128(unsigned __int64 _LowPart,
 
 #if defined(__i386__) || (defined(__x86_64__) && !defined(__arm64ec__))
 void _mm_pause(void);
+/* CL-IDENTITY: cl's <intrin0.h> has it; <bmiintrin.h> may have made it a
+   macro already. */
+#ifndef _tzcnt_u32
+unsigned int _tzcnt_u32(unsigned int);
+#endif
+#endif
+
+#if defined(__x86_64__) && !defined(__arm64ec__)
+#ifndef _tzcnt_u64
+unsigned __int64 _tzcnt_u64(unsigned __int64);
+#endif
 #endif
 
 #if defined(__x86_64__) || defined(__aarch64__)

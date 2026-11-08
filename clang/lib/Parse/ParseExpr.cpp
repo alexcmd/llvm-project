@@ -1270,6 +1270,10 @@ Parser::ParseCastExpression(CastParseKind ParseKind, bool isAddressOfOperand,
       *NotPrimaryExpression = true;
     Res = ParseBuiltinBitCast();
     break;
+  case tok::kw___is_pointer_interconvertible_with_class:
+  case tok::kw___is_corresponding_member:
+    Res = ParseMSMemberPointerTrait();
+    break;
   case tok::kw_typeid:
     if (NotPrimaryExpression)
       *NotPrimaryExpression = true;

@@ -1213,6 +1213,59 @@ def ClearPadding : Builtin {
   let Prototype = "void(void*)";
 }
 
+// CL-IDENTITY: cl's rounding and sign intrinsics (its <cmath> calls them;
+// cl declares them in <intrin0.h>). Same code as ceil, floor, round, trunc
+// and copysign: a libm call or the SSE4.1 instruction (cl 14.51 /O2).
+class MSFloatDoubleTemplate : Template<["float", "double"], ["f", ""]>;
+def MSCeil : MSFloatDoubleTemplate, MSLangBuiltin {
+  let Spellings = ["__ceil"];
+  let Attributes = [NoThrow, Const];
+  let Prototype = "T(T)";
+}
+def MSFloor : MSFloatDoubleTemplate, MSLangBuiltin {
+  let Spellings = ["__floor"];
+  let Attributes = [NoThrow, Const];
+  let Prototype = "T(T)";
+}
+def MSRound : MSFloatDoubleTemplate, MSLangBuiltin {
+  let Spellings = ["__round"];
+  let Attributes = [NoThrow, Const];
+  let Prototype = "T(T)";
+}
+def MSTrunc : MSFloatDoubleTemplate, MSLangBuiltin {
+  let Spellings = ["__trunc"];
+  let Attributes = [NoThrow, Const];
+  let Prototype = "T(T)";
+}
+def MSCopysign : MSFloatDoubleTemplate, MSLangBuiltin {
+  let Spellings = ["__copysign"];
+  let Attributes = [NoThrow, Const];
+  let Prototype = "T(T, T)";
+}
+
+// CL-IDENTITY: what __is_pointer_interconvertible_with_class(T, mp) and
+// __is_corresponding_member(T1, T2, mp1, mp2) parse to: the classes come as
+// null T * arguments ahead of the member pointers.
+def MSIsPointerInterconvertibleWithClass : MSLangBuiltin {
+  let Spellings = ["__builtin_ms_is_pointer_interconvertible_with_class"];
+  let Attributes = [NoThrow, CustomTypeChecking, Constexpr];
+  let Prototype = "bool(...)";
+}
+def MSIsCorrespondingMember : MSLangBuiltin {
+  let Spellings = ["__builtin_ms_is_corresponding_member"];
+  let Attributes = [NoThrow, CustomTypeChecking, Constexpr];
+  let Prototype = "bool(...)";
+}
+
+// CL-IDENTITY: cl's spelling of __builtin_clear_padding (its <atomic> calls
+// it qualified, ::__builtin_zero_non_value_bits); usable in constant
+// evaluation, where it does nothing (measured with cl 14.51).
+def MSZeroNonValueBits : MSLangBuiltin {
+  let Spellings = ["__builtin_zero_non_value_bits"];
+  let Attributes = [NoThrow, CustomTypeChecking, Constexpr];
+  let Prototype = "void(void*)";
+}
+
 def GetVtablePointer : LangBuiltin<"CXX_LANG"> {
   let Spellings = ["__builtin_get_vtable_pointer"];
   let Attributes = [CustomTypeChecking, NoThrow, Const];

@@ -819,6 +819,11 @@ UNARY_EXPR_OR_TYPE_TRAIT(__builtin_vectorelements, VectorElements, KEYALL)
 ALIAS("__char16_t"   , char16_t          , KEYCXX)
 ALIAS("__char32_t"   , char32_t          , KEYCXX)
 KEYWORD(__builtin_bit_cast               , KEYALL)
+// CL-IDENTITY: cl's traits behind std::is_pointer_interconvertible_with_class
+// and std::is_corresponding_member: (type, member pointer) and (type, type,
+// member pointer, member pointer).
+KEYWORD(__is_pointer_interconvertible_with_class, KEYMS)
+KEYWORD(__is_corresponding_member        , KEYMS)
 KEYWORD(__builtin_available              , KEYALL)
 KEYWORD(__builtin_sycl_unique_stable_name, KEYSYCL)
 

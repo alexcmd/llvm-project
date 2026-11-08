@@ -965,7 +965,9 @@ Value *CodeGenFunction::EmitX86BuiltinExpr(unsigned BuiltinID,
   }
   case X86::BI__builtin_ia32_tzcnt_u16:
   case X86::BI__builtin_ia32_tzcnt_u32:
-  case X86::BI__builtin_ia32_tzcnt_u64: {
+  case X86::BI__builtin_ia32_tzcnt_u64:
+  case X86::BI_tzcnt_u32:
+  case X86::BI_tzcnt_u64: {
     Function *F = CGM.getIntrinsic(Intrinsic::cttz, Ops[0]->getType());
     return Builder.CreateCall(F, {Ops[0], Builder.getInt1(false)});
   }
@@ -2989,6 +2991,25 @@ Value *CodeGenFunction::EmitX86BuiltinExpr(unsigned BuiltinID,
     Address HighBitsAddress = EmitPointerWithAlignment(E->getArg(2));
     Builder.CreateStore(HigherBits, HighBitsAddress);
     return Builder.CreateIntCast(MulResult, ResType, IsSigned);
+  }
+
+  case X86::BI_udiv128:
+  case X86::BI_div128: {
+    // CL-IDENTITY: (High:Low) / Divisor in one divq/idivq, remainder stored.
+    bool IsSigned = BuiltinID == X86::BI_div128;
+    llvm::FunctionType *FTy = llvm::FunctionType::get(
+        llvm::StructType::get(Int64Ty, Int64Ty), {Int64Ty, Int64Ty, Int64Ty},
+        false);
+    llvm::InlineAsm *IA = llvm::InlineAsm::get(
+        FTy, IsSigned ? "idivq $4" : "divq $4",
+        "={ax},={dx},{dx},{ax},r,~{dirflag},~{fpsr},~{flags}",
+        /*hasSideEffects=*/false);
+    Value *QR = Builder.CreateCall(IA, {Ops[0], Ops[1], Ops[2]});
+    CharUnits Align = getContext().getTypeAlignInChars(
+        E->getArg(3)->getType()->getPointeeType());
+    Builder.CreateStore(Builder.CreateExtractValue(QR, 1),
+                        Address(Ops[3], Int64Ty, Align));
+    return Builder.CreateExtractValue(QR, 0);
   }
 
   case X86::BI__faststorefence: {

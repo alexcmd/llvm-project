@@ -13,6 +13,7 @@
 #include "llvm/Object/WindowsResource.h"
 #include "llvm/Object/COFF.h"
 #include "llvm/Object/WindowsMachineFlag.h"
+#include "llvm/Support/Endian.h"
 #include "llvm/Support/FormatVariadic.h"
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/ScopedPrinter.h"
@@ -600,7 +601,9 @@ void WindowsResourceParser::TreeNode::shiftDataIndexDown(uint32_t Index) {
 class WindowsResourceCOFFWriter {
 public:
   WindowsResourceCOFFWriter(COFF::MachineTypes MachineType,
-                            const WindowsResourceParser &Parser, Error &E);
+                            const WindowsResourceParser &Parser, Error &E,
+                            const WindowsResourceCOFFOptions &Options =
+                                WindowsResourceCOFFOptions());
   std::unique_ptr<MemoryBuffer> write(uint32_t TimeDateStamp);
 
 private:
@@ -634,13 +637,18 @@ private:
   std::vector<uint32_t> StringTableOffsets;
   std::vector<uint32_t> DataOffsets;
   std::vector<uint32_t> RelocationAddresses;
+  WindowsResourceCOFFOptions Options;
+  // Long /DEFINE symbol names: their offsets in the COFF string table.
+  std::vector<uint32_t> DefineNameOffsets;
+  uint32_t CoffStringTableSize = 4;
 };
 
 WindowsResourceCOFFWriter::WindowsResourceCOFFWriter(
     COFF::MachineTypes MachineType, const WindowsResourceParser &Parser,
-    Error &E)
+    Error &E, const WindowsResourceCOFFOptions &Options)
     : MachineType(MachineType), Resources(Parser.getTree()),
-      Data(Parser.getData()), StringTable(Parser.getStringTable()) {
+      Data(Parser.getData()), StringTable(Parser.getStringTable()),
+      Options(Options) {
   performFileLayout();
 
   OutputBuffer = WritableMemoryBuffer::getNewMemBuffer(
@@ -663,7 +671,14 @@ void WindowsResourceCOFFWriter::performFileLayout() {
   FileSize += COFF::Symbol16Size;     // size of the @feat.00 symbol.
   FileSize += 4 * COFF::Symbol16Size; // symbol + aux for each section.
   FileSize += Data.size() * COFF::Symbol16Size; // 1 symbol per resource.
-  FileSize += 4; // four null bytes for the string table.
+  // cvtres /DEFINE symbols, names over 8 bytes in the string table.
+  FileSize += Options.DefineSymbols.size() * COFF::Symbol16Size;
+  for (const std::string &Name : Options.DefineSymbols) {
+    DefineNameOffsets.push_back(CoffStringTableSize);
+    if (Name.size() > COFF::NameSize)
+      CoffStringTableSize += Name.size() + 1;
+  }
+  FileSize += CoffStringTableSize; // the string table (size field included).
 }
 
 void WindowsResourceCOFFWriter::performSectionOneLayout() {
@@ -734,7 +749,7 @@ void WindowsResourceCOFFWriter::writeCOFFHeader(uint32_t TimeDateStamp) {
   Header->TimeDateStamp = TimeDateStamp;
   Header->PointerToSymbolTable = SymbolTableOffset;
   // One symbol for every resource plus 2 for each section and 1 for @feat.00
-  Header->NumberOfSymbols = Data.size() + 5;
+  Header->NumberOfSymbols = Data.size() + 5 + Options.DefineSymbols.size();
   Header->SizeOfOptionalHeader = 0;
   // cvtres.exe sets 32BIT_MACHINE even for 64-bit machine types. Match it.
   Header->Characteristics = COFF::IMAGE_FILE_32BIT_MACHINE;
@@ -774,6 +789,8 @@ void WindowsResourceCOFFWriter::writeSecondSectionHeader() {
   SectionTwoHeader->NumberOfLinenumbers = 0;
   SectionTwoHeader->Characteristics = COFF::IMAGE_SCN_CNT_INITIALIZED_DATA;
   SectionTwoHeader->Characteristics += COFF::IMAGE_SCN_MEM_READ;
+  if (!Options.ReadOnlyData)
+    SectionTwoHeader->Characteristics += COFF::IMAGE_SCN_MEM_WRITE;
 }
 
 void WindowsResourceCOFFWriter::writeFirstSection() {
@@ -859,12 +876,40 @@ void WindowsResourceCOFFWriter::writeSymbolTable() {
     Symbol->NumberOfAuxSymbols = 0;
     CurrentOffset += sizeof(coff_symbol16);
   }
+
+  // cvtres /DEFINE: an absolute external symbol of value 0 each.
+  for (size_t I = 0; I != Options.DefineSymbols.size(); ++I) {
+    const std::string &Name = Options.DefineSymbols[I];
+    Symbol = reinterpret_cast<coff_symbol16 *>(BufferStart + CurrentOffset);
+    if (Name.size() <= COFF::NameSize) {
+      coffnamecpy(Symbol->Name.ShortName, Name);
+    } else {
+      Symbol->Name.Offset.Zeroes = 0;
+      Symbol->Name.Offset.Offset = DefineNameOffsets[I];
+    }
+    Symbol->Value = 0;
+    Symbol->SectionNumber = static_cast<uint16_t>(COFF::IMAGE_SYM_ABSOLUTE);
+    Symbol->Type = COFF::IMAGE_SYM_DTYPE_NULL;
+    Symbol->StorageClass = COFF::IMAGE_SYM_CLASS_EXTERNAL;
+    Symbol->NumberOfAuxSymbols = 0;
+    CurrentOffset += sizeof(coff_symbol16);
+  }
 }
 
 void WindowsResourceCOFFWriter::writeStringTable() {
-  // Just 4 null bytes for the string table.
+  // Just 4 null bytes for the string table, unless a /DEFINE name needs it.
   auto COFFStringTable = reinterpret_cast<void *>(BufferStart + CurrentOffset);
   memset(COFFStringTable, 0, 4);
+  if (CoffStringTableSize == 4)
+    return;
+  support::endian::write32le(COFFStringTable, CoffStringTableSize);
+  char *P = BufferStart + CurrentOffset + 4;
+  for (const std::string &Name : Options.DefineSymbols)
+    if (Name.size() > COFF::NameSize) {
+      memcpy(P, Name.data(), Name.size());
+      P[Name.size()] = 0;
+      P += Name.size() + 1;
+    }
 }
 
 void WindowsResourceCOFFWriter::writeDirectoryTree() {
@@ -1006,8 +1051,17 @@ Expected<std::unique_ptr<MemoryBuffer>>
 writeWindowsResourceCOFF(COFF::MachineTypes MachineType,
                          const WindowsResourceParser &Parser,
                          uint32_t TimeDateStamp) {
+  return writeWindowsResourceCOFF(MachineType, Parser, TimeDateStamp,
+                                  WindowsResourceCOFFOptions());
+}
+
+Expected<std::unique_ptr<MemoryBuffer>>
+writeWindowsResourceCOFF(COFF::MachineTypes MachineType,
+                         const WindowsResourceParser &Parser,
+                         uint32_t TimeDateStamp,
+                         const WindowsResourceCOFFOptions &Options) {
   Error E = Error::success();
-  WindowsResourceCOFFWriter Writer(MachineType, Parser, E);
+  WindowsResourceCOFFWriter Writer(MachineType, Parser, E, Options);
   if (E)
     return E;
   return Writer.write(TimeDateStamp);

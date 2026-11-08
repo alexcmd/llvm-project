@@ -12240,7 +12240,15 @@ static bool IsSameFloatAfterCast(const APValue &value,
 }
 
 static void AnalyzeImplicitConversions(Sema &S, Expr *E, SourceLocation CC,
-                                       bool IsListInit = false);
+                                       bool IsListInit = false,
+                                       bool MSOperand = false);
+
+// UE-CONST-INT-FLOAT: set while the conversion being checked is the usual
+// arithmetic conversion of an operand of a binary operator (comparison and
+// compound assignment included). cl reports a constant int that does not fit
+// the float there as C5219 (off by default), and says nothing for a ?: arm;
+// C4305 (level 1) is only for initialization, assignment, argument, return.
+static LLVM_THREAD_LOCAL bool MSArithOperandConversion = false;
 
 static bool IsEnumConstOrFromMacro(Sema &S, const Expr *E) {
   // Suppress cases where we are comparing against an enum constant.
@@ -12576,8 +12584,10 @@ static bool CheckTautologicalComparison(Sema &S, BinaryOperator *E,
 /// Analyze the operands of the given comparison.  Implements the
 /// fallback case from AnalyzeComparison.
 static void AnalyzeImpConvsInComparison(Sema &S, BinaryOperator *E) {
-  AnalyzeImplicitConversions(S, E->getLHS(), E->getOperatorLoc());
-  AnalyzeImplicitConversions(S, E->getRHS(), E->getOperatorLoc());
+  AnalyzeImplicitConversions(S, E->getLHS(), E->getOperatorLoc(), false,
+                             /*MSOperand=*/true);
+  AnalyzeImplicitConversions(S, E->getRHS(), E->getOperatorLoc(), false,
+                             /*MSOperand=*/true);
 }
 
 /// Implements -Wsign-compare.
@@ -13210,7 +13220,8 @@ static void AnalyzeCompoundAssignment(Sema &S, BinaryOperator *E) {
          "Must be compound assignment operation");
   // Recurse on the LHS and RHS in here
   AnalyzeImplicitConversions(S, E->getLHS(), E->getOperatorLoc());
-  AnalyzeImplicitConversions(S, E->getRHS(), E->getOperatorLoc());
+  AnalyzeImplicitConversions(S, E->getRHS(), E->getOperatorLoc(), false,
+                             /*MSOperand=*/true);
 
   if (E->getLHS()->getType()->isAtomicType())
     S.Diag(E->getOperatorLoc(), diag::warn_atomic_implicit_seq_cst);
@@ -13849,7 +13860,11 @@ void Sema::CheckImplicitConversion(Expr *E, QualType T, SourceLocation CC,
                 *SourceInt, SourceBT->isSignedInteger(),
                 llvm::APFloat::rmNearestTiesToEven);
 
-        if (ConversionStatus != llvm::APFloat::opOK) {
+        // UE-CONST-INT-FLOAT (r32): cl is silent by default for an operand of
+        // a binary operator (C5219, off) and for a ?: arm.
+        bool MSSilent = getLangOpts().MSVCCompat &&
+                        (ICContext || MSArithOperandConversion);
+        if (ConversionStatus != llvm::APFloat::opOK && !MSSilent) {
           SmallString<32> PrettySourceValue;
           SourceInt->toString(PrettySourceValue, 10);
           SmallString<32> PrettyTargetValue;
@@ -14179,6 +14194,7 @@ struct AnalyzeImplicitConversionsWorkItem {
   Expr *E;
   SourceLocation CC;
   bool IsListInit;
+  bool MSOperand = false;
 };
 }
 
@@ -14289,8 +14305,10 @@ static void AnalyzeImplicitConversions(
   // Go ahead and check any implicit conversions we might have skipped.
   // The non-canonical typecheck is just an optimization;
   // CheckImplicitConversion will filter out dead implicit conversions.
-  if (SourceExpr->getType() != T)
+  if (SourceExpr->getType() != T) {
+    llvm::SaveAndRestore MSOperand(MSArithOperandConversion, Item.MSOperand);
     S.CheckImplicitConversion(SourceExpr, T, CC, nullptr, IsListInit);
+  }
 
   // Now continue drilling into this expression.
 
@@ -14379,7 +14397,8 @@ static void AnalyzeImplicitConversions(
       // Ignore checking string literals that are in logical and operators.
       // This is a common pattern for asserts.
       continue;
-    WorkList.push_back({ChildExpr, CC, IsListInit});
+    WorkList.push_back({ChildExpr, CC, IsListInit,
+                        BO && !BO->isLogicalOp() && !BO->isCommaOp()});
   }
 
   if (BO && BO->isLogicalOp()) {
@@ -14407,9 +14426,10 @@ static void AnalyzeImplicitConversions(
 /// implicit conversions in the given expression.  There are a couple
 /// of competing diagnostics here, -Wconversion and -Wsign-compare.
 static void AnalyzeImplicitConversions(Sema &S, Expr *OrigE, SourceLocation CC,
-                                       bool IsListInit/*= false*/) {
+                                       bool IsListInit /*= false*/,
+                                       bool MSOperand /*= false*/) {
   llvm::SmallVector<AnalyzeImplicitConversionsWorkItem, 16> WorkList;
-  WorkList.push_back({OrigE, CC, IsListInit});
+  WorkList.push_back({OrigE, CC, IsListInit, MSOperand});
   while (!WorkList.empty())
     AnalyzeImplicitConversions(S, WorkList.pop_back_val(), WorkList);
 }

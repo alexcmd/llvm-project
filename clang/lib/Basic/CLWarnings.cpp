@@ -58,6 +58,8 @@ clang::diagGroupFromCLWarningID(unsigned CLWarningID) {
   switch (CLWarningID) {
   case 4010: Name = "comment"; break;
   case 4057: Name = "pointer-sign"; break;
+  // UE-DECLSPEC-LEFT: __declspec(x) class C ... (no declarator).
+  case 4091: Name = "declspec-attribute-ignored"; break;
   case 4062: Name = "switch"; break;
   case 4099: Name = "mismatched-tags"; break;
   case 4102: Name = "unused-label"; break;

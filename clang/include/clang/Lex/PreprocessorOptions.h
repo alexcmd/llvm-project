@@ -95,6 +95,10 @@ public:
   /// of the source (-fms-predeclare-eh-types).
   bool MSPredeclareEHTypes = false;
 
+  /// Predefine the clang identity macros (__clang__, __llvm__, ...);
+  /// -fno-ms-clang-identity, the cl mode default, leaves them out.
+  bool MSClangIdentity = true;
+
   /// Whether we should maintain a detailed record of all macro
   /// definitions and expansions.
   bool DetailedRecord = false;

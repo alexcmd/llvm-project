@@ -833,6 +833,16 @@ static bool gchProbe(const Driver &D, StringRef Path) {
   return false;
 }
 
+// CL-IDENTITY: cl.exe has none of the clang identity macros (__clang__,
+// __llvm__, ...); -fno-ms-clang-identity leaves them out. Staged: cl mode
+// keeps them by default until the cl-path gaps are closed (CLModeIdentity).
+static constexpr bool CLModeIdentity = true;
+static bool msClangIdentity(const Driver &D, const ArgList &Args) {
+  return Args.hasFlag(options::OPT_fms_clang_identity,
+                      options::OPT_fno_ms_clang_identity,
+                      !D.IsCLMode() || CLModeIdentity);
+}
+
 // The Microsoft compiler's pre-injected EH/RTTI types: default in cl mode.
 static bool msPredeclareEHTypes(const Driver &D, const ArgList &Args) {
   return Args.hasFlag(options::OPT_fms_predeclare_eh_types,
@@ -1050,6 +1060,9 @@ void Clang::AddPreprocessingOptions(Compilation &C, const JobAction &JA,
   // opt-in elsewhere. Not for /E, /P: the types are not source text, so
   // preprocessed output leaves them out and gets them when it is compiled.
   // C translation units get the C subset (the __report_* functions).
+  if (!msClangIdentity(D, Args))
+    CmdArgs.push_back("-fno-ms-clang-identity");
+
   if (msPredeclareEHTypes(D, Args) &&
       (types::isCXX(Inputs[0].getType()) ||
        types::isDerivedFromC(Inputs[0].getType())) &&
@@ -5130,6 +5143,9 @@ static void ProcessVSRuntimeLibrary(const ToolChain &TC, const ArgList &Args,
     if (Args.hasArg(options::OPT__SLASH_LDd))
       CmdArgs.push_back("-D_DEBUG");
     CmdArgs.push_back("-D_MT");
+    // CL-IDENTITY: cl 14.51 defines _MSVC_MT for /MT only (not /MTd, /MD).
+    if (!msClangIdentity(TC.getDriver(), Args))
+      CmdArgs.push_back("-D_MSVC_MT=1");
     CmdArgs.push_back("-flto-visibility-public-std");
     CRT = openrt::DefaultLib::RuntimeMT;
     break;
@@ -6901,6 +6917,15 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
           CLNamed.insert(DiagnosticIDs::getWarningOptionForGroup(G));
     }
     CLLevelsOff = CLLevel > 4;
+  }
+  // CL-IDENTITY: cl 14.51 defines _MSVC_WARNING_LEVEL as the final /W level
+  // (0L for /W0 and /w, 100L for /Wall, 1L by default).
+  if (D.IsCLMode() && !msClangIdentity(D, Args)) {
+    unsigned WL = Args.hasArg(options::OPT_w) ? 0
+                  : CLLevel > 4               ? 100
+                                              : CLLevel;
+    CmdArgs.push_back(
+        Args.MakeArgString("-D_MSVC_WARNING_LEVEL=" + Twine(WL) + "L"));
   }
   auto RenderCLLevels = [&]() {
     unsigned Count;

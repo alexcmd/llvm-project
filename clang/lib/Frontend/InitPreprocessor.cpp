@@ -867,6 +867,11 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
                                        const PreprocessorOptions &PPOpts,
                                        const CodeGenOptions &CGOpts,
                                        MacroBuilder &Builder) {
+  // CL-IDENTITY: -fno-ms-clang-identity (the cl mode default) leaves out the
+  // macros that name clang, as cl.exe has none of them: code then takes the
+  // same branches it takes under cl.
+  const bool ClangIdentity = PPOpts.MSClangIdentity;
+  if (ClangIdentity) {
   // Compiler version introspection macros.
   Builder.defineMacro("__llvm__");  // LLVM Backend
   Builder.defineMacro("__clang__"); // Clang Frontend
@@ -880,6 +885,17 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
   Builder.defineMacro("__clang_version__",
                       "\"" CLANG_VERSION_STRING " "
                       + getClangFullRepositoryVersion() + "\"");
+  } else if (LangOpts.MSVCCompat && LangOpts.CPlusPlus) {
+    // CL-IDENTITY: feature macros cl 14.51 predefines (measured with /PD):
+    // the cl branches they open use only builtins clang has.
+    // CLANG-CL-GAP(is-assignable-nocheck): _IS_ASSIGNABLE_NOCHECK_SUPPORTED
+    // stays undefined; the branch it opens needs cl-only traits.
+    Builder.defineMacro("_CONSTEXPR_CHAR_TRAITS_SUPPORTED", "1");
+    if (LangOpts.CPlusPlus17) {
+      Builder.defineMacro("_BUILTIN_LAUNDER_SUPPORTED", "1");
+      Builder.defineMacro("_NOEXCEPT_TYPES_SUPPORTED", "1");
+    }
+  }
 
   if (LangOpts.GNUCVersion != 0) {
     // Major, minor, patch, are given two decimal places each, so 4.2.1 becomes
@@ -945,8 +961,9 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
 
   // Previously this macro was set to a string aiming to achieve compatibility
   // with GCC 4.2.1. Now, just return the full Clang version
-  Builder.defineMacro("__VERSION__", "\"" +
-                      Twine(getClangFullCPPVersion()) + "\"");
+  if (ClangIdentity)
+    Builder.defineMacro("__VERSION__", "\"" +
+                        Twine(getClangFullCPPVersion()) + "\"");
 
   // Initialize language-specific preprocessor defines.
 
@@ -1063,6 +1080,8 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
   // Macros to help identify the narrow and wide character sets. This is set
   // to fexec-charset. If fexec-charset is not specified, the default is the
   // system charset.
+  // CL-IDENTITY: not under -fno-ms-clang-identity.
+  if (ClangIdentity) {
   Builder.defineMacro("__clang_literal_encoding__",
                       Twine("\"" +
                             (LangOpts.LiteralEncoding.empty()
@@ -1079,6 +1098,7 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
     // (e.g., Windows, 32-bit IBM). This may need to be
     // updated if -fwide-exec-charset= is ever supported.
     Builder.defineMacro("__clang_wide_literal_encoding__", "\"UTF-16\"");
+  }
   }
 
   if (CGOpts.OptimizationLevel != 0)

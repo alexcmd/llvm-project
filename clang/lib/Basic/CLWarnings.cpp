@@ -204,6 +204,8 @@ static const CLWarningLevel CLLevels[] = {
     // UE-NOISE (r32): 'this' (or a reference's address) in a bool context;
     // cl is silent on 'this' and reports the address only as C4800 (off).
     {"undefined-bool-conversion", 0, nullptr, nullptr},
+    // UE-MISSING-TYPENAME (r35): Dep::Name(args) taken as a cast, cl silent.
+    {"typename-missing", 0, nullptr, nullptr},
     // UE-WD5054: cl has no counterpart of the ?: enum mismatch.
     {"deprecated-enum-compare-conditional", 0, nullptr, nullptr},
     // Off: the cl.exe counterpart is off by default (enable via /w<l><n>).

@@ -13965,8 +13965,27 @@ TreeTransform<Derived>::TransformOMPIteratorExpr(OMPIteratorExpr *E) {
 template<typename Derived>
 ExprResult
 TreeTransform<Derived>::TransformCallExpr(CallExpr *E) {
-  // Transform the callee.
-  ExprResult Callee = getDerived().TransformExpr(E->getCallee());
+  // UE-MISSING-TYPENAME (r35): cl takes Dep::Name(args) for a functional
+  // cast when Name turns out to be a type at instantiation; so does MSVC
+  // compatibility (with the -Wtypename-missing extension warning).
+  TypeSourceInfo *RecoveryTSI = nullptr;
+  ExprResult Callee;
+  auto *DSDRE = dyn_cast<DependentScopeDeclRefExpr>(E->getCallee());
+  if (DSDRE && SemaRef.getLangOpts().MSVCCompat)
+    Callee = getDerived().TransformDependentScopeDeclRefExpr(
+        DSDRE, /*IsAddressOfOperand=*/false, &RecoveryTSI);
+  else
+    Callee = getDerived().TransformExpr(E->getCallee());
+  if (RecoveryTSI) {
+    SmallVector<Expr *, 8> CastArgs;
+    bool CastArgsChanged = false;
+    if (getDerived().TransformExprs(E->getArgs(), E->getNumArgs(), true,
+                                    CastArgs, &CastArgsChanged))
+      return ExprError();
+    return getDerived().RebuildCXXUnresolvedConstructExpr(
+        RecoveryTSI, E->getCallee()->getEndLoc(), CastArgs, E->getRParenLoc(),
+        /*ListInitialization=*/false);
+  }
   if (Callee.isInvalid())
     return ExprError();
 

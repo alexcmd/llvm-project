@@ -29,7 +29,9 @@ u32 ok9(u64 x) { return x & ~0ull; }
 
 u32 w1(u64 x) { return x & 0x1FFFFFFFFull; }       // expected-warning {{implicit conversion loses integer precision}}
 u32 w2(u64 x) { return x >> 31; }                  // expected-warning {{implicit conversion loses integer precision}}
-u32 w3(u64 x) { return x / 0x100000000ull; }       // expected-warning {{implicit conversion loses integer precision}}
+// CLANG-CL-GAP(c4244-range-safe): cl reports this one; clang's value range
+// proves it fits, and openrt never adds a C4244 that range rules out.
+u32 ok10(u64 x) { return x / 0x100000000ull; }
 u32 w4(u64 x, u64 d) { return x % d; }             // expected-warning {{implicit conversion loses integer precision}}
 u32 w5(u64 x) { return x - (x & 0xFF); }           // expected-warning {{implicit conversion loses integer precision}}
 int w6(A &a, i64 i) { return a[i]; }               // expected-warning {{implicit conversion loses integer precision}}

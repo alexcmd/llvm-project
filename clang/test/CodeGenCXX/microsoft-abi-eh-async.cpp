@@ -3,7 +3,7 @@
 // FH3 pinned (/d2FH4-): the CHECKs below are the FH3 ip2state table (.long
 // IP/ToState pairs) and FH3 funclet names. cl's FH4 default encodes the table
 // compactly. FH4 coverage: microsoft-abi-eh4-*.cpp.
-// RUN: %clang_cl -c --target=x86_64-windows-msvc /EHa -O2 /GS- /d2FH4- \
+// RUN: %clang_cl -c --target=x86_64-windows-msvc /clang:-fms-clang-identity /EHa -O2 /GS- /d2FH4- \
 // RUN:   -Xclang=-import-call-optimization \
 // RUN:   /clang:-S /clang:-o- -- %s 2>&1 \
 // RUN:   | FileCheck %s

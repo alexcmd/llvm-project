@@ -42,6 +42,7 @@
 #include "clang/Basic/TypeTraits.h"
 #include "clang/Lex/LiteralSupport.h"
 #include "clang/Lex/Preprocessor.h"
+#include "clang/Lex/PreprocessorOptions.h"
 #include "clang/Sema/AnalysisBasedWarnings.h"
 #include "clang/Sema/DeclSpec.h"
 #include "clang/Sema/DelayedDiagnostic.h"
@@ -3627,6 +3628,169 @@ static void ConvertUTF8ToWideString(unsigned CharByteWidth, StringRef Source,
   Target.resize(ResultPtr - &Target[0]);
 }
 
+// UE-FUNCSIG-CL: cl's __FUNCSIG__ (measured, cl 14.51): "<return type>
+// __cdecl <qualified name><template args>(<params>)[ const]" with no
+// "static"/"virtual", parameters "T *", "const struct S &" (class keys, ","
+// without space, "(void)" when none), template arguments of the function and
+// of enclosing class templates written as types are canonical with class
+// keys, default arguments, no space before '*'/'&' ("int*const ",
+// "unsigned __int64"), "> >" between closers inside, integral values as
+// 64-bit hex ("0x5", "0xfffffffffffffffd"), enumerators by name, bool as
+// true/false, pointers as "&g". Code parses it (UE's generated type names
+// take the text between the first '<' and the last '>'). Without the clang
+// identity macros MSVC compatibility writes it that way; other cases
+// (lambdas, non-functions) keep clang's form.
+static std::string msPrintTypeCL(const ASTContext &Ctx, QualType T,
+                                 const PrintingPolicy &P, bool TemplateArg) {
+  // cl: a member pointer argument reads "intN::S::* ".
+  if (const auto *MPT = T.getCanonicalType()->getAs<MemberPointerType>();
+      TemplateArg && MPT && !MPT->isMemberFunctionPointer()) {
+    std::string C;
+    llvm::raw_string_ostream COS(C);
+    MPT->getMostRecentCXXRecordDecl()->printQualifiedName(COS, P);
+    return msPrintTypeCL(Ctx, MPT->getPointeeType(), P, true) + C + "::* ";
+  }
+  std::string S = T.getCanonicalType().getAsString(P);
+  auto ReplaceAll = [&](StringRef From, StringRef To) {
+    for (size_t I = S.find(From); I != std::string::npos;
+         I = S.find(From, I + To.size()))
+      S.replace(I, From.size(), To);
+  };
+  ReplaceAll("unsigned long long", "unsigned __int64");
+  ReplaceAll("long long", "__int64");
+  ReplaceAll(", ", ",");
+  if (TemplateArg) {
+    ReplaceAll(" *", "*");
+    ReplaceAll(" &", "&");
+    ReplaceAll(" (*)", "(*)");
+    ReplaceAll("(*)", "(__cdecl *)");
+    if (StringRef(S).ends_with("*const"))
+      S += ' ';
+  }
+  return S;
+}
+
+static void msPrintTemplateArgsCL(raw_ostream &OS, const ASTContext &Ctx,
+                                  ArrayRef<TemplateArgument> Args,
+                                  const PrintingPolicy &P) {
+  OS << '<';
+  bool First = true;
+  std::function<void(const TemplateArgument &)> One =
+      [&](const TemplateArgument &A) {
+        if (A.getKind() == TemplateArgument::Pack) {
+          for (const TemplateArgument &E : A.pack_elements())
+            One(E);
+          return;
+        }
+        if (!First)
+          OS << ',';
+        First = false;
+        switch (A.getKind()) {
+        case TemplateArgument::Type:
+          OS << msPrintTypeCL(Ctx, A.getAsType(), P, /*TemplateArg=*/true);
+          return;
+        case TemplateArgument::Integral: {
+          QualType T = A.getIntegralType();
+          llvm::APSInt V = A.getAsIntegral();
+          if (T->isBooleanType()) {
+            OS << (V.getBoolValue() ? "true" : "false");
+            return;
+          }
+          if (const auto *ET = T->getAsEnumDecl())
+            for (const EnumConstantDecl *ECD : ET->enumerators())
+              if (llvm::APSInt::isSameValue(ECD->getInitVal(), V)) {
+                OS << ECD->getName();
+                return;
+              }
+          OS << "0x" << llvm::utohexstr(V.extOrTrunc(64).getZExtValue(),
+                                        /*LowerCase=*/true);
+          return;
+        }
+        case TemplateArgument::Declaration:
+          OS << '&';
+          A.getAsDecl()->printQualifiedName(OS, P);
+          return;
+        default:
+          A.print(P, OS, /*IncludeType=*/false);
+          return;
+        }
+      };
+  for (const TemplateArgument &A : Args)
+    One(A);
+  OS << '>';
+}
+
+static std::string msFuncSigCL(const ASTContext &Ctx, const Decl *D) {
+  const auto *FD = dyn_cast<FunctionDecl>(D);
+  if (!FD)
+    return {};
+  if (const auto *MD = dyn_cast<CXXMethodDecl>(FD))
+    if (MD->getParent()->isLambda())
+      return {};
+  PrintingPolicy P(Ctx.getLangOpts());
+  P.SuppressTagKeyword = false;
+  P.MSVCFormatting = true;
+  P.SplitTemplateClosers = true;
+  P.SuppressDefaultTemplateArgs = false;
+  P.FullyQualifiedName = true;
+  P.SuppressUnwrittenScope = true;
+
+  std::string Out;
+  llvm::raw_string_ostream OS(Out);
+  if (!isa<CXXConstructorDecl, CXXDestructorDecl>(FD)) {
+    std::string R = msPrintTypeCL(Ctx, FD->getReturnType(), P, false);
+    OS << R;
+    if (!R.empty() && R.back() != '*' && R.back() != '&')
+      OS << ' ';
+  }
+  const auto *FT = FD->getType()->castAs<FunctionType>();
+  switch (FT->getCallConv()) {
+  case CC_X86VectorCall: OS << "__vectorcall "; break;
+  case CC_X86StdCall: OS << "__stdcall "; break;
+  case CC_X86FastCall: OS << "__fastcall "; break;
+  case CC_X86ThisCall: OS << "__thiscall "; break;
+  default: OS << "__cdecl "; break;
+  }
+  // Enclosing scopes, outermost first.
+  SmallVector<const DeclContext *, 8> Scopes;
+  for (const DeclContext *DC = FD->getDeclContext(); DC && !DC->isTranslationUnit();
+       DC = DC->getParent())
+    if (!isa<LinkageSpecDecl, ExportDecl>(DC) &&
+        !(isa<NamespaceDecl>(DC) && cast<NamespaceDecl>(DC)->isInline()))
+      Scopes.push_back(DC);
+  for (const DeclContext *DC : llvm::reverse(Scopes)) {
+    const auto *ND = cast<NamedDecl>(DC);
+    if (const auto *NS = dyn_cast<NamespaceDecl>(ND); NS && NS->isAnonymousNamespace())
+      OS << "`anonymous namespace'";
+    else
+      OS << ND->getName();
+    if (const auto *CTS = dyn_cast<ClassTemplateSpecializationDecl>(ND))
+      msPrintTemplateArgsCL(OS, Ctx, CTS->getTemplateArgs().asArray(), P);
+    OS << "::";
+  }
+  OS << FD->getDeclName().getAsString();
+  if (const TemplateArgumentList *TA = FD->getTemplateSpecializationArgs())
+    msPrintTemplateArgsCL(OS, Ctx, TA->asArray(), P);
+  OS << '(';
+  if (FD->getNumParams() == 0 && !FD->isVariadic())
+    OS << "void";
+  for (unsigned I = 0, N = FD->getNumParams(); I != N; ++I) {
+    if (I)
+      OS << ',';
+    OS << msPrintTypeCL(Ctx, FD->getParamDecl(I)->getType(), P, false);
+  }
+  if (FD->isVariadic())
+    OS << (FD->getNumParams() ? ",..." : "...");
+  OS << ')';
+  if (const auto *MD = dyn_cast<CXXMethodDecl>(FD)) {
+    if (MD->isConst())
+      OS << " const";
+    if (MD->isVolatile())
+      OS << " volatile";
+  }
+  return Out;
+}
+
 ExprResult Sema::BuildPredefinedExpr(SourceLocation Loc,
                                      PredefinedIdentKind IK) {
   Decl *currentDecl = getPredefinedExprDecl(CurContext);
@@ -3644,8 +3808,13 @@ ExprResult Sema::BuildPredefinedExpr(SourceLocation Loc,
     // the string.
     bool ForceElaboratedPrinting =
         IK == PredefinedIdentKind::Function && getLangOpts().MSVCCompat;
-    auto Str =
-        PredefinedExpr::ComputeName(IK, currentDecl, ForceElaboratedPrinting);
+    std::string Str;
+    if ((IK == PredefinedIdentKind::FuncSig ||
+         IK == PredefinedIdentKind::LFuncSig) &&
+        getLangOpts().MSVCCompat && !PP.getPreprocessorOpts().MSClangIdentity)
+      Str = msFuncSigCL(Context, currentDecl);
+    if (Str.empty())
+      Str = PredefinedExpr::ComputeName(IK, currentDecl, ForceElaboratedPrinting);
     unsigned Length = Str.length();
 
     llvm::APInt LengthI(32, Length + 1);

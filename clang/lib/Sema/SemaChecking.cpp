@@ -12972,9 +12972,9 @@ void Sema::recordMSSizeTTemplateArgs(const Decl *Specialization,
 }
 
 /// UE-C4244-CAST-ORIGIN, UE-C4244-VALUE-RANGE: the width cl 14.51 attributes
-/// to a value when it decides on C4244/C4267 (no constant folding beyond
-/// literals; measured on 60+ forms):
-///   integer literal: the bits of its value;  cast: min(its width, operand);
+/// to a value when it decides on C4244/C4267 (measured on 100+ forms):
+///   integral constant expression: the bits of its value (as a signed
+///   number);  cast: min(its width, operand);
 ///   & : min;  | ^ + - * ?: : max;  / : left;  % : right;
 ///   >> c (constant): left - c;  << (any count) or >> by a variable: left;
 ///   ~ - + : operand;  bit-field: its width;  anything else: its type's width
@@ -12999,10 +12999,17 @@ static unsigned msOriginWidth(const ASTContext &Ctx, const Expr *E) {
   unsigned TW = Width(T);
   if (!T->isArithmeticType() && !T->isEnumeralType())
     return TW;
-  if (const auto *IL = dyn_cast<IntegerLiteral>(E))
-    return std::max(1u, IL->getValue().getActiveBits());
-  if (const auto *CL = dyn_cast<CharacterLiteral>(E))
-    return std::max(1u, (unsigned)llvm::bit_width(CL->getValue()));
+  // UE-MASK-CONSTEXPR (r26): any integral constant expression (literal,
+  // constexpr or const variable, enumerator, static constexpr member,
+  // template argument, (1ull << 14) - 1 written inline) counts by the bits of
+  // its value read as a signed number: ~0ull is -1, one bit; 0xFF00000000 is
+  // 40 bits; 0xFFFFFFFF00000000 is 33.
+  if (T->isIntegralOrEnumerationType() && !E->isValueDependent())
+    if (std::optional<llvm::APSInt> V = E->getIntegerConstantExpr(Ctx)) {
+      const llvm::APInt &A = *V;
+      return std::max(1u, A.isNegative() ? A.getSignificantBits()
+                                         : A.getActiveBits());
+    }
   if (const FieldDecl *FD = E->getSourceBitField())
     return std::min(TW, FD->getBitWidthValue());
   if (const auto *CE = dyn_cast<CastExpr>(E)) {

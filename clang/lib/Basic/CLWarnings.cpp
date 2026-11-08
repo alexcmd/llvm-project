@@ -94,6 +94,10 @@ clang::diagGroupFromCLWarningID(unsigned CLWarningID) {
   case 5205: Name = "delete-abstract-non-virtual-dtor"; break;
   case 5263: Name = "pessimizing-move"; break;
   case 5266: Name = "ignored-qualifiers"; break;
+  // UE-NO-SPECIALIZATIONS: specializing a no_specializations template (cl
+  // 14.51: C5278, level 1); the STL's cl branches disable it around their own
+  // specializations.
+  case 5278: Name = "invalid-specialization"; break;
   }
   if (Name)
     return DiagnosticIDs::getGroupForWarningOption(Name);

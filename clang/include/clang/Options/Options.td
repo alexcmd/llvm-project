@@ -3598,6 +3598,18 @@ defm ms_predeclare_eh_types : BoolFOption<"ms-predeclare-eh-types",
           "Microsoft compiler pre-injects (_ThrowInfo, _CatchableType, ...; "
           "default in cl mode)">,
   NegFlag<SetFalse, [], [ClangOption, CLOption]>>;
+// CL-IDENTITY: cl defines none of __clang__, __clang_major__/minor__/
+// patchlevel__, __clang_version__, __llvm__, __VERSION__ and the
+// __clang_*literal_encoding__ macros; -fno-ms-clang-identity (from clang-cl:
+// /clang:-fno-ms-clang-identity, also through the CL/_CL_ variables) leaves
+// them out. cc1 keeps them unless told otherwise.
+defm ms_clang_identity : BoolFOption<"ms-clang-identity",
+  PreprocessorOpts<"MSClangIdentity">, DefaultTrue,
+  PosFlag<SetTrue, [], [ClangOption, CLOption],
+          "Predefine the clang identity macros (__clang__, __llvm__, ...; "
+          "default)">,
+  NegFlag<SetFalse, [], [ClangOption, CLOption, CC1Option],
+          "Do not predefine the clang identity macros, as cl.exe">>;
 defm openrt_overlay : BoolOptionWithoutMarshalling<"f", "openrt-overlay",
   PosFlag<SetTrue, [], [ClangOption, CLOption],
           "Use the VFS overlay declared by the openrt layout around the "

@@ -16163,6 +16163,15 @@ ExprResult Sema::BuildBinOp(Scope *S, SourceLocation OpLoc,
                         RHSExpr->getType()->isOverloadableType();
     if (CanOverloadBinOp && (TypeDependent || Overloadable))
       return BuildOverloadedBinOp(*this, S, OpLoc, Opc, LHSExpr, RHSExpr);
+    // UE-XM-VECTOR-OPS: a user operator on an MS vector type wins; with none
+    // in scope, clang's built-in vector operations stay.
+    if (S && (isMSOperatorVectorType(LHSExpr->getType()) ||
+              isMSOperatorVectorType(RHSExpr->getType()))) {
+      UnresolvedSet<16> Fns;
+      LookupBinOp(S, OpLoc, Opc, Fns);
+      if (hasMSVectorOperatorCandidate(Fns, 2))
+        return BuildOverloadedBinOp(*this, S, OpLoc, Opc, LHSExpr, RHSExpr);
+    }
   }
 
   if (getLangOpts().RecoveryAST &&
@@ -16546,7 +16555,17 @@ ExprResult Sema::BuildUnaryOp(Scope *S, SourceLocation OpLoc,
     Input = Result.get();
   }
 
-  if (getLangOpts().CPlusPlus && Input->getType()->isOverloadableType() &&
+  // UE-XM-VECTOR-OPS: a user operator on an MS vector type wins.
+  bool MSVectorOverload = false;
+  if (S && UnaryOperator::getOverloadedOperator(Opc) != OO_None &&
+      Opc != UO_AddrOf && isMSOperatorVectorType(Input->getType())) {
+    UnresolvedSet<16> Fns;
+    LookupOverloadedOperatorName(UnaryOperator::getOverloadedOperator(Opc), S,
+                                 Fns);
+    MSVectorOverload = hasMSVectorOperatorCandidate(Fns, 1);
+  }
+  if (getLangOpts().CPlusPlus &&
+      (Input->getType()->isOverloadableType() || MSVectorOverload) &&
       UnaryOperator::getOverloadedOperator(Opc) != OO_None &&
       !(Opc == UO_AddrOf && isQualifiedMemberAccess(Input))) {
     // Find all of the overloaded operators visible from this point.

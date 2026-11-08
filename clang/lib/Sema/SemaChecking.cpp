@@ -56,6 +56,8 @@
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Basic/TypeTraits.h"
 #include "clang/Lex/Lexer.h" // TODO: Extract static functions to fix layering.
+#include "clang/Lex/Preprocessor.h"
+#include "clang/Lex/PreprocessorOptions.h"
 #include "clang/Sema/Initialization.h"
 #include "clang/Sema/Lookup.h"
 #include "clang/Sema/Ownership.h"
@@ -12954,6 +12956,30 @@ static void AnalyzeAssignment(Sema &S, BinaryOperator *E) {
 /// UE-C4244-SHORTEN: whether \p T is written as size_t somewhere in its sugar
 /// (the typedef, a typedef naming it, or sizeof's type); UE-C4267-TEMPLATE:
 /// or a template parameter whose argument was first spelled size_t.
+bool Sema::isMSOperatorVectorType(QualType T) const {
+  if (!getLangOpts().CPlusPlus || !getLangOpts().MicrosoftExt ||
+      PP.getPreprocessorOpts().MSClangIdentity)
+    return false;
+  const auto *VT = T.getNonReferenceType()->getAs<VectorType>();
+  if (!VT || VT->getVectorKind() != VectorKind::Generic)
+    return false;
+  uint64_t Bits = Context.getTypeSize(VT);
+  return Bits == 64 || Bits == 128 || Bits == 256 || Bits == 512;
+}
+
+bool Sema::hasMSVectorOperatorCandidate(const UnresolvedSetImpl &Fns,
+                                        unsigned NumArgs) const {
+  for (NamedDecl *D : Fns) {
+    const FunctionDecl *FD = D->getUnderlyingDecl()->getAsFunction();
+    if (!FD || FD->getNumParams() != NumArgs)
+      continue;
+    for (const ParmVarDecl *P : FD->parameters())
+      if (isMSOperatorVectorType(P->getType()))
+        return true;
+  }
+  return false;
+}
+
 bool Sema::isMSSpelledSizeT(QualType T) const {
   const ASTContext &Ctx = Context;
   for (unsigned Steps = 0; Steps != 64; ++Steps) {

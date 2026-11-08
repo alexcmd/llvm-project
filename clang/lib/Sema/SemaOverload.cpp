@@ -7240,7 +7240,7 @@ ExprResult Sema::PerformContextualImplicitConversion(
 /// arguments have types T1 (and, if non-empty, T2). This routine
 /// implements the check in C++ [over.match.oper]p3b2 concerning
 /// enumeration types.
-static bool IsAcceptableNonMemberOperatorCandidate(ASTContext &Context,
+static bool IsAcceptableNonMemberOperatorCandidate(Sema &S, ASTContext &Context,
                                                    FunctionDecl *Fn,
                                                    ArrayRef<Expr *> Args) {
   QualType T1 = Args[0]->getType();
@@ -7250,6 +7250,12 @@ static bool IsAcceptableNonMemberOperatorCandidate(ASTContext &Context,
     return true;
 
   if (T1->isRecordType() || (!T2.isNull() && T2->isRecordType()))
+    return true;
+
+  // UE-XM-VECTOR-OPS: an MS vector operand counts as a class operand (cl's
+  // __m128 & co. are unions).
+  if (S.isMSOperatorVectorType(T1) ||
+      (!T2.isNull() && S.isMSOperatorVectorType(T2)))
     return true;
 
   const auto *Proto = Fn->getType()->castAs<FunctionProtoType>();
@@ -7356,7 +7362,7 @@ void Sema::AddOverloadCandidate(
   //   (possibly cv-qualified) T2", when T2 is an enumeration type, are
   //   candidate functions.
   if (CandidateSet.getKind() == OverloadCandidateSet::CSK_Operator &&
-      !IsAcceptableNonMemberOperatorCandidate(Context, Function, Args))
+      !IsAcceptableNonMemberOperatorCandidate(*this, Context, Function, Args))
     return;
 
   // Add this candidate
@@ -15242,6 +15248,22 @@ ExprResult Sema::BuildCXXMemberCallExpr(Expr *E, NamedDecl *FoundDecl,
   return CheckForImmediateInvocation(CE, CE->getDirectCallee());
 }
 
+// UE-XM-VECTOR-OPS: with a user operator for an MS vector type in the set,
+// clang's built-in vector candidates go (cl has no built-in vector
+// arithmetic, its __m128 & co. are unions).
+static void msDropBuiltinVectorCandidates(Sema &S, OverloadCandidateSet &Set,
+                                          ArrayRef<Expr *> Args) {
+  if (!llvm::any_of(Args, [&](Expr *E) {
+        return E && S.isMSOperatorVectorType(E->getType());
+      }))
+    return;
+  if (!llvm::any_of(Set, [](const OverloadCandidate &C) { return C.Function; }))
+    return;
+  for (OverloadCandidate &C : Set)
+    if (!C.Function)
+      C.Viable = false;
+}
+
 ExprResult
 Sema::CreateOverloadedUnaryOp(SourceLocation OpLoc, UnaryOperatorKind Opc,
                               const UnresolvedSetImpl &Fns,
@@ -15311,6 +15333,7 @@ Sema::CreateOverloadedUnaryOp(SourceLocation OpLoc, UnaryOperatorKind Opc,
 
   // Add builtin operator candidates.
   AddBuiltinOperatorCandidates(Op, OpLoc, ArgsArray, CandidateSet);
+  msDropBuiltinVectorCandidates(*this, CandidateSet, ArgsArray);
 
   bool HadMultipleCandidates = (CandidateSet.size() > 1);
 
@@ -15601,6 +15624,7 @@ ExprResult Sema::CreateOverloadedBinOp(SourceLocation OpLoc,
   if (DefaultedFn)
     CandidateSet.exclude(DefaultedFn);
   LookupOverloadedBinOp(CandidateSet, Op, Fns, Args, PerformADL);
+  msDropBuiltinVectorCandidates(*this, CandidateSet, Args);
 
   bool HadMultipleCandidates = (CandidateSet.size() > 1);
 

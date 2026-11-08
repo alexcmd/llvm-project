@@ -17032,7 +17032,7 @@ bool Sema::CheckOverloadedOperatorDeclaration(FunctionDecl *FnDecl) {
     for (auto *Param : FnDecl->parameters()) {
       QualType ParamType = Param->getType().getNonReferenceType();
       if (ParamType->isDependentType() || ParamType->isRecordType() ||
-          ParamType->isEnumeralType()) {
+          ParamType->isEnumeralType() || isMSOperatorVectorType(ParamType)) {
         ClassOrEnumParam = true;
         break;
       }

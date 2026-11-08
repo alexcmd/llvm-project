@@ -264,6 +264,21 @@ writeWindowsResourceCOFF(llvm::COFF::MachineTypes MachineType,
                          const WindowsResourceParser &Parser,
                          uint32_t TimeDateStamp);
 
+/// UE-CVTRES-FOLDDUPS: what cvtres.exe options change in the object.
+struct WindowsResourceCOFFOptions {
+  /// .rsrc$02 (the resource data) read-only: cvtres /READONLY. cvtres
+  /// 14.51 makes it read/write without it; lld and llvm-rc keep read-only.
+  bool ReadOnlyData = true;
+  /// cvtres /DEFINE:<symbol>: an absolute external symbol of value 0 each.
+  std::vector<std::string> DefineSymbols;
+};
+
+LLVM_ABI Expected<std::unique_ptr<MemoryBuffer>>
+writeWindowsResourceCOFF(llvm::COFF::MachineTypes MachineType,
+                         const WindowsResourceParser &Parser,
+                         uint32_t TimeDateStamp,
+                         const WindowsResourceCOFFOptions &Options);
+
 LLVM_ABI void printResourceTypeName(uint16_t TypeID, raw_ostream &OS);
 } // namespace object
 } // namespace llvm

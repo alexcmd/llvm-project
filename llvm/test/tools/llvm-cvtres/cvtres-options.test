@@ -1,0 +1,33 @@
+; openrt UE-CVTRES-FOLDDUPS (r29, every UE DLL link): UnrealBuildTool runs
+;   cvtres.exe /nologo /folddups /machine:x64 /out:X.res.obj X.res
+; cvtres 14.51 accepts /FOLDDUPS (it folds nothing: an identical duplicate is
+; still CVT1100), makes the resource data read/write unless /READONLY, adds an
+; absolute external symbol for the last /DEFINE, and answers an unknown
+; /option with its usage and exit code 1.
+
+RUN: llvm-cvtres /nologo /folddups /machine:x64 /out:%t.obj %p/Inputs/test_resource.res
+RUN: llvm-readobj --sections %t.obj | FileCheck --check-prefix=RW %s
+RW:      Name: .rsrc$02
+RW:      Characteristics [
+RW-NEXT:   IMAGE_SCN_CNT_INITIALIZED_DATA
+RW-NEXT:   IMAGE_SCN_MEM_READ
+RW-NEXT:   IMAGE_SCN_MEM_WRITE
+
+RUN: llvm-cvtres /nologo /readonly /machine:x64 /out:%t.ro.obj %p/Inputs/test_resource.res
+RUN: llvm-readobj --sections %t.ro.obj | FileCheck --check-prefix=RO %s
+RO:      Name: .rsrc$02
+RO:      Characteristics [
+RO-NEXT:   IMAGE_SCN_CNT_INITIALIZED_DATA
+RO-NEXT:   IMAGE_SCN_MEM_READ
+RO-NEXT: ]
+
+RUN: llvm-cvtres /nologo /define:FOO /define:A_LONG_SYMBOL_NAME /machine:x64 /out:%t.df.obj %p/Inputs/test_resource.res
+RUN: llvm-readobj --symbols %t.df.obj | FileCheck --check-prefix=DEF %s
+DEF-NOT: Name: FOO
+DEF:     Name: A_LONG_SYMBOL_NAME
+DEF-NEXT: Value: 0
+DEF-NEXT: Section: IMAGE_SYM_ABSOLUTE
+DEF:     StorageClass: External
+
+RUN: not llvm-cvtres /nologo /bogus /machine:x64 /out:%t.u.obj %p/Inputs/test_resource.res | FileCheck --check-prefix=UNK %s
+UNK: USAGE: llvm-cvtres

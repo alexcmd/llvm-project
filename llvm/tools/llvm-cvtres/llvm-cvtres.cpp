@@ -125,6 +125,21 @@ int main(int Argc, const char **Argv) {
     return 0;
   }
 
+  // UE-CVTRES-FOLDDUPS: cvtres.exe answers an unknown /option (one that is
+  // not an existing file) with its usage and exit code 1.
+  for (const opt::Arg *A : InputArgs) {
+    bool Unknown = A->getOption().getKind() == opt::Option::UnknownClass;
+    if (A->getOption().matches(OPT_INPUT)) {
+      StringRef V = A->getValue();
+      Unknown = V.starts_with("/") && !sys::fs::exists(V);
+    }
+    if (Unknown) {
+      T.printHelp(outs(), "llvm-cvtres [options] file...",
+                  "Resource Converter");
+      return 1;
+    }
+  }
+
   bool Verbose = InputArgs.hasArg(OPT_VERBOSE);
 
   COFF::MachineTypes MachineType;
@@ -169,6 +184,15 @@ int main(int Argc, const char **Argv) {
   if (Verbose)
     outs() << "Machine: " << machineToStr(MachineType) << '\n';
 
+  // UE-CVTRES-FOLDDUPS: as cvtres 14.51, the resource data is read/write
+  // unless /READONLY; /DEFINE adds an absolute symbol; /FOLDDUPS changes
+  // nothing (measured: an identical duplicate is still CVT1100).
+  object::WindowsResourceCOFFOptions CoffOptions;
+  CoffOptions.ReadOnlyData = InputArgs.hasArg(OPT_READONLY);
+  // cvtres keeps only the last /DEFINE (measured with two).
+  if (const opt::Arg *A = InputArgs.getLastArg(OPT_DEFINE))
+    CoffOptions.DefineSymbols.push_back(A->getValue());
+
   WindowsResourceParser Parser;
 
   for (const auto &File : InputFiles) {
@@ -207,7 +231,7 @@ int main(int Argc, const char **Argv) {
 
   std::unique_ptr<MemoryBuffer> OutputBuffer =
       error(llvm::object::writeWindowsResourceCOFF(MachineType, Parser,
-                                                   DateTimeStamp));
+                                                   DateTimeStamp, CoffOptions));
   auto FileOrErr =
       FileOutputBuffer::create(OutputFile, OutputBuffer->getBufferSize());
   if (!FileOrErr)

@@ -39,6 +39,7 @@
 #include "clang/Lex/Lexer.h" // TODO: Extract static functions to fix layering.
 #include "clang/Lex/ModuleLoader.h" // TODO: Sema shouldn't depend on Lex
 #include "clang/Lex/Preprocessor.h" // Included for isCodeCompletionEnabled()
+#include "clang/Lex/PreprocessorOptions.h"
 #include "clang/Sema/CXXFieldCollector.h"
 #include "clang/Sema/DeclSpec.h"
 #include "clang/Sema/DelayedDiagnostic.h"
@@ -16491,7 +16492,26 @@ Decl *Sema::ActOnStartOfFunctionDef(Scope *FnBodyScope, Decl *D,
 
   // Builtin functions cannot be defined.
   if (unsigned BuiltinID = FD->getBuiltinID()) {
-    if (!Context.BuiltinInfo.isPredefinedLibFunction(BuiltinID) &&
+    // The cl branches of portability headers define these GNU-spelled
+    // helpers themselves. Once defined, calls must use that implementation,
+    // including its behaviour at zero, rather than a GNU builtin expansion.
+    if (getLangOpts().MSVCCompat &&
+        !PP.getPreprocessorOpts().MSClangIdentity &&
+        (BuiltinID == Builtin::BI__builtin_ctzll ||
+         BuiltinID == Builtin::BI__builtin_clzll)) {
+      for (FunctionDecl *Redecl : FD->redecls()) {
+        Redecl->dropAttr<BuiltinAttr>();
+        // The user body may have side effects or throw. Do not retain the
+        // optimization promises attached to the original builtin declaration.
+        if (const auto *A = Redecl->getAttr<ConstAttr>(); A && A->isImplicit())
+          Redecl->dropAttr<ConstAttr>();
+        if (const auto *A = Redecl->getAttr<PureAttr>(); A && A->isImplicit())
+          Redecl->dropAttr<PureAttr>();
+        if (const auto *A = Redecl->getAttr<NoThrowAttr>(); A && A->isImplicit())
+          Redecl->dropAttr<NoThrowAttr>();
+      }
+      FD->getIdentifier()->setBuiltinID(0);
+    } else if (!Context.BuiltinInfo.isPredefinedLibFunction(BuiltinID) &&
         !Context.BuiltinInfo.isPredefinedRuntimeFunction(BuiltinID)) {
       Diag(FD->getLocation(), diag::err_builtin_definition) << FD;
       FD->setInvalidDecl();

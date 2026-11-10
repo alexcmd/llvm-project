@@ -2293,11 +2293,16 @@ QualType Sema::BuildArrayType(QualType T, ArraySizeModifier ASM,
 
         // GCC accepts zero sized static arrays. We allow them when
         // we're not in a SFINAE context.
+        // UE-ZERO-LEN-ARRAY-SPEC (r34 class 1): cl forms them in template
+        // argument deduction too (a T[0] partial specialization is selected
+        // for U[0], measured with cl 14.51); so does MSVC compatibility.
+        bool ZeroIsSubstitutionFailure =
+            isSFINAEContext() && !getLangOpts().MSVCCompat;
         Diag(ArraySize->getBeginLoc(),
-             isSFINAEContext() ? diag::err_typecheck_zero_array_size
-                               : diag::ext_typecheck_zero_array_size)
+             ZeroIsSubstitutionFailure ? diag::err_typecheck_zero_array_size
+                                       : diag::ext_typecheck_zero_array_size)
             << 0 << ArraySize->getSourceRange();
-        if (isSFINAEContext())
+        if (ZeroIsSubstitutionFailure)
           return QualType();
       }
 

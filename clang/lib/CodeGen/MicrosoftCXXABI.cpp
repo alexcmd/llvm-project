@@ -1080,7 +1080,9 @@ llvm::Value *MicrosoftCXXABI::emitDynamicCastToVoid(CodeGenFunction &CGF,
       llvm::FunctionType::get(CGF.Int8PtrTy, ArgTypes, false),
       "__RTCastToVoid");
   llvm::Value *Args[] = {Value.emitRawPointer(CGF)};
-  return CGF.EmitRuntimeCall(Function, Args);
+  // Like the other Microsoft RTTI helpers, __RTCastToVoid can throw
+  // std::__non_rtti_object when RTTI is unavailable.
+  return CGF.EmitRuntimeCallOrInvoke(Function, Args);
 }
 
 bool MicrosoftCXXABI::EmitBadCastCall(CodeGenFunction &CGF) {

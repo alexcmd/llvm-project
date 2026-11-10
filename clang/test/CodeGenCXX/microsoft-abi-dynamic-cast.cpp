@@ -1,4 +1,10 @@
 // RUN: %clang_cc1 -emit-llvm -O1 -o - -fexceptions -triple=i386-pc-win32 %s | FileCheck %s
+// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -DTEST_CAST_VOID_EH -fcxx-exceptions -fexceptions \
+// RUN:   -emit-llvm -o - %s | FileCheck %s --check-prefix=EH
+// RUN: %clang_cc1 -triple i686-pc-windows-msvc -DTEST_CAST_VOID_EH -fcxx-exceptions -fexceptions \
+// RUN:   -emit-llvm -o - %s | FileCheck %s --check-prefix=EH
+// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -DTEST_CAST_VOID_EH -DNO_EXCEPTIONS \
+// RUN:   -emit-llvm -o - %s | FileCheck %s --check-prefix=NOEH
 
 struct S { char a; };
 struct V { virtual void f(); };
@@ -119,3 +125,25 @@ S3 *f(S2 &s) {
 // CHECK:    call x86_thiscallcc void @"??1Cleanup@PR25606@@QAE@XZ"(
 // CHECK:    ret ptr [[CALL]]
 }
+
+#ifdef TEST_CAST_VOID_EH
+// __RTCastToVoid can throw __non_rtti_object when RTTI is unavailable.
+#ifndef NO_EXCEPTIONS
+// EH-LABEL: define {{.*}}@"?cast_void@@
+// EH: invoke {{.*}}ptr @__RTCastToVoid(
+void *cast_void(B *p) {
+  try {
+    return dynamic_cast<void *>(p);
+  } catch (...) {
+    return nullptr;
+  }
+}
+#endif
+
+// Outside a try block, including with exceptions disabled, emit a call.
+// EH-LABEL: define {{.*}}@"?cast_void_no_try@@
+// EH: call {{.*}}ptr @__RTCastToVoid(
+// NOEH-LABEL: define {{.*}}@"?cast_void_no_try@@
+// NOEH: call {{.*}}ptr @__RTCastToVoid(
+void *cast_void_no_try(B *p) { return dynamic_cast<void *>(p); }
+#endif

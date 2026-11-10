@@ -966,6 +966,11 @@ documentation](CIR/index.md) for more information regarding ClangIR's status and
   type. (#GH204756)
 
 #### Bug Fixes to C++ Support
+
+- Fixed exception handling for `dynamic_cast<void *>` with the Microsoft
+  C++ ABI so that exceptions from `__RTCastToVoid`, such as
+  `__non_rtti_object`, reach enclosing handlers.
+
 - Clang now recovers from invalid single pointer declarators in structured
   bindings (such as ``auto *[x, y] = s;``) by removing the pointer declarator.
   This allows type deduction to proceed and avoids redundant follow-up

@@ -19462,6 +19462,58 @@ bool RecordExprEvaluator::VisitCXXParenListInitExpr(
   return VisitCXXParenListOrInitListExpr(E, E->getInitExprs());
 }
 
+// MSVC accepts the field-offset idiom used by protobuf even for non-POD
+// records. Recognize only member-address subtraction from the same literal
+// integer pointer base. Do not relax constexpr reinterpret_cast generally:
+// array indexing, pointer arithmetic, reference members, inherited fields,
+// and expressions with runtime effects still use the normal evaluator.
+namespace {
+struct MSFieldOffsetEvaluator {
+  ASTContext &Ctx;
+  const IntegerLiteral *Base = nullptr;
+  uint64_t Offset = 0;
+  bool HasField = false;
+
+  bool pointer(const Expr *E) {
+    E = E->IgnoreParens();
+    if (const auto *C = dyn_cast<CastExpr>(E)) {
+      if (C->getCastKind() == CK_IntegralToPointer) {
+        Base = dyn_cast<IntegerLiteral>(C->getSubExpr()->IgnoreParens());
+        return Base && Base->getValue().getActiveBits() <= 64;
+      }
+      if (C->getCastKind() == CK_BitCast || C->getCastKind() == CK_NoOp)
+        return pointer(C->getSubExpr());
+    }
+    if (const auto *U = dyn_cast<UnaryOperator>(E))
+      if (U->getOpcode() == UO_AddrOf)
+        return object(U->getSubExpr());
+    return false;
+  }
+
+  bool object(const Expr *E) {
+    E = E->IgnoreParens();
+    const auto *M = dyn_cast<MemberExpr>(E);
+    if (!M)
+      return false;
+    const auto *F = dyn_cast<FieldDecl>(M->getMemberDecl());
+    if (!F || F->isBitField() || F->getType()->isReferenceType() ||
+        F->getParent()->isInvalidDecl())
+      return false;
+    QualType BaseTy = M->getBase()->getType();
+    if (M->isArrow())
+      BaseTy = BaseTy->getPointeeType();
+    if (BaseTy->getAsRecordDecl() != F->getParent())
+      return false;
+    uint64_t FieldOffset = Ctx.getFieldOffset(F) / Ctx.getCharWidth();
+    if (Offset > std::numeric_limits<uint64_t>::max() - FieldOffset)
+      return false;
+    Offset += FieldOffset;
+    HasField = true;
+    return M->isArrow() ? pointer(M->getBase()) : object(M->getBase());
+  }
+};
+} // namespace
+
 bool IntExprEvaluator::VisitBinaryOperator(const BinaryOperator *E) {
   // We don't support assignment in C. C++ assignments don't get here because
   // assignment is an lvalue in C++.
@@ -19514,6 +19566,18 @@ bool IntExprEvaluator::VisitBinaryOperator(const BinaryOperator *E) {
 
   if (LHSTy->isPointerType() && RHSTy->isPointerType() &&
       E->getOpcode() == BO_Sub) {
+    if (Info.getLangOpts().CPlusPlus && Info.getLangOpts().MSVCCompat &&
+        LHSTy->getPointeeType()->isCharType() &&
+        RHSTy->getPointeeType()->isCharType()) {
+      MSFieldOffsetEvaluator L{Info.Ctx}, R{Info.Ctx};
+      if (L.pointer(E->getLHS()) && R.pointer(E->getRHS()) &&
+          L.HasField && !R.HasField &&
+          L.Base->getValue().getZExtValue() == R.Base->getValue().getZExtValue()) {
+        APInt Offset(Info.Ctx.getIntWidth(E->getType()), L.Offset);
+        if (!Offset.isNegative() && Offset.getZExtValue() == L.Offset)
+          return Success(APSInt(Offset, false), E);
+      }
+    }
     LValue LHSValue, RHSValue;
 
     bool LHSOK = EvaluatePointer(E->getLHS(), LHSValue, Info);

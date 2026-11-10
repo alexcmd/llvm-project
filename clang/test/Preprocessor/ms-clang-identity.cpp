@@ -5,8 +5,7 @@
 // RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility \
 // RUN:   -std=c++20 -E -dM -fno-ms-clang-identity %s | FileCheck --check-prefix=NOID \
 // RUN:   --implicit-check-not=__clang --implicit-check-not=__llvm__ \
-// RUN:   --implicit-check-not=__VERSION__ --implicit-check-not=__GNUC \
-// RUN:   --implicit-check-not=_IS_ASSIGNABLE_NOCHECK_SUPPORTED %s
+// RUN:   --implicit-check-not=__VERSION__ --implicit-check-not=__GNUC %s
 // RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility \
 // RUN:   -std=c++14 -E -dM -fno-ms-clang-identity %s | FileCheck --check-prefix=NOID14 \
 // RUN:   --implicit-check-not=_BUILTIN_LAUNDER_SUPPORTED \
@@ -20,6 +19,7 @@
 
 // NOID-DAG: #define _BUILTIN_LAUNDER_SUPPORTED 1
 // NOID-DAG: #define _CONSTEXPR_CHAR_TRAITS_SUPPORTED 1
+// NOID-DAG: #define _IS_ASSIGNABLE_NOCHECK_SUPPORTED 1
 // NOID-DAG: #define _NOEXCEPT_TYPES_SUPPORTED 1
 // NOID-DAG: #define _MSC_EXTENSIONS 1
 

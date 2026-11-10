@@ -886,11 +886,10 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
                       "\"" CLANG_VERSION_STRING " "
                       + getClangFullRepositoryVersion() + "\"");
   } else if (LangOpts.MSVCCompat && LangOpts.CPlusPlus) {
-    // CL-IDENTITY: feature macros cl 14.51 predefines (measured with /PD):
-    // the cl branches they open use only builtins clang has.
-    // CLANG-CL-GAP(is-assignable-nocheck): _IS_ASSIGNABLE_NOCHECK_SUPPORTED
-    // stays undefined; the branch it opens needs cl-only traits.
+    // CL-IDENTITY: feature macros cl 14.51 predefines (measured with /PD);
+    // _IS_ASSIGNABLE_NOCHECK_SUPPORTED opens __is_assignable_no_precondition_check.
     Builder.defineMacro("_CONSTEXPR_CHAR_TRAITS_SUPPORTED", "1");
+    Builder.defineMacro("_IS_ASSIGNABLE_NOCHECK_SUPPORTED", "1");
     if (LangOpts.CPlusPlus17) {
       Builder.defineMacro("_BUILTIN_LAUNDER_SUPPORTED", "1");
       Builder.defineMacro("_NOEXCEPT_TYPES_SUPPORTED", "1");

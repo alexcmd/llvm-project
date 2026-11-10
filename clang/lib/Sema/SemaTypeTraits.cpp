@@ -1648,8 +1648,16 @@ static bool EvaluateBinaryTypeTrait(Sema &Self, TypeTrait BTT,
   }
 
   case BTT_IsAssignable:
+  case BTT_IsAssignableNoPreconditionCheck:
   case BTT_IsNothrowAssignable:
   case BTT_IsTriviallyAssignable: {
+    // CL-IDENTITY: no precondition: an incomplete type is not assignable.
+    if (BTT == BTT_IsAssignableNoPreconditionCheck) {
+      for (QualType T : {LhsT, RhsT})
+        if (!T->isVoidType() && !T->isIncompleteArrayType() &&
+            !Self.isCompleteType(KeyLoc, T))
+          return false;
+    }
     // C++11 [meta.unary.prop]p3:
     //   is_trivially_assignable is defined as:
     //     is_assignable<T, U>::value is true and the assignment, as defined by
@@ -1705,7 +1713,7 @@ static bool EvaluateBinaryTypeTrait(Sema &Self, TypeTrait BTT,
     if (SFINAE.hasErrorOccurred())
       return false;
 
-    if (BTT == BTT_IsAssignable)
+    if (BTT == BTT_IsAssignable || BTT == BTT_IsAssignableNoPreconditionCheck)
       return true;
 
     if (BTT == BTT_IsNothrowAssignable)

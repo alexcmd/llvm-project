@@ -272,6 +272,10 @@ Makes programs 10x faster by doing Special New Thing.
 
 ### Changes to Interprocedural Optimizations
 
+- Argument promotion now preserves potentially faulting loads inside SEH
+  and `/EHa` protected call ranges. Loads proven dereferenceable and aligned
+  can still be promoted across these ranges.
+
 - Interprocedural passes no longer rewrite the signature of functions marked
   `optnone`, so their argument list, return type, and calling convention are
   preserved. Interprocedural analysis and transformation of such functions is

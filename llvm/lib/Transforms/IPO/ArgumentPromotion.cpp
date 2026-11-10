@@ -54,6 +54,7 @@
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Dominators.h"
+#include "llvm/IR/EHPersonalities.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/InstrTypes.h"
@@ -519,6 +520,7 @@ static bool isArgUnmodifiedByAllCalls(Argument *Arg,
 /// parts it can be promoted into.
 static bool findArgParts(Argument *Arg, const DataLayout &DL, AAResults &AAR,
                          unsigned MaxElements, bool IsRecursive,
+                         bool HasAsynchEHInvoke,
                          SmallVectorImpl<OffsetAndArgPart> &ArgPartsVec,
                          FunctionAnalysisManager &FAM) {
   // Quick exit for unused arguments
@@ -606,7 +608,9 @@ static bool findArgParts(Argument *Arg, const DataLayout &DL, AAResults &AAR,
     // Note that skipping instructions of previously seen offsets is only
     // correct because we only allow a single type for a given offset, which
     // also means that the number of accessed bytes will be the same.
-    if (!GuaranteedToExecute &&
+    // Even guaranteed-executed loads need to be dereferenceable when promotion
+    // would move them outside an asynchronous EH invoke's protected range.
+    if ((!GuaranteedToExecute || HasAsynchEHInvoke) &&
         (OffsetNotSeenBefore || Part.Alignment < I->getAlign())) {
       // We won't be able to prove dereferenceability for negative offsets.
       if (Off < 0)
@@ -841,6 +845,7 @@ static Function *promoteArguments(Function *F, FunctionAnalysisManager &FAM,
   // Second check: make sure that all callers are direct callers.  We can't
   // transform functions that have indirect callers.  Also see if the function
   // is self-recursive.
+  bool HasAsynchEHInvoke = false;
   for (Use &U : F->uses()) {
     CallBase *CB = dyn_cast<CallBase>(U.getUser());
     // Must be a direct call.
@@ -851,6 +856,12 @@ static Function *promoteArguments(Function *F, FunctionAnalysisManager &FAM,
     // Can't change signature of musttail callee
     if (CB->isMustTailCall())
       return nullptr;
+
+    // Moving a potentially faulting load before an invoke can escape its SEH
+    // or /EHa handler. Plain calls, including those in funclets, do not move
+    // loads across a protected-range boundary.
+    HasAsynchEHInvoke |=
+        isa<InvokeInst>(CB) && !canSimplifyInvokeNoUnwind(CB->getFunction());
 
     if (CB->getFunction() == F)
       IsRecursive = true;
@@ -887,8 +898,8 @@ static Function *promoteArguments(Function *F, FunctionAnalysisManager &FAM,
     // If we can promote the pointer to its value.
     SmallVector<OffsetAndArgPart, 4> ArgParts;
 
-    if (findArgParts(PtrArg, DL, AAR, MaxElements, IsRecursive, ArgParts,
-                     FAM)) {
+    if (findArgParts(PtrArg, DL, AAR, MaxElements, IsRecursive,
+                     HasAsynchEHInvoke, ArgParts, FAM)) {
       SmallVector<Type *, 4> Types;
       for (const auto &Pair : ArgParts)
         Types.push_back(Pair.second.Ty);

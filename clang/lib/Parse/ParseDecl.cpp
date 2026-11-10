@@ -4596,6 +4596,9 @@ void Parser::ParseDeclarationSpecifiers(
     case tok::annot_pragma_ms_vtordisp:
       HandlePragmaMSVtorDisp();
       continue;
+    case tok::annot_pragma_ms_fp_contract:
+      HandlePragmaMSFPContract();
+      continue;
 
     case tok::annot_pragma_ms_pointers_to_members:
       HandlePragmaMSPointersToMembers();

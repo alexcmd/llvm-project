@@ -2403,6 +2403,7 @@ public:
   /// \#pragma {STDC,OPENCL} FP_CONTRACT and
   /// \#pragma clang fp contract
   void ActOnPragmaFPContract(SourceLocation Loc, LangOptions::FPModeKind FPC);
+  void ActOnPragmaMSFPContract(SourceLocation Loc, bool IsEnabled);
 
   /// Called on well formed
   /// \#pragma clang fp reassociate

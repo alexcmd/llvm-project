@@ -3023,7 +3023,7 @@ static void RenderFloatingPointOptions(const ToolChain &TC, const Driver &D,
   bool SeenUnsafeMathModeOption = false;
   if (!JA.isDeviceOffloading(Action::OFK_Cuda) &&
       !JA.isOffloading(Action::OFK_HIP))
-    FPContract = "on";
+    FPContract = D.IsCLMode() ? "off" : "on";
   bool StrictFPModel = false;
   StringRef Float16ExcessPrecision = "";
   StringRef BFloat16ExcessPrecision = "";
@@ -3071,7 +3071,7 @@ static void RenderFloatingPointOptions(const ToolChain &TC, const Driver &D,
       if (LastSeenFfpContractOption != "")
         FPContract = LastSeenFfpContractOption;
       else if (SeenUnsafeMathModeOption)
-        FPContract = "on";
+        FPContract = D.IsCLMode() ? "off" : "on";
     }
     // In this case, we're reverting to the last explicit fp-contract option
     // or the platform default
@@ -3169,7 +3169,7 @@ static void RenderFloatingPointOptions(const ToolChain &TC, const Driver &D,
         LastFpContractOverrideOption = "-ffp-model=aggressive";
       } else if (Val == "precise") {
         FPModel = Val;
-        FPContract = "on";
+        FPContract = D.IsCLMode() ? "off" : "on";
         LastFpContractOverrideOption = "-ffp-model=precise";
         setComplexRange(D, Args.MakeArgString(A->getSpelling() + Val),
                         LangOptions::ComplexRangeKind::CX_Full,

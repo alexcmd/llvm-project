@@ -976,6 +976,9 @@ PRAGMA_ANNOTATION(pragma_redefine_extname)
 // handles them.
 PRAGMA_ANNOTATION(pragma_fp_contract)
 
+// Annotation for Microsoft #pragma fp_contract(on/off).
+PRAGMA_ANNOTATION(pragma_ms_fp_contract)
+
 // Annotations for #pragma STDC FENV_ACCESS and #pragma fenv_access (MS compat)
 // The lexer produces these so that they only take effect when the parser
 // handles them.

@@ -1385,6 +1385,8 @@ def err_pragma_detect_mismatch_malformed : Error<
   "pragma detect_mismatch is malformed; it requires two comma-separated "
   "string literals">;
 // - #pragma float_control
+def err_pragma_ms_fp_contract_malformed : Error<
+  "pragma fp_contract is malformed; use 'fp_contract({on|off})'">;
 def err_pragma_float_control_malformed : Error<
   "pragma float_control is malformed; use 'float_control({push|pop})' or "
   "'float_control({precise|except}, {on|off} [,push])'">;

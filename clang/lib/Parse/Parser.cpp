@@ -764,6 +764,9 @@ Parser::ParseExternalDeclaration(ParsedAttributes &Attrs,
   case tok::annot_pragma_fp_contract:
     HandlePragmaFPContract();
     return nullptr;
+  case tok::annot_pragma_ms_fp_contract:
+    HandlePragmaMSFPContract();
+    return nullptr;
   case tok::annot_pragma_fenv_access:
   case tok::annot_pragma_fenv_access_ms:
     HandlePragmaFEnvAccess();

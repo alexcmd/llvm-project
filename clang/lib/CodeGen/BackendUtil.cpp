@@ -414,7 +414,12 @@ static bool initTargetOptions(const CompilerInstance &CI,
     Options.AllowFPOpFusion = llvm::FPOpFusion::Standard;
     break;
   case LangOptions::FPM_Fast:
-    Options.AllowFPOpFusion = llvm::FPOpFusion::Fast;
+    // Microsoft fp_contract(off) must also disable backend fusion under
+    // /fp:fast. In Microsoft mode use the per-instruction contract flags;
+    // retain the usual -ffp-contract=fast behavior in other language modes.
+    Options.AllowFPOpFusion = LangOpts.MicrosoftExt
+                                 ? llvm::FPOpFusion::Standard
+                                 : llvm::FPOpFusion::Fast;
     break;
   }
 

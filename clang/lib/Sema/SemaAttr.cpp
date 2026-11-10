@@ -723,6 +723,18 @@ void Sema::ActOnPragmaFPEvalMethod(SourceLocation Loc,
   PP.setCurrentFPEvalMethod(Loc, Value);
 }
 
+void Sema::ActOnPragmaMSFPContract(SourceLocation Loc, bool IsEnabled) {
+  if (!CurContext->getRedeclContext()->isFileContext()) {
+    Diag(Loc, diag::warn_pragma_ms_fp_contract_scope);
+    return;
+  }
+  // Unlike STDC FP_CONTRACT ON, the Microsoft pragma also permits fusion
+  // across statements. Use the same stack as float_control so push/pop saves
+  // and restores the contraction setting along with the other FP options.
+  ActOnPragmaFPContract(Loc, IsEnabled ? LangOptions::FPM_Fast
+                                     : LangOptions::FPM_Off);
+}
+
 void Sema::ActOnPragmaFloatControl(SourceLocation Loc,
                                    PragmaMsStackAction Action,
                                    PragmaFloatControlKind Value) {
@@ -739,6 +751,8 @@ void Sema::ActOnPragmaFloatControl(SourceLocation Loc,
     llvm_unreachable("invalid pragma float_control kind");
   case PFC_Precise:
     NewFPFeatures.setFPPreciseEnabled(true);
+    if (getLangOpts().MicrosoftExt)
+      NewFPFeatures.setDisallowFPContract();
     FpPragmaStack.Act(Loc, Action, StringRef(), NewFPFeatures);
     break;
   case PFC_NoPrecise:
@@ -746,8 +760,13 @@ void Sema::ActOnPragmaFloatControl(SourceLocation Loc,
       Diag(Loc, diag::err_pragma_fc_noprecise_requires_noexcept);
     else if (CurFPFeatures.getAllowFEnvAccess())
       Diag(Loc, diag::err_pragma_fc_noprecise_requires_nofenv);
-    else
+    else {
       NewFPFeatures.setFPPreciseEnabled(false);
+      // Disabling precise does not change an explicit Microsoft contraction
+      // setting. Enabling precise, in contrast, disables contraction.
+      if (getLangOpts().MicrosoftExt)
+        NewFPFeatures.setFPContractModeOverride(CurFPFeatures.getFPContractMode());
+    }
     FpPragmaStack.Act(Loc, Action, StringRef(), NewFPFeatures);
     break;
   case PFC_Except:

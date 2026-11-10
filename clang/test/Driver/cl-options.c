@@ -58,6 +58,7 @@
 // RUN:   FileCheck -check-prefix=fpprecise %s
 // fpprecise-NOT: -funsafe-math-optimizations
 // fpprecise-NOT: -ffast-math
+// fpprecise: -ffp-contract=off
 
 // RUN: %clang_cl /fp:fast /fp:strict -Wno-overriding-complex-range -### -- %s 2>&1 | \
 // RUN:   FileCheck -check-prefix=fpstrict %s

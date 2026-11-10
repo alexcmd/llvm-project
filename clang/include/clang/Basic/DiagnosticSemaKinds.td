@@ -1199,6 +1199,10 @@ def warn_pragma_pop_failed : Warning<"#pragma %0(pop, ...) failed: %1">,
 def err_pragma_fc_pp_scope : Error<
   "'#pragma float_control push/pop' can only appear at file or namespace scope "
   "or within a language linkage specification">;
+
+def warn_pragma_ms_fp_contract_scope : Warning<
+  "'#pragma fp_contract' can only appear at file or namespace scope "
+  "or within a language linkage specification">, InGroup<IgnoredPragmas>;
 def err_pragma_fc_noprecise_requires_nofenv : Error<
   "'#pragma float_control(precise, off)' is illegal when fenv_access is enabled">;
 def err_pragma_fc_except_requires_precise : Error<

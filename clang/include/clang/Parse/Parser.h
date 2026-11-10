@@ -7106,6 +7106,7 @@ private:
   std::unique_ptr<PragmaHandler> WeakHandler;
   std::unique_ptr<PragmaHandler> RedefineExtnameHandler;
   std::unique_ptr<PragmaHandler> FPContractHandler;
+  std::unique_ptr<PragmaHandler> MSFPContractHandler;
   std::unique_ptr<PragmaHandler> OpenCLExtensionHandler;
   std::unique_ptr<PragmaHandler> OpenMPHandler;
   std::unique_ptr<PragmaHandler> OpenACCHandler;
@@ -7227,6 +7228,7 @@ private:
   /// Handle the annotation token produced for
   /// #pragma STDC FP_CONTRACT...
   void HandlePragmaFPContract();
+  void HandlePragmaMSFPContract();
 
   /// Handle the annotation token produced for
   /// #pragma STDC FENV_ACCESS...

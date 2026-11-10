@@ -257,6 +257,12 @@ struct PragmaFloatControlHandler : public PragmaHandler {
                     Token &FirstToken) override;
 };
 
+struct PragmaMSFPContractHandler : public PragmaHandler {
+  PragmaMSFPContractHandler() : PragmaHandler("fp_contract") {}
+  void HandlePragma(Preprocessor &PP, PragmaIntroducer Introducer,
+                    Token &FirstToken) override;
+};
+
 struct PragmaMSPointersToMembers : public PragmaHandler {
   explicit PragmaMSPointersToMembers() : PragmaHandler("pointers_to_members") {}
   void HandlePragma(Preprocessor &PP, PragmaIntroducer Introducer,
@@ -490,6 +496,8 @@ void Parser::initializePragmaHandlers() {
   FloatControlHandler = std::make_unique<PragmaFloatControlHandler>(Actions);
   PP.AddPragmaHandler(FloatControlHandler.get());
   if (getLangOpts().MicrosoftExt) {
+    MSFPContractHandler = std::make_unique<PragmaMSFPContractHandler>();
+    PP.AddPragmaHandler(MSFPContractHandler.get());
     MSDetectMismatchHandler =
         std::make_unique<PragmaDetectMismatchHandler>(Actions);
     PP.AddPragmaHandler(MSDetectMismatchHandler.get());
@@ -621,6 +629,8 @@ void Parser::resetPragmaHandlers() {
   PP.RemovePragmaHandler(FloatControlHandler.get());
   FloatControlHandler.reset();
   if (getLangOpts().MicrosoftExt) {
+    PP.RemovePragmaHandler(MSFPContractHandler.get());
+    MSFPContractHandler.reset();
     PP.RemovePragmaHandler(MSDetectMismatchHandler.get());
     MSDetectMismatchHandler.reset();
     PP.RemovePragmaHandler(MSPointersToMembers.get());
@@ -866,6 +876,13 @@ void Parser::HandlePragmaFPContract() {
 
   SourceLocation PragmaLoc = ConsumeAnnotationToken();
   Actions.ActOnPragmaFPContract(PragmaLoc, FPC);
+}
+
+void Parser::HandlePragmaMSFPContract() {
+  assert(Tok.is(tok::annot_pragma_ms_fp_contract));
+  bool IsEnabled = reinterpret_cast<uintptr_t>(Tok.getAnnotationValue());
+  SourceLocation Loc = ConsumeAnnotationToken();
+  Actions.ActOnPragmaMSFPContract(Loc, IsEnabled);
 }
 
 void Parser::HandlePragmaFloatControl() {
@@ -3078,6 +3095,45 @@ void PragmaMSPragma::HandlePragma(Preprocessor &PP,
                                                   TokenVector.size());
   AnnotTok.setAnnotationValue(Value);
   PP.EnterToken(AnnotTok, /*IsReinject*/ false);
+}
+
+void PragmaMSFPContractHandler::HandlePragma(Preprocessor &PP,
+                                            PragmaIntroducer Introducer,
+                                            Token &Tok) {
+  SourceLocation Loc = Tok.getLocation();
+  PP.Lex(Tok);
+  if (Tok.isNot(tok::l_paren)) {
+    PP.Diag(Tok.getLocation(), diag::err_expected) << tok::l_paren;
+    return;
+  }
+  PP.Lex(Tok);
+  if (!Tok.isAnyIdentifier() ||
+      (Tok.getIdentifierInfo()->getName() != "on" &&
+       Tok.getIdentifierInfo()->getName() != "off")) {
+    PP.Diag(Tok.getLocation(), diag::err_pragma_ms_fp_contract_malformed);
+    return;
+  }
+  bool IsEnabled = Tok.getIdentifierInfo()->getName() == "on";
+  PP.Lex(Tok);
+  if (Tok.isNot(tok::r_paren)) {
+    PP.Diag(Tok.getLocation(), diag::err_expected) << tok::r_paren;
+    return;
+  }
+  PP.Lex(Tok);
+  if (Tok.isNot(tok::eod)) {
+    PP.Diag(Tok.getLocation(), diag::warn_pragma_extra_tokens_at_eol)
+        << "fp_contract";
+    return;
+  }
+  auto Tokens = std::make_unique<Token[]>(1);
+  Tokens[0].startToken();
+  Tokens[0].setKind(tok::annot_pragma_ms_fp_contract);
+  Tokens[0].setLocation(Loc);
+  Tokens[0].setAnnotationEndLoc(Tok.getLocation());
+  Tokens[0].setAnnotationValue(
+      reinterpret_cast<void *>(static_cast<uintptr_t>(IsEnabled)));
+  PP.EnterTokenStream(std::move(Tokens), 1, /*DisableMacroExpansion=*/false,
+                      /*IsReinject=*/false);
 }
 
 /// Handle the \#pragma float_control extension.

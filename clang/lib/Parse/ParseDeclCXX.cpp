@@ -1470,6 +1470,8 @@ bool Parser::isValidAfterTypeSpecifier(bool CouldBeBitfield) {
   case tok::annot_pragma_pack: // struct foo {...} _Pragma(pack(pop));
   // struct foo {...} _Pragma(section(...));
   case tok::annot_pragma_ms_pragma:
+  // struct foo {...} _Pragma(fp_contract(off));
+  case tok::annot_pragma_ms_fp_contract:
   // struct foo {...} _Pragma(vtordisp(pop));
   case tok::annot_pragma_ms_vtordisp:
   // struct foo {...} _Pragma(pointers_to_members(...));
@@ -3416,6 +3418,9 @@ Parser::DeclGroupPtrTy Parser::ParseCXXClassMemberDeclarationWithPragmas(
     return nullptr;
   case tok::annot_pragma_ms_vtordisp:
     HandlePragmaMSVtorDisp();
+    return nullptr;
+  case tok::annot_pragma_ms_fp_contract:
+    HandlePragmaMSFPContract();
     return nullptr;
   case tok::annot_pragma_export:
     HandlePragmaExport();

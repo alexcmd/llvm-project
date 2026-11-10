@@ -515,6 +515,12 @@ Retry:
     HandlePragmaMSVtorDisp();
     return StmtEmpty();
 
+  case tok::annot_pragma_ms_fp_contract:
+    ProhibitAttributes(CXX11Attrs);
+    ProhibitAttributes(GNUAttrs);
+    HandlePragmaMSFPContract();
+    return StmtEmpty();
+
   case tok::annot_pragma_loop_hint:
     ProhibitAttributes(CXX11Attrs);
     ProhibitAttributes(GNUAttrs);
@@ -1045,6 +1051,9 @@ void Parser::ParseCompoundStatementLeadingPragmas() {
       break;
     case tok::annot_pragma_fp_contract:
       HandlePragmaFPContract();
+      break;
+    case tok::annot_pragma_ms_fp_contract:
+      HandlePragmaMSFPContract();
       break;
     case tok::annot_pragma_fp:
       HandlePragmaFP();

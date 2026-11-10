@@ -3258,6 +3258,26 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
   }
   case Builtin::BI__builtin_launder:
     return BuiltinLaunder(*this, TheCall);
+  case Builtin::BI__builtin_u8strlen: {
+    if (checkArgCount(TheCall, 1))
+      return ExprError();
+    ExprResult Arg = DefaultFunctionArrayLvalueConversion(TheCall->getArg(0));
+    if (Arg.isInvalid())
+      return ExprError();
+    QualType Ty = Arg.get()->getType();
+    if (!Ty->isPointerType() ||
+        !Ty->getPointeeType()->isSpecificBuiltinType(BuiltinType::Char8) ||
+        Ty->getPointeeType().isVolatileQualified()) {
+      Diag(Arg.get()->getBeginLoc(), diag::err_typecheck_convert_incompatible)
+          << Ty << Context.getPointerType(Context.Char8Ty.withConst())
+          << 1 << 0 << 3 << 1 << Ty
+          << Context.getPointerType(Context.Char8Ty.withConst());
+      return ExprError();
+    }
+    TheCall->setArg(0, Arg.get());
+    TheCall->setType(Context.getSizeType());
+    break;
+  }
   case Builtin::BI__builtin_is_within_lifetime:
     return BuiltinIsWithinLifetime(*this, TheCall);
   case Builtin::BI__builtin_ms_is_pointer_interconvertible_with_class:

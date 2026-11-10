@@ -5474,6 +5474,12 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
 
     return RValue::get(Ptr);
   }
+  case Builtin::BI__builtin_u8strlen: {
+    llvm::FunctionType *FT = llvm::FunctionType::get(SizeTy, {VoidPtrTy}, false);
+    llvm::FunctionCallee Fn = CGM.CreateRuntimeFunction(FT, "strlen");
+    return RValue::get(EmitNounwindRuntimeCall(
+        Fn, {EmitScalarExpr(E->getArg(0))}, "u8len"));
+  }
   case Builtin::BI__builtin_ms_is_pointer_interconvertible_with_class:
   case Builtin::BI__builtin_ms_is_corresponding_member:
     // CL-IDENTITY: folded above when the member pointers are constants; cl

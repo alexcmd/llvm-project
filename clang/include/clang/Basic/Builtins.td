@@ -1266,6 +1266,13 @@ def MSZeroNonValueBits : MSLangBuiltin {
   let Prototype = "void(void*)";
 }
 
+// cl's char8_t strlen, used by the MSVC branch of char_traits<char8_t>.
+def MSU8StrLen : MSLangBuiltin {
+  let Spellings = ["__builtin_u8strlen"];
+  let Attributes = [NoThrow, CustomTypeChecking, Constexpr];
+  let Prototype = "size_t(...)";
+}
+
 def GetVtablePointer : LangBuiltin<"CXX_LANG"> {
   let Spellings = ["__builtin_get_vtable_pointer"];
   let Attributes = [CustomTypeChecking, NoThrow, Const];

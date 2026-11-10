@@ -17798,6 +17798,7 @@ bool IntExprEvaluator::VisitBuiltinCallExpr(const CallExpr *E,
       Info.CCEDiag(E, diag::note_invalid_subexpr_in_const_expr);
     [[fallthrough]];
   case Builtin::BI__builtin_strlen:
+  case Builtin::BI__builtin_u8strlen:
   case Builtin::BI__builtin_wcslen: {
     // As an extension, we support __builtin_strlen() as a constant expression,
     // and support folding strlen() to a constant.

@@ -1317,7 +1317,11 @@ void Sema::ActOnPragmaOptimize(bool On, SourceLocation PragmaLoc) {
 }
 
 void Sema::ActOnPragmaMSOptimize(SourceLocation Loc, bool IsOn) {
-  if (!CurContext->getRedeclContext()->isFileContext()) {
+  // UE-PRAGMA-OPTIMIZE-CLASS (r34 class 5): cl 14.51 takes it in a class body
+  // too, silently, as a change of the state at that point (measured, /FA).
+  bool MSInClass = getLangOpts().MSVCCompat &&
+                   CurContext->getRedeclContext()->isRecord();
+  if (!CurContext->getRedeclContext()->isFileContext() && !MSInClass) {
     Diag(Loc, diag::err_pragma_expected_file_scope) << "optimize";
     return;
   }
@@ -1361,6 +1365,12 @@ void Sema::AddSectionMSAllocText(FunctionDecl *FD) {
 void Sema::ModifyFnAttributesMSPragmaOptimize(FunctionDecl *FD) {
   // Don't modify the function attributes if it's "on". "on" resets the
   // optimizations to the ones listed on the command line
+  // UE-PRAGMA-OPTIMIZE-CLASS: cl compiles a member function defined in its
+  // class with the state at the end of the outermost class (its body is
+  // parsed there), not at its declaration (measured, /FA).
+  if (getLangOpts().MSVCCompat && isa<CXXMethodDecl>(FD) &&
+      FD->getLexicalDeclContext()->isRecord())
+    return;
   if (!MSPragmaOptimizeIsOn)
     AddOptnoneAttributeIfNoConflicts(FD, FD->getBeginLoc());
 }

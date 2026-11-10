@@ -16396,6 +16396,12 @@ Decl *Sema::ActOnStartOfFunctionDef(Scope *FnBodyScope, Decl *D,
   else
     FD = cast<FunctionDecl>(D);
 
+  // UE-PRAGMA-OPTIMIZE-CLASS: a member function defined in its class takes
+  // the #pragma optimize state at its (late-parsed) body, as cl.
+  if (getLangOpts().MSVCCompat && !MSPragmaOptimizeIsOn &&
+      isa<CXXMethodDecl>(FD) && FD->getLexicalDeclContext()->isRecord())
+    AddOptnoneAttributeIfNoConflicts(FD, FD->getBeginLoc());
+
   // Do not push if it is a lambda because one is already pushed when building
   // the lambda in ActOnStartOfLambdaDefinition().
   if (!isLambdaCallOperator(FD))

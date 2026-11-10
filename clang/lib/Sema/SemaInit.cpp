@@ -2019,6 +2019,41 @@ void InitListChecker::CheckVectorType(const InitializedEntity &Entity,
   }
 
   if (!SemaRef.getLangOpts().OpenCL && !SemaRef.getLangOpts().HLSL ) {
+    // MS SIMD types are unions containing an array. A second brace level
+    // initializes that array; preserve the ordinary GNU vector rules for
+    // other types and for the clang personality.
+    if (SemaRef.getLangOpts().MSVCCompat &&
+        !SemaRef.PP.getPreprocessorOpts().MSClangIdentity) {
+      bool MSSimd = false;
+      for (QualType Cur = DeclType;;) {
+        const auto *TT = Cur->getAs<TypedefType>();
+        if (!TT)
+          break;
+        StringRef N = TT->getDecl()->getName();
+        if (N == "__m64" || N == "__m128" || N == "__m128d" ||
+            N == "__m128i" || N == "__m256" || N == "__m256d" ||
+            N == "__m256i" || N == "__m512" || N == "__m512d" ||
+            N == "__m512i") {
+          MSSimd = true;
+          break;
+        }
+        Cur = TT->getDecl()->getUnderlyingType();
+      }
+      if (MSSimd)
+        if (auto *Inner = dyn_cast<InitListExpr>(IList->getInit(Index))) {
+          ++Index;
+          unsigned InnerIndex = 0;
+          CheckVectorType(Entity, Inner, DeclType, InnerIndex, StructuredList,
+                          StructuredIndex);
+          if (InnerIndex < Inner->getNumInits()) {
+            if (!VerifyOnly)
+              SemaRef.Diag(Inner->getInit(InnerIndex)->getBeginLoc(),
+                           diag::err_excess_initializers) << 4;
+            hadError = true;
+          }
+          return;
+        }
+    }
     // If the initializing element is a vector, try to copy-initialize
     // instead of breaking it apart (which is doomed to failure anyway).
     Expr *Init = IList->getInit(Index);

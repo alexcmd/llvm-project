@@ -47,6 +47,7 @@ clang::diagGroupFromCLWarningID(unsigned CLWarningID) {
   case 4702: return diag::Group::UnreachableCodeReturn;
   case 4706: return diag::Group::Parentheses;
   case 4715: return diag::Group::ReturnType;
+  case 4717: return diag::Group::InfiniteRecursion;
   case 4724: return diag::Group::DivZero;
   case 4910: return diag::Group::DllexportExplicitInstantiationDecl;
   case 4996: return diag::Group::DeprecatedDeclarations;

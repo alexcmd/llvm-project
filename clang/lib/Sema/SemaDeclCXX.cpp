@@ -681,6 +681,25 @@ bool Sema::MergeCXXFunctionDecl(FunctionDecl *New, FunctionDecl *Old,
   bool MSConstexprBuiltinRedecl =
       getLangOpts().MSVCCompat && Old->isImplicit() && Old->getBuiltinID() &&
       New->isConstexpr() && !New->doesThisDeclarationHaveABody();
+  // UE-INTRIN-CONSTEXPR-REDECL (r34 class 2): an intrinsic is one function to
+  // cl however a header declares it; the 14.50 <complex> declares
+  // _mm_fmsub_sd extern "C", clang's <fmaintrin.h> defines it constexpr.
+  // Either order is accepted between a plain declaration and the always_inline
+  // definition of a system (intrinsic) header.
+  auto IsHeaderIntrinsic = [&](const FunctionDecl *F) {
+    const IdentifierInfo *II = F->getIdentifier();
+    return II && (II->getName().starts_with("_mm_") ||
+                  II->getName().starts_with("_mm256_") ||
+                  II->getName().starts_with("_mm512_")) &&
+           (F->doesThisDeclarationHaveABody() || F->isInlineSpecified()) &&
+           F->hasAttr<TargetAttr>() &&
+           F->hasAttr<AlwaysInlineAttr>() &&
+           SourceMgr.isInSystemHeader(F->getLocation());
+  };
+  if (getLangOpts().MSVCCompat &&
+      ((IsHeaderIntrinsic(Old) && !New->doesThisDeclarationHaveABody()) ||
+       (IsHeaderIntrinsic(New) && !Old->isDefined())))
+    MSConstexprBuiltinRedecl = true;
   if (New->getConstexprKind() != Old->getConstexprKind() &&
       !MSConstexprBuiltinRedecl) {
     Diag(New->getLocation(), diag::err_constexpr_redecl_mismatch)

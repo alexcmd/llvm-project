@@ -3638,8 +3638,8 @@ static void ConvertUTF8ToWideString(unsigned CharByteWidth, StringRef Source,
 // 64-bit hex ("0x5", "0xfffffffffffffffd"), enumerators by name, bool as
 // true/false, pointers as "&g". Code parses it (UE's generated type names
 // take the text between the first '<' and the last '>'). Without the clang
-// identity macros MSVC compatibility writes it that way; other cases
-// (lambdas, non-functions) keep clang's form.
+// identity macros MSVC compatibility writes it that way (" noexcept", then
+// " const"/" volatile"/" &"); non-functions keep clang's form.
 static std::string msPrintTypeCL(const ASTContext &Ctx, QualType T,
                                  const PrintingPolicy &P, bool TemplateArg) {
   // cl: a member pointer argument reads "intN::S::* ".
@@ -3720,13 +3720,79 @@ static void msPrintTemplateArgsCL(raw_ostream &OS, const ASTContext &Ctx,
   OS << '>';
 }
 
+// cl's name of a lambda's scope: "<function>::<lambda_N>" (N counts the
+// lambdas of that function from 1; the function without template arguments),
+// "<outer lambda scope>::()::<lambda_N>" inside another lambda, or
+// "<lambda>@<variable>" at namespace scope (measured, cl 14.51).
+static void msPrintLambdaScopeCL(raw_ostream &OS, const CXXRecordDecl *L) {
+  const DeclContext *DC = L->getDeclContext();
+  if (const auto *F = dyn_cast<FunctionDecl>(DC)) {
+    const auto *MD = dyn_cast<CXXMethodDecl>(F);
+    if (MD && MD->getParent()->isLambda()) {
+      msPrintLambdaScopeCL(OS, MD->getParent());
+      OS << "::()";
+    } else {
+      SmallVector<const DeclContext *, 8> Scopes;
+      for (const DeclContext *P = F->getDeclContext();
+           P && !P->isTranslationUnit(); P = P->getParent())
+        if (isa<NamespaceDecl, RecordDecl>(P) &&
+            !(isa<NamespaceDecl>(P) && cast<NamespaceDecl>(P)->isInline()))
+          Scopes.push_back(P);
+      for (const DeclContext *P : llvm::reverse(Scopes))
+        OS << cast<NamedDecl>(P)->getName() << "::";
+      OS << F->getDeclName().getAsString();
+    }
+    unsigned N = 1;
+    for (const Decl *D : DC->decls()) {
+      if (D == L)
+        break;
+      if (const auto *RD = dyn_cast<CXXRecordDecl>(D); RD && RD->isLambda())
+        ++N;
+    }
+    OS << "::<lambda_" << N << '>';
+    return;
+  }
+  // The variable whose initializer holds it: the last one declared before it.
+  const VarDecl *Var = dyn_cast_or_null<VarDecl>(L->getLambdaContextDecl());
+  if (!Var)
+    for (const Decl *D : DC->decls()) {
+      if (D == L)
+        break;
+      if (const auto *VD = dyn_cast<VarDecl>(D))
+        Var = VD;
+    }
+  OS << "<lambda>";
+  if (Var)
+    OS << '@' << Var->getName();
+}
+
+static void msPrintFunctionQualsCL(raw_ostream &OS, const FunctionDecl *FD) {
+  const auto *FPT = FD->getType()->getAs<FunctionProtoType>();
+  if (FPT && FPT->isNothrow())
+    OS << " noexcept";
+  if (const auto *MD = dyn_cast<CXXMethodDecl>(FD)) {
+    if (MD->isConst())
+      OS << " const";
+    if (MD->isVolatile())
+      OS << " volatile";
+    if (MD->getRefQualifier() == RQ_LValue)
+      OS << " &";
+    else if (MD->getRefQualifier() == RQ_RValue)
+      OS << " &&";
+  }
+}
+
 static std::string msFuncSigCL(const ASTContext &Ctx, const Decl *D) {
   const auto *FD = dyn_cast<FunctionDecl>(D);
   if (!FD)
     return {};
+  const CXXRecordDecl *Lambda = nullptr;
   if (const auto *MD = dyn_cast<CXXMethodDecl>(FD))
-    if (MD->getParent()->isLambda())
-      return {};
+    if (MD->getParent()->isLambda()) {
+      if (MD->getOverloadedOperator() != OO_Call)
+        return {};
+      Lambda = MD->getParent();
+    }
   PrintingPolicy P(Ctx.getLangOpts());
   P.SuppressTagKeyword = false;
   P.MSVCFormatting = true;
@@ -3737,6 +3803,32 @@ static std::string msFuncSigCL(const ASTContext &Ctx, const Decl *D) {
 
   std::string Out;
   llvm::raw_string_ostream OS(Out);
+  if (Lambda) {
+    // "auto __cdecl f::<lambda_1>::operator ()(int) const" (a deduced
+    // return type reads "auto").
+    if (FD->getDeclaredReturnType()->getContainedAutoType())
+      OS << "auto ";
+    else {
+      std::string R = msPrintTypeCL(Ctx, FD->getReturnType(), P, false);
+      OS << R;
+      if (!R.empty() && R.back() != '*' && R.back() != '&')
+        OS << ' ';
+    }
+    OS << "__cdecl ";
+    msPrintLambdaScopeCL(OS, Lambda);
+    OS << "::operator ()";
+    if (const TemplateArgumentList *TA = FD->getTemplateSpecializationArgs())
+      msPrintTemplateArgsCL(OS, Ctx, TA->asArray(), P);
+    OS << '(';
+    if (FD->getNumParams() == 0)
+      OS << "void";
+    for (unsigned I = 0, N = FD->getNumParams(); I != N; ++I)
+      OS << (I ? "," : "")
+         << msPrintTypeCL(Ctx, FD->getParamDecl(I)->getType(), P, false);
+    OS << ')';
+    msPrintFunctionQualsCL(OS, FD);
+    return Out;
+  }
   if (!isa<CXXConstructorDecl, CXXDestructorDecl>(FD)) {
     std::string R = msPrintTypeCL(Ctx, FD->getReturnType(), P, false);
     OS << R;
@@ -3782,12 +3874,7 @@ static std::string msFuncSigCL(const ASTContext &Ctx, const Decl *D) {
   if (FD->isVariadic())
     OS << (FD->getNumParams() ? ",..." : "...");
   OS << ')';
-  if (const auto *MD = dyn_cast<CXXMethodDecl>(FD)) {
-    if (MD->isConst())
-      OS << " const";
-    if (MD->isVolatile())
-      OS << " volatile";
-  }
+  msPrintFunctionQualsCL(OS, FD);
   return Out;
 }
 

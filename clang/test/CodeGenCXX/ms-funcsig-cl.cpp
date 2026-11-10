@@ -32,6 +32,33 @@ const char *plain(int, const char *, double &) { return __FUNCSIG__; }
 // CHECK-DAG: c"const char *__cdecl plain(int,const char *,double &)\00"
 // CHECK-DAG: c"const char *__cdecl G<>(void)\00"
 // ID-DAG: c"const char *__cdecl G(void) [T = <N::S, N::C, N::U, N::E, N::EC>]\00"
+
+// noexcept, then const/volatile/ref-qualifier; lambdas (measured, cl 14.51).
+const char *nx() noexcept { return __FUNCSIG__; }
+struct Q {
+  const char *b() const noexcept { return __FUNCSIG__; }
+  const char *c() volatile { return __FUNCSIG__; }
+  const char *d() & { return __FUNCSIG__; }
+  const char *m2() { auto a = [] { return 1; }; auto l = [this](int) -> const char * { return __FUNCSIG__; }; (void)a; return l(1); }
+};
+const char *f2() { auto a = [] { return __FUNCSIG__; }; auto b = [](int, double &) { return __FUNCSIG__; }; double d; a(); return b(1, d); }
+const char *g1() { auto l = [](auto) { return __FUNCSIG__; }; return l(3); }
+const char *n1() { auto o = [] { auto in = [] { return __FUNCSIG__; }; return in(); }; return o(); }
+auto gl = [] { return __FUNCSIG__; };
+const char *mn() { auto l = []() noexcept { return __FUNCSIG__; }; auto m = [](int) mutable { return __FUNCSIG__; }; l(); return m(1); }
+// CHECK-DAG: c"const char *__cdecl nx(void) noexcept\00"
+// CHECK-DAG: c"const char *__cdecl Q::b(void) noexcept const\00"
+// CHECK-DAG: c"const char *__cdecl Q::c(void) volatile\00"
+// CHECK-DAG: c"const char *__cdecl Q::d(void) &\00"
+// CHECK-DAG: c"const char *__cdecl Q::m2::<lambda_2>::operator ()(int) const\00"
+// CHECK-DAG: c"auto __cdecl f2::<lambda_1>::operator ()(void) const\00"
+// CHECK-DAG: c"auto __cdecl f2::<lambda_2>::operator ()(int,double &) const\00"
+// CHECK-DAG: c"auto __cdecl g1::<lambda_1>::operator ()<int>(int) const\00"
+// CHECK-DAG: c"auto __cdecl n1::<lambda_1>::()::<lambda_1>::operator ()(void) const\00"
+// CHECK-DAG: c"auto __cdecl <lambda>@gl::operator ()(void) const\00"
+// CHECK-DAG: c"auto __cdecl mn::<lambda_1>::operator ()(void) noexcept const\00"
+// CHECK-DAG: c"auto __cdecl mn::<lambda_2>::operator ()(int)\00"
+void use2() { Q q; q.b(); q.c(); q.d(); q.m2(); nx(); f2(); g1(); n1(); gl(); mn(); }
 void use() {
   int i = 0; double d = 0;
   G<N::S, N::C, N::U, N::E, N::EC>();

@@ -966,6 +966,12 @@ documentation](CIR/index.md) for more information regarding ClangIR's status and
   type. (#GH204756)
 
 #### Bug Fixes to C++ Support
+
+- Fixed initialization order for non-COMDAT globals using
+  `#pragma init_seg(compiler)` or `#pragma init_seg(lib)`. Their initializers
+  now share a CRT section and retain declaration order within a translation
+  unit, including when internal and external variables are interleaved.
+
 - Clang now recovers from invalid single pointer declarators in structured
   bindings (such as ``auto *[x, y] = s;``) by removing the pointer declarator.
   This allows type deduction to proceed and avoids redundant follow-up

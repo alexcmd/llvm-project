@@ -57,7 +57,7 @@ int g() { return A<int>::x; }
 
 // ... and here's where we emitted user level ctors.
 // CHECK: @llvm.global_ctors = appending global [3 x { i32, ptr, ptr }]
-// CHECK: [{ i32, ptr, ptr } { i32 200, ptr @"??__Ex@simple_init@@YAXXZ", ptr @"?x@simple_init@@3HA" }, { i32, ptr, ptr } { i32 400, ptr @"??__Ey@simple_init@@YAXXZ", ptr @"?y@simple_init@@3HA" }, { i32, ptr, ptr } { i32 65535, ptr @_GLOBAL__sub_I_pragma_init_seg.cpp, ptr null }]
+// CHECK: [{ i32, ptr, ptr } { i32 200, ptr @"??__Ex@simple_init@@YAXXZ", ptr null }, { i32, ptr, ptr } { i32 400, ptr @"??__Ey@simple_init@@YAXXZ", ptr null }, { i32, ptr, ptr } { i32 65535, ptr @_GLOBAL__sub_I_pragma_init_seg.cpp, ptr null }]
 
 // We have to mark everything used so we can survive globalopt, even through
 // LTO.  There's no way LLVM could really understand if data in the .asdf

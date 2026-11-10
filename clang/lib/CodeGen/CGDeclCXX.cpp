@@ -586,10 +586,16 @@ CodeGenModule::EmitCXXGlobalVarDeclInitFunc(const VarDecl *D,
     else if (ISA->getSection() == ".CRT$XCL")
       Priority = 400;
 
-    if (Priority != -1)
-      AddGlobalCtor(Fn, Priority, ~0U, COMDATKey);
-    else
+    if (Priority != -1) {
+      // Keep non-COMDAT initializers in one CRT section to preserve
+      // declaration order within the translation unit. COMDAT variables
+      // retain their key for duplicate elimination.
+      llvm::GlobalVariable *Key =
+          COMDATKey && COMDATKey->hasComdat() ? COMDATKey : nullptr;
+      AddGlobalCtor(Fn, Priority, ~0U, Key);
+    } else {
       EmitPointerToInitFunc(D, Addr, Fn, ISA);
+    }
   } else if (auto *IPA = D->getAttr<InitPriorityAttr>()) {
     OrderGlobalInitsOrStermFinalizers Key(IPA->getPriority(),
                                           PrioritizedCXXGlobalInits.size());

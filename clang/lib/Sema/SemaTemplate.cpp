@@ -46,6 +46,24 @@
 
 #include <optional>
 using namespace clang;
+
+// UE-STATIC-MEMBER-SPEC (r34 class 4): cl 14.51 accepts an explicit
+// specialization of a static data member after a use when the class template
+// has no definition of that member (the use needed only its declaration);
+// with a definition it reports C2908, as clang does.
+static bool msStaticMemberOnlyDeclared(const Sema &S, const NamedDecl *D) {
+  const auto *VD = dyn_cast<VarDecl>(D);
+  if (!S.getLangOpts().MSVCCompat || !VD || !VD->isStaticDataMember())
+    return false;
+  const VarDecl *Pattern = VD->getInstantiatedFromStaticDataMember();
+  return Pattern && !Pattern->getDefinition() && !VD->getDefinition();
+}
+
+// UE-NO-SPECIALIZATIONS: cl warns (C5278, level 1); clang errors by default.
+static unsigned invalidSpecializationDiag(const Sema &S) {
+  return S.getLangOpts().MSVCCompat ? diag::warn_ms_invalid_specialization
+                                    : diag::warn_invalid_specialization;
+}
 using namespace sema;
 
 // Exported for use by Parser.
@@ -4420,7 +4438,7 @@ DeclResult Sema::ActOnVarTemplateSpecialization(
 
   if (const auto *DSA = VarTemplate->getAttr<NoSpecializationsAttr>()) {
     auto Message = DSA->getMessage();
-    Diag(TemplateNameLoc, diag::warn_invalid_specialization)
+    Diag(TemplateNameLoc, invalidSpecializationDiag(*this))
         << VarTemplate << !Message.empty() << Message;
     Diag(DSA->getLoc(), diag::note_marked_here) << DSA;
   }
@@ -8810,7 +8828,7 @@ DeclResult Sema::ActOnClassTemplateSpecialization(
 
   if (const auto *DSA = ClassTemplate->getAttr<NoSpecializationsAttr>()) {
     auto Message = DSA->getMessage();
-    Diag(TemplateNameLoc, diag::warn_invalid_specialization)
+    Diag(TemplateNameLoc, invalidSpecializationDiag(*this))
         << ClassTemplate << !Message.empty() << Message;
     Diag(DSA->getLoc(), diag::note_marked_here) << DSA;
   }
@@ -9426,7 +9444,8 @@ Sema::CheckSpecializationInstantiationRedecl(SourceLocation NewLoc,
       return false;
 
     case TSK_ImplicitInstantiation:
-      if (PrevPointOfInstantiation.isInvalid()) {
+      if (PrevPointOfInstantiation.isInvalid() ||
+          msStaticMemberOnlyDeclared(*this, PrevDecl)) {
         // The declaration itself has not actually been instantiated, so it is
         // still okay to specialize it.
         StripImplicitInstantiation(
@@ -9734,7 +9753,7 @@ bool Sema::CheckFunctionTemplateSpecialization(
   if (const auto *PT = Specialization->getPrimaryTemplate();
       const auto *DSA = PT->getAttr<NoSpecializationsAttr>()) {
     auto Message = DSA->getMessage();
-    Diag(FD->getLocation(), diag::warn_invalid_specialization)
+    Diag(FD->getLocation(), invalidSpecializationDiag(*this))
         << PT << !Message.empty() << Message;
     Diag(DSA->getLoc(), diag::note_marked_here) << DSA;
   }

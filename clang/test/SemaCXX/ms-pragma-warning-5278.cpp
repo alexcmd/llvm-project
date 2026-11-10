@@ -11,5 +11,5 @@ template <class T> struct [[clang::no_specializations]] rc { using type = T; }; 
 #pragma warning(disable : 5278)
 template <class T> struct rc<const T> { using type = T; };
 #pragma warning(pop)
-template <class T> struct rc<volatile T> { using type = T; }; // expected-error {{'rc' cannot be specialized}}
+template <class T> struct rc<volatile T> { using type = T; }; // expected-warning {{'rc' cannot be specialized}}
 }

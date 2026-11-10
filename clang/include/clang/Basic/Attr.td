@@ -3781,8 +3781,11 @@ def DiagnoseIf : InheritableAttr {
   let Documentation = [DiagnoseIfDocs];
 }
 
+// UE-NO-SPECIALIZATIONS: cl's [[msvc::no_specializations]] (the STL's cl
+// branches put it on the templates users must not specialize).
 def NoSpecializations : InheritableAttr {
-  let Spellings = [Clang<"no_specializations", /*AllowInC*/0>];
+  let Spellings = [Clang<"no_specializations", /*AllowInC*/0>,
+                   CXX11<"msvc", "no_specializations">];
   let Args = [StringArgument<"Message", 1>];
   let Subjects = SubjectList<[ClassTmpl, FunctionTmpl, VarTmpl]>;
   let Documentation = [NoSpecializationsDocs];

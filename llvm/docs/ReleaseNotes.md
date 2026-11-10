@@ -412,6 +412,9 @@ Makes programs 10x faster by doing Special New Thing.
 
 ### Changes to the Windows Target
 
+* Fixed call-site splitting across `catchret` edges, which could place
+  calls inside catch funclets without the required funclet operand bundle.
+
 ### Changes to the X86 Backend
 
 * Added assembler and code generation support for the `AVX10_V2_AUX`

@@ -6417,6 +6417,21 @@ public:
   SmallVector<CXXRecordDecl *, 4> DelayedDllExportClasses;
   SmallVector<CXXMethodDecl *, 4> DelayedDllExportMemberFunctions;
 
+  /// UE-NSDMI-DEFAULT-ARG (r34): implicit default constructors whose
+  /// exception specification was computed before their class's default
+  /// member initializers were parsed; recomputed once they are.
+  SmallVector<CXXConstructorDecl *, 4> MSProvisionalNSDMIExceptionSpecs;
+
+  /// Definitions requested while their default member initializers were
+  /// unparsed. A containing constructor may be their only later caller.
+  SmallVector<std::pair<CXXConstructorDecl *, SourceLocation>, 4>
+      MSDeferredNSDMIConstructorDefinitions;
+
+  /// Called once the late-parsed default member initializers of the
+  /// outermost class are parsed. Local classes parsed within an initializer
+  /// must leave the enclosing class's pending work alone.
+  void ActOnFinishCXXMemberDefaultInitializers(Decl *Class);
+
   /// Merge the exception specifications of two variable declarations.
   ///
   /// This is called when there's a redeclaration of a VarDecl. The function

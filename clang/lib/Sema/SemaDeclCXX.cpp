@@ -14186,8 +14186,14 @@ bool SpecialMemberExceptionSpecInfo::visitField(FieldDecl *FD) {
     // (Not for a template instantiation: its initializers are instantiated
     // on demand.)
     if (!E && S.getLangOpts().MSVCCompat &&
-        !cast<CXXRecordDecl>(FD->getParent())->getTemplateInstantiationPattern())
+        !cast<CXXRecordDecl>(FD->getParent())->getTemplateInstantiationPattern()) {
+      // Provisional (as not throwing); recomputed once the initializers are
+      // parsed, as cl (noexcept(T()) after the class follows them).
+      if (auto *Ctor = dyn_cast<CXXConstructorDecl>(MD);
+          Ctor && !llvm::is_contained(S.MSProvisionalNSDMIExceptionSpecs, Ctor))
+        S.MSProvisionalNSDMIExceptionSpecs.push_back(Ctor);
       return false;
+    }
     if (!E)
       // FIXME: It's a little wasteful to build and throw away a
       // CXXDefaultInitExpr here.
@@ -14216,8 +14222,17 @@ void SpecialMemberExceptionSpecInfo::visitSubobjectCall(
     Subobject Subobj, Sema::SpecialMemberOverloadResult SMOR) {
   // Note, if lookup fails, it doesn't matter what exception specification we
   // choose because the special member will be deleted.
-  if (CXXMethodDecl *MD = SMOR.getMethod())
-    ExceptSpec.CalledDecl(getSubobjectLoc(Subobj), MD);
+  if (CXXMethodDecl *Callee = SMOR.getMethod()) {
+    ExceptSpec.CalledDecl(getSubobjectLoc(Subobj), Callee);
+    // A containing default constructor also depends on the provisional
+    // specification of its base or member constructor. Revisit it even when
+    // it has no default member initializers of its own.
+    if (auto *Ctor = dyn_cast<CXXConstructorDecl>(Callee);
+        CSM == CXXSpecialMemberKind::DefaultConstructor && Ctor &&
+        llvm::is_contained(S.MSProvisionalNSDMIExceptionSpecs, Ctor) &&
+        !llvm::is_contained(S.MSProvisionalNSDMIExceptionSpecs, MD))
+      S.MSProvisionalNSDMIExceptionSpecs.push_back(cast<CXXConstructorDecl>(MD));
+  }
 }
 
 bool Sema::tryResolveExplicitSpecifier(ExplicitSpecifier &ExplicitSpec) {
@@ -14808,6 +14823,51 @@ void Sema::ActOnFinishCXXMemberDecls() {
     }
     checkForMultipleExportedDefaultConstructors(*this, Record);
   }
+}
+
+void Sema::ActOnFinishCXXMemberDefaultInitializers(Decl *Class) {
+  // UE-NSDMI-DEFAULT-ARG (r34): the provisional exception specifications
+  // follow the now parsed default member initializers.
+  auto *RD = dyn_cast<CXXRecordDecl>(Class);
+  if (!RD)
+    RD = cast<ClassTemplateDecl>(Class)->getTemplatedDecl();
+  auto InCompletedClass = [&](const CXXConstructorDecl *Ctor) {
+    for (const DeclContext *DC = Ctor->getParent(); DC;
+         DC = DC->getLexicalParent())
+      if (DC == RD)
+        return true;
+    return false;
+  };
+  SmallVector<CXXConstructorDecl *, 4> WorkList;
+  llvm::erase_if(MSProvisionalNSDMIExceptionSpecs, [&](auto *Ctor) {
+    if (!InCompletedClass(Ctor))
+      return false;
+    WorkList.push_back(Ctor);
+    return true;
+  });
+  // Invalidate all provisional results before resolving any of them, so a
+  // constructor referenced by another initializer is evaluated on demand
+  // regardless of the order in which the constructors were first used.
+  for (CXXConstructorDecl *Ctor : WorkList) {
+    FunctionProtoType::ExceptionSpecInfo ESI;
+    ESI.Type = EST_Unevaluated;
+    ESI.SourceDecl = Ctor;
+    UpdateExceptionSpec(Ctor, ESI);
+  }
+  for (CXXConstructorDecl *Ctor : WorkList)
+    EvaluateImplicitExceptionSpec(Ctor->getLocation(), Ctor);
+
+  SmallVector<std::pair<CXXConstructorDecl *, SourceLocation>, 4> Definitions;
+  llvm::erase_if(MSDeferredNSDMIConstructorDefinitions, [&](const auto &D) {
+    if (!InCompletedClass(D.first))
+      return false;
+    Definitions.push_back(D);
+    return true;
+  });
+  for (auto [Ctor, UseLoc] : Definitions)
+    if (!Ctor->doesThisDeclarationHaveABody() && !Ctor->isInvalidDecl() &&
+        !Ctor->isDeleted())
+      DefineImplicitDefaultConstructor(UseLoc, Ctor);
 }
 
 void Sema::ActOnFinishCXXNonNestedClass() {

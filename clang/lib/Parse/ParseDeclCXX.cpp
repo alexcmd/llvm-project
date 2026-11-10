@@ -3729,6 +3729,8 @@ void Parser::ParseCXXMemberSpecification(SourceLocation RecordLoc,
     Actions.ActOnFinishCXXMemberDecls();
 
     ParseLexedMemberInitializers(getCurrentClass());
+    Actions.ActOnFinishCXXMemberDefaultInitializers(
+        getCurrentClass().TagOrTemplate);
     ParseLexedMethodDefs(getCurrentClass());
     PrevTokLocation = SavedPrevTokLocation;
 

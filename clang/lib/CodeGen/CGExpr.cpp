@@ -6293,13 +6293,12 @@ LValue CodeGenFunction::EmitCastLValue(const CastExpr *E) {
                           CGM.getTBAAInfoForSubobject(LV, E->getType()));
   }
   case CK_LValueBitCast: {
-    // This must be a reinterpret_cast (or c-style equivalent).
-    const auto *CE = cast<ExplicitCastExpr>(E);
-
-    CGM.EmitExplicitCastExprType(CE, this);
+    // MS SIMD union storage views also use an implicit glvalue bitcast.
+    if (const auto *CE = dyn_cast<ExplicitCastExpr>(E))
+      CGM.EmitExplicitCastExprType(CE, this);
     LValue LV = EmitLValue(E->getSubExpr());
     Address V = LV.getAddress().withElementType(
-        ConvertTypeForMem(CE->getTypeAsWritten()->getPointeeType()));
+        ConvertTypeForMem(E->getType()));
 
     if (SanOpts.has(SanitizerKind::CFIUnrelatedCast))
       EmitVTablePtrCheckForCast(E->getType(), V,

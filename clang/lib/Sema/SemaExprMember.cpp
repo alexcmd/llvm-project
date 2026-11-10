@@ -24,6 +24,7 @@
 #include "clang/Sema/SemaHLSL.h"
 #include "clang/Sema/SemaObjC.h"
 #include "clang/Sema/SemaOpenMP.h"
+#include "llvm/ADT/StringSwitch.h"
 
 using namespace clang;
 using namespace sema;
@@ -1225,6 +1226,112 @@ Sema::PerformMemberExprBaseConversion(Expr *Base, bool IsArrow) {
 ///
 /// The ObjCImpDecl bit is a gross hack that will need to be properly
 /// fixed for ObjC++.
+// UE-M128-UNION-MEMBERS (r34 class 3): cl's __m64/__m128*/__m256*/__m512*
+// are unions of element arrays, all at offset 0 (measured, cl 14.51):
+//   m64_ / m128_ (float)  f32 i8 i16 i32 i64 u8 u16 u32 u64
+//   m128d_ m256d_ m512d_  f64        m256_ m512_  f32
+//   m128i_ m256i_ m512i_  i8 i16 i32 i64 u8 u16 u32 u64
+// (i8 char, i16 short, i32 int, i64 long long, uN unsigned, f32 float, f64
+// double). With -fms-extensions such a member of an MS vector reads the
+// vector's storage as that array: *(T(*)[N])&v, qualifiers kept.
+static ExprResult msVectorUnionMember(Sema &S, Expr *Base, bool IsArrow,
+                                      QualType VecTy, IdentifierInfo *II,
+                                      SourceLocation MemberLoc) {
+  ASTContext &Ctx = S.Context;
+  const auto *VT = VecTy->getAs<VectorType>();
+  if (!S.getLangOpts().MicrosoftExt || !II || !VT ||
+      VT->getVectorKind() != VectorKind::Generic)
+    return ExprEmpty();
+  uint64_t Bits = Ctx.getTypeSize(VT);
+  if (Bits != 64 && Bits != 128 && Bits != 256 && Bits != 512)
+    return ExprEmpty();
+  QualType ET = VT->getElementType();
+  std::string Prefix = "m" + std::to_string(Bits);
+  bool Ints = true, F32 = false, F64 = false;
+  if (ET->isSpecificBuiltinType(BuiltinType::Float)) {
+    Prefix += "_";
+    F32 = true;
+    Ints = Bits <= 128;
+  } else if (ET->isSpecificBuiltinType(BuiltinType::Double)) {
+    Prefix += "d_";
+    F64 = true;
+    Ints = false;
+  } else if (ET->isIntegerType()) {
+    Prefix += Bits == 64 ? "_" : "i_";
+    F32 = Bits == 64;
+  } else {
+    return ExprEmpty();
+  }
+  StringRef Name = II->getName();
+  if (!Name.consume_front(Prefix))
+    return ExprEmpty();
+  QualType Elt = llvm::StringSwitch<QualType>(Name)
+                     .Case("f32", F32 ? Ctx.FloatTy : QualType())
+                     .Case("f64", F64 ? Ctx.DoubleTy : QualType())
+                     .Case("i8", Ints ? Ctx.CharTy : QualType())
+                     .Case("i16", Ints ? Ctx.ShortTy : QualType())
+                     .Case("i32", Ints ? Ctx.IntTy : QualType())
+                     .Case("i64", Ints ? Ctx.LongLongTy : QualType())
+                     .Case("u8", Ints ? Ctx.UnsignedCharTy : QualType())
+                     .Case("u16", Ints ? Ctx.UnsignedShortTy : QualType())
+                     .Case("u32", Ints ? Ctx.UnsignedIntTy : QualType())
+                     .Case("u64", Ints ? Ctx.UnsignedLongLongTy : QualType())
+                     .Default(QualType());
+  if (Elt.isNull())
+    return ExprEmpty();
+  QualType ArrTy = Ctx.getConstantArrayType(
+      Elt, llvm::APInt(64, Bits / Ctx.getTypeSize(Elt)), nullptr,
+      ArraySizeModifier::Normal, 0);
+  // Keep a real member expression: decltype(v.member) names the declared
+  // array type, whereas decltype((v.member)) follows the base's cv/ref kind.
+  // A raw pointer dereference loses both rules. The implicit union provides
+  // the measured offset-zero storage view without changing the vector ABI.
+  RecordDecl *Union;
+  if (S.getLangOpts().CPlusPlus)
+    Union = CXXRecordDecl::Create(Ctx, TagTypeKind::Union,
+                                 Ctx.getTranslationUnitDecl(), MemberLoc,
+                                 MemberLoc, nullptr);
+  else
+    Union = RecordDecl::Create(Ctx, TagTypeKind::Union,
+                              Ctx.getTranslationUnitDecl(), MemberLoc,
+                              MemberLoc, nullptr);
+  Union->setImplicit();
+  Union->startDefinition();
+  auto *Field = FieldDecl::Create(Ctx, Union, MemberLoc, MemberLoc, II, ArrTy,
+                                  nullptr, nullptr, false, ICIS_NoInit);
+  Field->setImplicit();
+  Field->setAccess(AS_public);
+  Union->addDecl(Field);
+  Union->completeDefinition();
+  Qualifiers Q = VecTy.getQualifiers();
+  if (!IsArrow)
+    Q = Base->getType().getQualifiers();
+  QualType UnionTy = Ctx.getQualifiedType(
+      Ctx.getTypeDeclType(ElaboratedTypeKeyword::None, NestedNameSpecifier(),
+                          Union), Q);
+  ExprValueKind VK = IsArrow ? VK_LValue : Base->getValueKind();
+  if (VK == VK_PRValue)
+    VK = VK_XValue;
+  Expr *Object = Base;
+  if (IsArrow) {
+    Object = UnaryOperator::Create(Ctx, Base, UO_Deref, VecTy, VK_LValue,
+                                    OK_Ordinary, MemberLoc, false,
+                                    FPOptionsOverride());
+  } else {
+    if (Base->isPRValue())
+      Object = S.CreateMaterializeTemporaryExpr(
+          Base->getType(), Base, /*BoundToLvalueReference=*/false);
+  }
+  // Keep the storage view a glvalue cast. Taking an address and dereferencing
+  // it would interrupt lifetime extension when a reference binds to a member
+  // of a temporary vector.
+  Object = ImplicitCastExpr::Create(Ctx, UnionTy, CK_LValueBitCast, Object,
+                                    nullptr, VK, FPOptionsOverride());
+  return MemberExpr::CreateImplicit(Ctx, Object, false, Field,
+                                    Ctx.getQualifiedType(ArrTy, Q), VK,
+                                    OK_Ordinary);
+}
+
 static ExprResult LookupMemberExpr(Sema &S, LookupResult &R,
                                    ExprResult &BaseExpr, bool &IsArrow,
                                    SourceLocation OpLoc, CXXScopeSpec &SS,
@@ -1615,6 +1722,14 @@ static ExprResult LookupMemberExpr(Sema &S, LookupResult &R,
         << MemberName
         << (BaseExpr.get() ? BaseExpr.get()->getSourceRange() : SourceRange());
     return ExprError();
+  }
+
+  {
+    ExprResult MSMember =
+        msVectorUnionMember(S, BaseExpr.get(), IsArrow, BaseType,
+                            MemberName.getAsIdentifierInfo(), MemberLoc);
+    if (!MSMember.isUnset())
+      return MSMember;
   }
 
   // Handle 'field access' to vectors, such as 'V.xx'.

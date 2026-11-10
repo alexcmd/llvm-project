@@ -1120,15 +1120,14 @@ static bool shouldAddReversedEqEq(Sema &S, SourceLocation OpLoc,
     S.LookupQualifiedName(Members, RHSRec);
     Members.suppressAccessDiagnostics();
     for (NamedDecl *Op : Members)
-      if (FunctionsCorrespond(S.Context, EqFD, Op->getAsFunction()))
+      if (FunctionsCorrespond(S.Context, EqFD,
+                              Op->getUnderlyingDecl()->getAsFunction()))
         return false;
     return true;
   }
   // Otherwise the search scope is the namespace scope of which F is a member.
   for (NamedDecl *Op : EqFD->getEnclosingNamespaceContext()->lookup(NotEqOp)) {
-    auto *NotEqFD = Op->getAsFunction();
-    if (auto *UD = dyn_cast<UsingShadowDecl>(Op))
-      NotEqFD = UD->getUnderlyingDecl()->getAsFunction();
+    auto *NotEqFD = Op->getUnderlyingDecl()->getAsFunction();
     if (FunctionsCorrespond(S.Context, EqFD, NotEqFD) && S.isVisible(NotEqFD) &&
         declaresSameEntity(cast<Decl>(EqFD->getEnclosingNamespaceContext()),
                            cast<Decl>(Op->getLexicalDeclContext())))
@@ -9097,10 +9096,12 @@ void Sema::AddMemberOperatorCandidates(OverloadedOperatorKind Op,
     for (LookupResult::iterator Oper = Operators.begin(),
                                 OperEnd = Operators.end();
          Oper != OperEnd; ++Oper) {
-      if (Oper->getAsFunction() &&
-          PO == OverloadCandidateParamOrder::Reversed &&
+      // A using-declaration names a function through a UsingShadowDecl. Apply
+      // the rewrite-target check to that function as well.
+      FunctionDecl *OperFD = Oper->getUnderlyingDecl()->getAsFunction();
+      if (OperFD && PO == OverloadCandidateParamOrder::Reversed &&
           !CandidateSet.getRewriteInfo().shouldAddReversed(
-              *this, {Args[1], Args[0]}, Oper->getAsFunction()))
+              *this, {Args[1], Args[0]}, OperFD))
         continue;
       AddMethodCandidate(Oper.getPair(), Args[0]->getType(),
                          Args[0]->Classify(Context), Args.slice(1),

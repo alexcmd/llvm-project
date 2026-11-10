@@ -966,6 +966,11 @@ documentation](CIR/index.md) for more information regarding ClangIR's status and
   type. (#GH204756)
 
 #### Bug Fixes to C++ Support
+
+- Fixed comparison rewriting through member using-declarations so that a
+  corresponding `operator!=` suppresses reversed `operator==` candidates
+  as required by P2468.
+
 - Clang now recovers from invalid single pointer declarators in structured
   bindings (such as ``auto *[x, y] = s;``) by removing the pointer declarator.
   This allows type deduction to proceed and avoids redundant follow-up

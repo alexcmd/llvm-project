@@ -544,6 +544,43 @@ bool i(X x) {
 } // namespace test2
 } // namespace function_scope_operator_eqeq
 
+// [over.match.oper]p4 (P2468): operator== re-exposed by a using-declaration
+// is not a rewrite target when lookup finds a corresponding operator!=.
+namespace member_using_declarations {
+namespace member_template {
+template <bool IsConst> struct Variant {
+  template <bool Other> bool operator==(const Variant<Other> &) const;
+  template <bool Other> bool operator!=(const Variant<Other> &) const;
+};
+struct Derived : Variant<true> {
+  using Variant<true>::operator==;
+};
+bool same(const Derived d) { return Derived() == d; }
+}
+
+namespace non_template {
+struct B {
+  bool operator==(const B &) const;
+  bool operator!=(const B &) const;
+};
+struct D : B { using B::operator==; };
+bool f(const D d) { return D() == d; }
+// operator!= re-exposed too.
+struct D2 : B { using B::operator==; using B::operator!=; };
+bool f2(const D2 d) { return D2() == d; }
+}
+
+namespace no_not_equal {
+struct B {
+  // expected-note@+1 {{regular call to this operator}}
+  bool operator==(const B &) const;
+};
+struct D : B { using B::operator==; };
+// expected-warning@+1 {{to be ambiguous despite}}
+bool f(const D d) { return D() == d; }
+}
+} // namespace member_using_declarations
+
 #else // NO_ERRORS
 
 namespace problem_cases {

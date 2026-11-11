@@ -92,6 +92,9 @@ clang::diagGroupFromCLWarningID(unsigned CLWarningID) {
   case 4838: Name = "microsoft-init-list-narrowing"; break;
   case 5030: Name = "unknown-attributes"; break;
   case 5038: Name = "reorder-ctor"; break;
+  // UE-C5046: a dead inline body uses a member declared here with its
+  // definition in another file (skia-simplify.cpp). cl's C5046.
+  case 5046: Name = "undefined-internal"; break;
   case 5054: Name = "deprecated-enum-enum-conversion"; break;
   case 5061: Name = "deprecated-comma-subscript"; break;
   case 5205: Name = "delete-abstract-non-virtual-dtor"; break;
@@ -244,6 +247,8 @@ static const CLWarningLevel CLLevels[] = {
     {"integer-overflow", 2, nullptr, nullptr},
     {"literal-conversion", 2, nullptr, nullptr},
     {"mismatched-tags", 2, nullptr, nullptr},
+    // UE-C5046: cl is silent at /W0../W1 and reports from /W2 (measured).
+    {"undefined-internal", 2, nullptr, nullptr},
     {"deprecated-declarations", 3, nullptr, nullptr},
     {"division-by-zero", 3, nullptr, nullptr},
     {"empty-body", 3, nullptr, nullptr},

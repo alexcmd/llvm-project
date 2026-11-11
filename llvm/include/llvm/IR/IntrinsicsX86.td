@@ -634,6 +634,10 @@ let TargetPrefix = "x86" in {  // All intrinsics start with "llvm.x86.".
 // (which models unknown effects), miscompiling code that changes MXCSR at
 // runtime. Clang emits memory(none) at call sites whose immediate selects a
 // fixed direction, so those calls keep their old pure-call optimizations.
+// In SelectionDAG the call is built as INTRINSIC_W_CHAIN from the callee
+// declaration's effects (the call site's are deliberately ignored there);
+// X86 lowers the six round forms through IntrinsicsWithChain and the
+// ROUNDP/ROUNDS cases in LowerINTRINSIC_W_CHAIN.
 // See clang/test/CodeGen/X86/round-mxcsr-fpenv.cpp.
 let TargetPrefix = "x86" in {  // All intrinsics start with "llvm.x86.".
   def int_x86_sse41_round_ss

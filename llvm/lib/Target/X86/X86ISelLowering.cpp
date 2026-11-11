@@ -27487,24 +27487,6 @@ SDValue X86TargetLowering::LowerINTRINSIC_WO_CHAIN(SDValue Op,
       return getScalarMaskingNode(FixupImm, Mask, Passthru, Subtarget, DAG,
                                   /*UpperEltOpSrc=*/1);
     }
-    case ROUNDP: {
-      assert(IntrData->Opc0 == X86ISD::VRNDSCALE && "Unexpected opcode");
-      // Clear the upper bits of the rounding immediate so that the legacy
-      // intrinsic can't trigger the scaling behavior of VRNDSCALE.
-      uint64_t Round = Op.getConstantOperandVal(2);
-      SDValue RoundingMode = DAG.getTargetConstant(Round & 0xf, dl, MVT::i32);
-      return DAG.getNode(IntrData->Opc0, dl, Op.getValueType(),
-                         Op.getOperand(1), RoundingMode);
-    }
-    case ROUNDS: {
-      assert(IntrData->Opc0 == X86ISD::VRNDSCALES && "Unexpected opcode");
-      // Clear the upper bits of the rounding immediate so that the legacy
-      // intrinsic can't trigger the scaling behavior of VRNDSCALE.
-      uint64_t Round = Op.getConstantOperandVal(3);
-      SDValue RoundingMode = DAG.getTargetConstant(Round & 0xf, dl, MVT::i32);
-      return DAG.getNode(IntrData->Opc0, dl, Op.getValueType(),
-                         Op.getOperand(1), Op.getOperand(2), RoundingMode);
-    }
     case BEXTRI: {
       assert(IntrData->Opc0 == X86ISD::BEXTRI && "Unexpected opcode");
 
@@ -28601,6 +28583,33 @@ static SDValue LowerINTRINSIC_W_CHAIN(SDValue Op, const X86Subtarget &Subtarget,
     // Return { result, isValid, chain }.
     return DAG.getNode(ISD::MERGE_VALUES, dl, Op->getVTList(), Result, isValid,
                        SDValue(Result.getNode(), 2));
+  }
+  case ROUNDP: {
+    assert(IntrData->Opc0 == X86ISD::VRNDSCALE && "Unexpected opcode");
+    // The legacy MXCSR-aware rounding intrinsics model a read of the FP
+    // environment, so they arrive chained (see IntrinsicsWithChain). Expand
+    // to the same pure VRNDSCALE node the chain-less lowering used and pass
+    // the chain through; the rounding itself stays schedulable.
+    // Clear the upper bits of the rounding immediate so that the legacy
+    // intrinsic can't trigger the scaling behavior of VRNDSCALE.
+    uint64_t Round = Op.getConstantOperandVal(3);
+    SDValue RoundingMode = DAG.getTargetConstant(Round & 0xf, dl, MVT::i32);
+    SDValue Res = DAG.getNode(IntrData->Opc0, dl, Op->getValueType(0),
+                              Op.getOperand(2), RoundingMode);
+    return DAG.getNode(ISD::MERGE_VALUES, dl, Op->getVTList(), Res,
+                       Op.getOperand(0));
+  }
+  case ROUNDS: {
+    assert(IntrData->Opc0 == X86ISD::VRNDSCALES && "Unexpected opcode");
+    // Clear the upper bits of the rounding immediate so that the legacy
+    // intrinsic can't trigger the scaling behavior of VRNDSCALE.
+    uint64_t Round = Op.getConstantOperandVal(4);
+    SDValue RoundingMode = DAG.getTargetConstant(Round & 0xf, dl, MVT::i32);
+    SDValue Res = DAG.getNode(IntrData->Opc0, dl, Op->getValueType(0),
+                              Op.getOperand(2), Op.getOperand(3),
+                              RoundingMode);
+    return DAG.getNode(ISD::MERGE_VALUES, dl, Op->getVTList(), Res,
+                       Op.getOperand(0));
   }
   case GATHER_AVX2: {
     SDValue Chain = Op.getOperand(0);

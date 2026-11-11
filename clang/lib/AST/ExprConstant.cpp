@@ -19505,8 +19505,15 @@ struct MSFieldOffsetEvaluator {
       return false;
     const ASTRecordLayout &Layout = Ctx.getASTRecordLayout(From);
     for (const CXXBaseSpecifier &B : From->bases()) {
+      // A virtual base's offset is not a constant expression, but it must
+      // not poison sibling non-virtual bases: cl accepts a member reached
+      // through a non-virtual base regardless of where the virtual base
+      // sits in the base list (D:\Build\ort-p34\vsibprobe, s1/s5, cl
+      // 19.50.35739). A virtual-only path still rejects: no base matches
+      // and the loop below returns false. A name reachable both ways is
+      // ambiguous at Sema before this evaluator runs (cl C2385, s2/s3).
       if (B.isVirtual())
-        return false;
+        continue;
       const auto *BD = B.getType()->getAsCXXRecordDecl();
       if (!BD)
         continue;
@@ -19549,11 +19556,11 @@ struct MSFieldOffsetEvaluator {
       // Inherited field. cl accepts the idiom for direct base members at
       // any depth, multi-base included, always at the true offset
       // (D:\Build\ort-p33-negtests: probe2.cmd MARK A, probe5.cmd MARK G).
-      // Through a NAMED member of a derived type cl accepts it too but
-      // drops the deeper base-subobject offsets (offsetof(outer, member) +
-      // getFieldOffset(field): inner.second measures 8 on cl, true 12,
-      // probe4.cmd MARK E). This evaluator keeps the true offset for that
-      // shape; the nested divergence is recorded for the reviewer.
+      // Through a NAMED member of a derived type cl also computes the true
+      // offset (re-measured 2026-11-11: the earlier "cl drops deeper base
+      // offsets" reading of probe4.cmd MARK E was wrong - that shape's true
+      // offset IS the measured 8; on the two-level nested shapes cl returns
+      // the true 12). This walk computes the true offset everywhere.
       const auto *BaseCXX = dyn_cast<CXXRecordDecl>(BaseRD);
       const auto *FieldRD = dyn_cast<CXXRecordDecl>(F->getParent());
       int64_t BaseOffset = 0;

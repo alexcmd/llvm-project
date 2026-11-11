@@ -37,14 +37,13 @@ static_assert(OFFSET(Derived2, second) == 8);
 static_assert(OFFSET(Multi2, right) == 4);
 static_assert(OFFSET(Multi2, left) == 0);
 
-// Through a named member of derived type: cl accepts this too but drops the
-// deeper base-subobject offsets there - it computes offsetof(outer, member)
-// + getFieldOffset(field), e.g. OFFSET(OffsetOuter2, inner.second) measures
-// 8 on cl 19.50.35739 while the true offset is 12 (inner at 4, second at 8
-// within Derived2 after first and mid; probe4.cmd MARK E). Direct shapes
-// agree with the true offset on cl (MARK A/F/G), so the walk matches cl on
-// every direct shape and keeps the true offset for the nested shape - the
-// nested divergence is recorded for the reviewer.
+// Through a named member of derived type: cl computes the true offset here
+// too. The earlier "cl drops the deeper base-subobject offsets" reading of
+// probe4.cmd MARK E was wrong - that shape's true offset IS the measured 8;
+// re-measured 2026-11-11 on the two-level nested shapes, cl 19.50.35739
+// returns the true 12 (delta-review). Direct shapes agree with the true
+// offset on cl (probe2.cmd MARK A, probe5.cmd MARK G), so the walk matches
+// cl on every nested shape.
 struct OffsetOuter2 { int prefix; Derived2 inner; };
 static_assert(OFFSET(OffsetOuter2, inner.first) == 4);
 static_assert(OFFSET(OffsetOuter2, inner.second) == 12);
@@ -54,8 +53,21 @@ static_assert(OFFSET(OffsetOuter2, inner.second) == 12);
 struct WithRef2 { int& r; };
 static_assert(OFFSET(WithRef2, r) == 0); // expected-error {{static assertion expression is not an integral constant expression}} expected-note {{reinterpret_cast is not allowed in a constant expression}}
 
-// A virtual-base path is rejected on cl too (C2131, probe5.cmd MARK H);
-// the base walk bails on virtual bases.
+// A virtual-base path is rejected on cl too (C2131, probe5.cmd MARK H):
+// the base walk skips virtual bases, so a virtual-only path finds no base
+// and rejects. A virtual base must not poison sibling non-virtual bases -
+// cl evaluates a member reached through a non-virtual base at the true
+// offset whichever side of the base list the virtual base sits on
+// (cl 19.50.35739, D:/Build/ort-p34/vsibprobe s1/s5, Show<0> both).
+// A name reachable both ways is ambiguous at Sema on both compilers
+// (cl C2385, clang multi-base-subobjects; vsibprobe s2/s3).
 struct VBase2 { int vb; };
 struct WithV2 : virtual VBase2 { int w; };
 static_assert(OFFSET(WithV2, vb) == 0); // expected-error {{static assertion expression is not an integral constant expression}} expected-note {{reinterpret_cast is not allowed in a constant expression}}
+
+struct VSibV { int v; };
+struct VSibB { int b; };
+struct VSib1 : virtual VSibV, VSibB {};
+struct VSib2 : VSibB, virtual VSibV {};
+static_assert(OFFSET(VSib1, b) == 0);
+static_assert(OFFSET(VSib2, b) == 0);

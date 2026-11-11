@@ -7,8 +7,15 @@
 // 14.50. Before this patch clang parsed the suppress clause and ignored it, so
 // the r2_getenv repro (D:\Build\warn-r5\r2_getenv.cpp) still printed the C4996
 // equivalent on the pragma's next line.
+//
+// Window refinement (measured on cl 19.50.35739, 2026-11-11,
+// D:\Build\ort-p34\cl-probes-20261111\probe2.cmd): the window is the pragma's
+// own line after the pragma through the next line. A #pragma directive's own
+// line cannot contain code, so for plain pragmas this is the single line
+// after; for a __pragma expanded mid-line the remainder of the expansion line
+// is inside the window too (SUPPRESS_4996 callMe(); below must be silent).
 
-[[deprecated]] void callMe() {} // expected-note 9 {{'callMe' has been explicitly marked deprecated here}}
+[[deprecated]] void callMe() {} // expected-note 11 {{'callMe' has been explicitly marked deprecated here}}
 
 void next_line_only() {
 #pragma warning(suppress : 4996)
@@ -75,10 +82,30 @@ void broken_clause_is_dropped() {
 }
 
 void unknown_number_is_silent() {
-  // cl says C4619 for an unknown number. Clang's warning pragmas stay silent
-  // about numbers the wd table does not map (as they already do for disable),
-  // and there is nothing to suppress.
+  // cl says C4616 ("#pragma warning: warning number '99999' not a valid
+  // compiler warning", measured on cl 19.50.35739 - it is not C4619) and
+  // suppresses nothing, so the warning stays visible. Clang's warning pragmas
+  // stay silent about numbers the wd table does not map (as they already do
+  // for disable), and there is nothing to suppress.
 #pragma warning(suppress : 99999)
+  callMe(); // expected-warning {{'callMe' is deprecated}}
+}
+
+// __pragma inside a macro: the window arms at the EXPANSION line. Both
+// compilers agree on these shapes (cl 19.50 measured, probe2.cmd MARK A/B).
+#define SUPPRESS_4996 __pragma(warning(suppress : 4996))
+void macro_window_next_line() {
+  SUPPRESS_4996
+  callMe();
+  callMe(); // expected-warning {{'callMe' is deprecated}}
+}
+
+// The remainder of the expansion line is inside the window: cl keeps both
+// this call and the next-line call silent. Clang before the window fix warns
+// on the same-line call (fails-before for that fix).
+void macro_window_same_line() {
+  SUPPRESS_4996 callMe();
+  callMe();
   callMe(); // expected-warning {{'callMe' is deprecated}}
 }
 

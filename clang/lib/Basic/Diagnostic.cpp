@@ -608,7 +608,7 @@ bool DiagnosticsEngine::isSuppressedViaMapping(diag::kind DiagId,
   return DiagSuppressionMapping(DiagId, DiagLoc, getSourceManager());
 }
 
-void DiagnosticsEngine::suppressMSWarningsForNextLine(
+void DiagnosticsEngine::suppressMSWarningsFromPragma(
     ArrayRef<diag::Group> Groups, SourceLocation PragmaLoc) {
   if (Groups.empty() || !SourceMgr || !PragmaLoc.isValid())
     return;
@@ -625,7 +625,7 @@ void DiagnosticsEngine::suppressMSWarningsForNextLine(
     return;
 
   // Expansion location, so a "__pragma(warning(suppress : n))" inside a macro
-  // arms the line after the macro's use, the way cl attributes it.
+  // arms at the macro's use line, the way cl attributes it.
   auto [FID, Offset] = SourceMgr->getDecomposedExpansionLoc(PragmaLoc);
   if (!FID.isValid())
     return;
@@ -634,9 +634,13 @@ void DiagnosticsEngine::suppressMSWarningsForNextLine(
   if (Invalid)
     return;
 
+  // The window is [Line, Line + 1]: cl covers the pragma's own line after the
+  // pragma (only reachable through a mid-line __pragma expansion; a #pragma
+  // directive line holds no code) and the next line (cl 19.50.35739,
+  // probe-sameline*.c).
   MSWarningSuppressWindow &Window = MSWarningSuppressWindows.emplace_back();
   Window.File = FID;
-  Window.Line = Line + 1;
+  Window.Line = Line;
   Window.Diags = std::move(MappedDiags);
 }
 
@@ -646,7 +650,7 @@ bool DiagnosticsEngine::isMSWarningSuppressed(diag::kind DiagId,
     return false;
 
   // Same decomposition as the window's: a diagnostic reported inside a macro
-  // expansion on the window line is covered, as cl attributes it to the
+  // expansion within the window is covered, as cl attributes it to the
   // expansion line.
   auto [FID, Offset] = SourceMgr->getDecomposedExpansionLoc(DiagLoc);
   if (!FID.isValid())
@@ -666,7 +670,7 @@ bool DiagnosticsEngine::isMSWarningSuppressed(diag::kind DiagId,
         return false;
       HaveLine = true;
     }
-    if (Window.Line == Line)
+    if (Window.Line == Line || Window.Line + 1 == Line)
       return true;
   }
   return false;

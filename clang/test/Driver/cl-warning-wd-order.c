@@ -20,6 +20,33 @@
 // ORDERL: "-Wall"
 // ORDERL-SAME: "-Wno-unused-variable"
 
+// /we is order-independent vs /W the same way (cl 19.50.35739, measured
+// 2026-11-11: error C4717 in all three orders /we4717 /W0, /W0 /we4717,
+// /we4717 /W4 - the explicit error survives any later /W level). The
+// -Werror=<group> must render after the /W flag, both orders.
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc /c -### /we4717 /W4 -- %s 2>&1 \
+// RUN:   | FileCheck --check-prefix=ORDERWE %s
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc /c -### /W4 /we4717 -- %s 2>&1 \
+// RUN:   | FileCheck --check-prefix=ORDERWE %s
+// ORDERWE: "-WCL4"
+// ORDERWE-SAME: "-Werror=infinite-recursion"
+
+// And the error stays on under /W0 in both orders (cl: error C4717 both).
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc /c -### /we4717 /W0 -- %s 2>&1 \
+// RUN:   | FileCheck --check-prefix=ORDERWE0 %s
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc /c -### /W0 /we4717 -- %s 2>&1 \
+// RUN:   | FileCheck --check-prefix=ORDERWE0 %s
+// ORDERWE0-NOT: "-Wno-infinite-recursion"
+// ORDERWE0: "-Werror=infinite-recursion"
+
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc /we4717 /W0 -fsyntax-only -- %s 2>&1 \
+// RUN:   | FileCheck --check-prefix=WE %s
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc /W0 /we4717 -fsyntax-only -- %s 2>&1 \
+// RUN:   | FileCheck --check-prefix=WE %s
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc /we4717 /W4 -fsyntax-only -- %s 2>&1 \
+// RUN:   | FileCheck --check-prefix=WE %s
+// WE: error: all paths through this function will call itself [-Werror,-Winfinite-recursion]
+
 // Observed: /wd4717 stays off in both orders; only the unused variable
 // remains (as on cl, which prints just the C4101 there).
 // RUN: %clang_cl --target=x86_64-pc-windows-msvc /wd4717 /W4 -fsyntax-only -- %s 2>&1 \

@@ -3,10 +3,10 @@
 // /W0../W1, reported at /W2../W4); clang reports -Wundefined-internal.
 // The id maps, so /wd5046 and #pragma warning(disable: 5046) reach it.
 
-// cl's default level (no /W flag): silent, as cl is.
-// RUN: %clang_cl --target=x86_64-pc-windows-msvc -fsyntax-only -- %s 2>&1 | FileCheck --check-prefix=OFF %s
-// RUN: %clang_cl --target=x86_64-pc-windows-msvc /W1 -fsyntax-only -- %s 2>&1 | FileCheck --check-prefix=OFF %s
-// OFF-NOT: warning:
+// cl's default level (no /W flag): silent, as cl is. Silent runs pipe through
+// `count 0` (FileCheck rejects empty input).
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc -fsyntax-only -- %s 2>&1 | count 0
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc /W1 -fsyntax-only -- %s 2>&1 | count 0
 
 // From /W2, as cl reports the C5046.
 // RUN: %clang_cl --target=x86_64-pc-windows-msvc /W2 -fsyntax-only -- %s 2>&1 | FileCheck --check-prefix=ON %s
@@ -15,7 +15,7 @@
 // ON-NOT: warning:
 
 // /wd5046 silences it, as cl's /wd does.
-// RUN: %clang_cl --target=x86_64-pc-windows-msvc /W4 /wd5046 -fsyntax-only -- %s 2>&1 | FileCheck --check-prefix=OFF %s
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc /W4 /wd5046 -fsyntax-only -- %s 2>&1 | count 0
 
 namespace {
 struct Used {

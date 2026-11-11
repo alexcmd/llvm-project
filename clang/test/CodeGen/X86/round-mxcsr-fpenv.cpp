@@ -88,15 +88,15 @@ extern "C" __v4sf round_fixed_across_setcsr(__v4sf x, unsigned a, unsigned b) {
 
 // -O0 structural checks: both call sites are emitted, the fixed-direction
 // call carries the memory(none) call-site attribute group, and the rounding
-// intrinsic declares a read of the FP environment. Declares precede
-// definitions and attribute groups come last, so the declare is checked
-// first and the two attribute groups are checked as a DAG.
-
-// CHECK: declare <4 x float> @llvm.x86.sse41.round.ps(<4 x float>, i32 immarg) #[[FPENV:[0-9]+]]
+// intrinsic declares a read of the FP environment. At -O0 clang emits each
+// used intrinsic's declaration after the first function body that uses it,
+// so the declare check follows the round_cur body checks; the two attribute
+// groups come last and are checked as a DAG.
 
 // CHECK-LABEL: define {{.*}}@round_cur_across_setcsr
 // CHECK: call {{.*}}@llvm.x86.sse41.round.ps(<4 x float> %{{.*}}, i32 4)
 // CHECK: call {{.*}}@llvm.x86.sse41.round.ps(<4 x float> %{{.*}}, i32 4)
+// CHECK: declare <4 x float> @llvm.x86.sse41.round.ps(<4 x float>, i32 immarg) #[[FPENV:[0-9]+]]
 
 // CHECK-LABEL: define {{.*}}@round_fixed_across_setcsr
 // CHECK: call {{.*}}@llvm.x86.sse41.round.ps(<4 x float> %{{.*}}, i32 1) #[[FIXEDATTR:[0-9]+]]

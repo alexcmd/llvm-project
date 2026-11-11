@@ -517,10 +517,14 @@ private:
   std::vector<DiagState *> DiagStateOnPushStack;
 
   /// One "\#pragma warning(suppress : n...)" clause: the diagnostics the
-  /// numbers map to are turned off on the single line following the pragma,
-  /// which is what cl does (the state resumes on the line after that).
-  /// Diags is the sorted, deduplicated set of diagnostics in the mapped
-  /// groups, i.e. exactly what "disable : n" would switch off.
+  /// numbers map to are turned off from the pragma's own line through the
+  /// next line, which is what cl does (the state resumes on the line after
+  /// that). Line is the pragma's own (expansion) line; a plain #pragma
+  /// directive line holds no code, so there only the next line is ever
+  /// affected, while for a mid-line __pragma expansion the remainder of the
+  /// expansion line is inside the window. Diags is the sorted, deduplicated
+  /// set of diagnostics in the mapped groups, i.e. exactly what
+  /// "disable : n" would switch off.
   struct MSWarningSuppressWindow {
     FileID File;
     unsigned Line;
@@ -529,7 +533,7 @@ private:
 
   /// Every suppress window seen in this translation unit. They are keyed by
   /// location instead of consumed, so one diagnostic checked twice gets the
-  /// same answer and each occurrence on the window line is covered, like cl.
+  /// same answer and each occurrence in the window is covered, like cl.
   /// A window is independent of the push/pop state and of error promotion.
   SmallVector<MSWarningSuppressWindow, 4> MSWarningSuppressWindows;
 
@@ -1014,14 +1018,15 @@ public:
   void setDiagSuppressionMapping(llvm::MemoryBuffer &Input);
   bool isSuppressedViaMapping(diag::kind DiagId, SourceLocation DiagLoc) const;
 
-  /// Turn off the diagnostics in \p Groups (the groups the numbers of one
-  /// "\#pragma warning(suppress : n...)" clause map to) on the line following
-  /// \p PragmaLoc, then the prior state resumes on the line after that. The
-  /// window is a location, not a state change: it never carries past its line
-  /// (a pop cannot push it forward, a blank line consumes it) and it wins over
-  /// a promotion of the number to an error, as measured on cl 14.50.
-  void suppressMSWarningsForNextLine(ArrayRef<diag::Group> Groups,
-                                     SourceLocation PragmaLoc);
+  /// Arm the suppress window of one "\#pragma warning(suppress : n...)"
+  /// clause: the diagnostics the numbers map to (\p Groups) are turned off
+  /// from the line of \p PragmaLoc (its expansion line, for a __pragma in a
+  /// macro) through the next line, then the prior state resumes. The window is
+  /// a location, not a state change: it never carries past its two lines (a
+  /// pop cannot push it forward, a blank line consumes it) and it wins over a
+  /// promotion of the number to an error, as measured on cl 14.50/19.50.
+  void suppressMSWarningsFromPragma(ArrayRef<diag::Group> Groups,
+                                    SourceLocation PragmaLoc);
 
   /// Whether an MSVC warning-suppression window covers \p DiagId at
   /// \p DiagLoc.

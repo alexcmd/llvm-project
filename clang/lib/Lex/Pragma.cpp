@@ -1397,8 +1397,9 @@ struct PragmaHdrstopHandler : public PragmaHandler {
 };
 
 /// "\#pragma warning(...)".  push/pop and disable act on the groups the wd
-/// table maps the numbers to; suppress turns those groups off for the single
-/// line after the pragma (see DiagnosticsEngine::suppressMSWarningsForNextLine).
+/// table maps the numbers to; suppress turns those groups off from the pragma's
+/// own line through the next one (see
+/// DiagnosticsEngine::suppressMSWarningsFromPragma).
 /// MSVC's diagnostics do not map cleanly to clang's, so numbers the table does
 /// not know stay silent, and error/once/default are parsed and ignored.
 struct PragmaWarningHandler : public PragmaHandler {
@@ -1546,8 +1547,8 @@ struct PragmaWarningHandler : public PragmaHandler {
 
         // The clause parsed cleanly up to the ';': arm its window.
         if (!SuppressGroups.empty()) {
-          PP.getDiagnostics().suppressMSWarningsForNextLine(SuppressGroups,
-                                                            DiagLoc);
+          PP.getDiagnostics().suppressMSWarningsFromPragma(SuppressGroups,
+                                                           DiagLoc);
           SuppressGroups.clear();
         }
         PP.Lex(Tok);
@@ -1561,8 +1562,8 @@ struct PragmaWarningHandler : public PragmaHandler {
 
     // The last clause ended at the ')': its window counts too.
     if (!SuppressGroups.empty())
-      PP.getDiagnostics().suppressMSWarningsForNextLine(SuppressGroups,
-                                                        DiagLoc);
+      PP.getDiagnostics().suppressMSWarningsFromPragma(SuppressGroups,
+                                                       DiagLoc);
 
     PP.Lex(Tok);
     if (Tok.isNot(tok::eod))

@@ -14,6 +14,14 @@
 // ON-COUNT-2: warning: {{.*}}has internal linkage but is not defined
 // ON-NOT: warning:
 
+// /Wall too (cl 19.50.35739 fires the C5046 at /Wall; measured 2026-11-11,
+// D:\Build\ort-p34\cl-probes-20261111\probe.cmd MARK 1). /Wall maps past the
+// CL level table so the default-on group stays on. The other /Wall warnings
+// are not checked here (both compilers emit their own set; the 5046 count is
+// the contract).
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc /Wall -fsyntax-only -- %s 2>&1 | FileCheck --check-prefix=WAL %s
+// WAL-COUNT-2: warning: {{.*}}has internal linkage but is not defined
+
 // /wd5046 silences it, as cl's /wd does.
 // RUN: %clang_cl --target=x86_64-pc-windows-msvc /W4 /wd5046 -fsyntax-only -- %s 2>&1 | count 0
 

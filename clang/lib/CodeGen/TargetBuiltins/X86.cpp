@@ -14,6 +14,7 @@
 #include "clang/Basic/TargetBuiltins.h"
 #include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/IntrinsicsX86.h"
+#include "llvm/Support/ModRef.h"
 #include "llvm/TargetParser/X86TargetParser.h"
 
 using namespace clang;
@@ -919,7 +920,15 @@ Value *CodeGenFunction::EmitX86BuiltinExpr(unsigned BuiltinID,
       }
 
       Function *F = CGM.getIntrinsic(ID);
-      return Builder.CreateCall(F, Ops);
+      CallInst *CI = Builder.CreateCall(F, Ops);
+      // The intrinsic conservatively models a read of the FP environment
+      // (memory(inaccessiblemem: read)) because bit 0b100 makes the result
+      // follow the MXCSR rounding direction. A call with a fixed direction
+      // cannot observe MXCSR changes, so override it to memory(none) to keep
+      // fixed immediates exactly as optimizable as pure calls.
+      if (!UseMXCSR)
+        CI->setMemoryEffects(llvm::MemoryEffects::none());
+      return CI;
     }
 
     return emitX86RoundImmediate(*this, Ops[0], M);
@@ -948,7 +957,11 @@ Value *CodeGenFunction::EmitX86BuiltinExpr(unsigned BuiltinID,
       }
 
       Function *F = CGM.getIntrinsic(ID);
-      return Builder.CreateCall(F, Ops);
+      // Fixed direction: not observable through MXCSR, see above.
+      CallInst *CI = Builder.CreateCall(F, Ops);
+      if (!UseMXCSR)
+        CI->setMemoryEffects(llvm::MemoryEffects::none());
+      return CI;
     }
 
     Value *Idx = Builder.getInt32(0);

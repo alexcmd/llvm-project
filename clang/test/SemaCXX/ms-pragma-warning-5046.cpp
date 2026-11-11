@@ -48,7 +48,7 @@ struct UseRestored {
 // The defaulted constructors above are only materialized when odr-used; a
 // never-called function that constructs each type forces that materialization
 // (without these, no -Wundefined-internal fires and the whole test is inert).
-void touch() {
+[[maybe_unused]] void touch() {
   UseUsed a;
   UseSuppressed b;
   UseRestored c;

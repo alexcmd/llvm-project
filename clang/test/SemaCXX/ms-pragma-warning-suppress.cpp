@@ -1,5 +1,5 @@
 // RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility \
-// RUN:   -std=c++20 -fsyntax-only -verify %s
+// RUN:   -std=c++20 -Wsign-compare -fsyntax-only -verify %s
 
 // openrt UE-getenv: cl's "#pragma warning(suppress : n)" turns the mapped
 // warning off on the single line after the pragma (every occurrence on that
@@ -8,7 +8,7 @@
 // the r2_getenv repro (D:\Build\warn-r5\r2_getenv.cpp) still printed the C4996
 // equivalent on the pragma's next line.
 
-[[deprecated]] void callMe() {} // expected-note 9 {{marked 'deprecated' attribute here}}
+[[deprecated]] void callMe() {} // expected-note 9 {{'callMe' has been explicitly marked deprecated here}}
 
 void next_line_only() {
 #pragma warning(suppress : 4996)

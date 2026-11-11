@@ -1306,8 +1306,10 @@ static ExprResult msVectorUnionMember(Sema &S, Expr *Base, bool IsArrow,
   Qualifiers Q = VecTy.getQualifiers();
   if (!IsArrow)
     Q = Base->getType().getQualifiers();
+  // No prefix. The default NNS constructor is Invalid under the new
+  // upstream NNS design; the null form is std::nullopt.
   QualType UnionTy = Ctx.getQualifiedType(
-      Ctx.getTypeDeclType(ElaboratedTypeKeyword::None, NestedNameSpecifier(),
+      Ctx.getTypeDeclType(ElaboratedTypeKeyword::None, std::nullopt,
                           Union), Q);
   ExprValueKind VK = IsArrow ? VK_LValue : Base->getValueKind();
   if (VK == VK_PRValue)

@@ -16510,7 +16510,9 @@ Decl *Sema::ActOnStartOfFunctionDef(Scope *FnBodyScope, Decl *D,
         if (const auto *A = Redecl->getAttr<NoThrowAttr>(); A && A->isImplicit())
           Redecl->dropAttr<NoThrowAttr>();
       }
-      FD->getIdentifier()->setBuiltinID(0);
+      // Upstream hardened setBuiltinID to reject NotBuiltin; clearing is the
+      // way to detach an identifier from a builtin now.
+      FD->getIdentifier()->clearBuiltinID();
     } else if (!Context.BuiltinInfo.isPredefinedLibFunction(BuiltinID) &&
         !Context.BuiltinInfo.isPredefinedRuntimeFunction(BuiltinID)) {
       Diag(FD->getLocation(), diag::err_builtin_definition) << FD;

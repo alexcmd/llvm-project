@@ -19,3 +19,40 @@ constexpr auto mismatched = reinterpret_cast<const char*>(&reinterpret_cast<cons
 constexpr auto arbitrary = reinterpret_cast<const Record*>(16); // expected-error {{must be initialized by a constant expression}} expected-note {{reinterpret_cast is not allowed in a constant expression}}
 int side_effect();
 constexpr auto effects = reinterpret_cast<const char*>(&reinterpret_cast<const Record*>((side_effect(), 16))->second) - reinterpret_cast<const char*>(16); // expected-error {{must be initialized by a constant expression}} expected-note {{reinterpret_cast is not allowed in a constant expression}}
+
+// Inherited fields (delta-review follow-up on p33 patch 0010; cl measured
+// 2026-11-11, D:\Build\ort-p33-negtests\probe2.cmd MARK A, probe5.cmd MARK G):
+// cl evaluates a direct base member at the true object offset, at any base
+// depth and through a second non-virtual base. Before the base walk this
+// file rejected every inherited shape (fails-before for the walk).
+struct Base2 { int first; };
+struct Mid2 : Base2 { int mid; };
+struct Derived2 : Mid2 { int second[3]; };
+struct LeftBase { int left; };
+struct RightBase { int right; };
+struct Multi2 : LeftBase, RightBase {};
+static_assert(OFFSET(Derived2, first) == 0);
+static_assert(OFFSET(Derived2, mid) == 4);
+static_assert(OFFSET(Derived2, second) == 8);
+static_assert(OFFSET(Multi2, right) == 4);
+static_assert(OFFSET(Multi2, left) == 0);
+
+// Through a named member of derived type: cl also evaluates this idiom but
+// computes a wrong value there (it loses one base-size: OFFSET(OffsetOuter,
+// offInner.first) measures 4 on cl 19.50.35739 while the true offset is 8;
+// probe4.cmd MARK E/F). This evaluator keeps the true offset - a recorded
+// divergence from cl for the reviewer.
+struct OffsetOuter2 { int prefix; Derived2 inner; };
+static_assert(OFFSET(OffsetOuter2, inner.first) == 8);
+static_assert(OFFSET(OffsetOuter2, inner.second) == 12);
+
+// A reference member is not address-of-able as a field offset: cl rejects
+// with C2131 and clang keeps the normal evaluator (probe2.cmd MARK B).
+struct WithRef2 { int& r; };
+static_assert(OFFSET(WithRef2, r) == 0); // expected-error {{static assertion expression is not an integral constant expression}} expected-note {{reinterpret_cast is not allowed in a constant expression}}
+
+// A virtual-base path is rejected on cl too (C2131, probe5.cmd MARK H);
+// the base walk bails on virtual bases.
+struct VBase2 { int vb; };
+struct WithV2 : virtual VBase2 { int w; };
+static_assert(OFFSET(WithV2, vb) == 0); // expected-error {{static assertion expression is not an integral constant expression}} expected-note {{reinterpret_cast is not allowed in a constant expression}}

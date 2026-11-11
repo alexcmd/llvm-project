@@ -19465,8 +19465,12 @@ bool RecordExprEvaluator::VisitCXXParenListInitExpr(
 // MSVC accepts the field-offset idiom used by protobuf even for non-POD
 // records. Recognize only member-address subtraction from the same literal
 // integer pointer base. Do not relax constexpr reinterpret_cast generally:
-// array indexing, pointer arithmetic, reference members, inherited fields,
+// array indexing, pointer arithmetic, reference members, virtual-base paths
 // and expressions with runtime effects still use the normal evaluator.
+// Inherited fields ARE accepted: cl 19.50.35739 evaluates a direct base
+// member at any depth, including a second non-virtual base, at the true
+// object offset (D:\Build\ort-p33-negtests\probe2.cmd MARK A, probe5.cmd
+// MARK G: multi-base y==4/x==0; virtual bases rejected with C2131).
 namespace {
 struct MSFieldOffsetEvaluator {
   ASTContext &Ctx;
@@ -19490,6 +19494,31 @@ struct MSFieldOffsetEvaluator {
     return false;
   }
 
+  // Offset of the Target base subobject inside From, walking non-virtual
+  // bases only. The member expression resolved the name unambiguously, so
+  // the first walk that reaches the field's class is the one Sema picked.
+  bool baseOffset(const CXXRecordDecl *From, const CXXRecordDecl *Target,
+                  int64_t &Out) {
+    if (From == Target)
+      return true;
+    if (!From->isCompleteDefinition())
+      return false;
+    const ASTRecordLayout &Layout = Ctx.getASTRecordLayout(From);
+    for (const CXXBaseSpecifier &B : From->bases()) {
+      if (B.isVirtual())
+        return false;
+      const auto *BD = B.getType()->getAsCXXRecordDecl();
+      if (!BD)
+        continue;
+      int64_t Sub = 0;
+      if (baseOffset(BD, Target, Sub)) {
+        Out += Layout.getBaseClassOffset(BD).getQuantity() + Sub;
+        return true;
+      }
+    }
+    return false;
+  }
+
   bool object(const Expr *E) {
     E = E->IgnoreParens();
     const auto *M = dyn_cast<MemberExpr>(E);
@@ -19502,9 +19531,26 @@ struct MSFieldOffsetEvaluator {
     QualType BaseTy = M->getBase()->getType();
     if (M->isArrow())
       BaseTy = BaseTy->getPointeeType();
-    if (BaseTy->getAsRecordDecl() != F->getParent())
+    const auto *BaseRD = BaseTy->getAsRecordDecl();
+    if (!BaseRD)
       return false;
     uint64_t FieldOffset = Ctx.getFieldOffset(F) / Ctx.getCharWidth();
+    if (BaseRD != F->getParent()) {
+      // Inherited field. cl accepts the direct path (any depth, multi-base
+      // included) and computes the true offset there. It also accepts paths
+      // through a NAMED member of a derived type but computes a wrong value
+      // there (true - sizeof of the leading prefix: OFFSET(Outer, inner.first)
+      // measures 4 on cl while the true offset is 8, probe4.cmd MARK E/F);
+      // this evaluator keeps the true offset for that shape, a recorded
+      // divergence for the reviewer.
+      const auto *BaseCXX = dyn_cast<CXXRecordDecl>(BaseRD);
+      const auto *FieldRD = dyn_cast<CXXRecordDecl>(F->getParent());
+      int64_t BaseOffset = 0;
+      if (!BaseCXX || !FieldRD ||
+          !baseOffset(BaseCXX, FieldRD, BaseOffset))
+        return false;
+      FieldOffset += static_cast<uint64_t>(BaseOffset);
+    }
     if (Offset > std::numeric_limits<uint64_t>::max() - FieldOffset)
       return false;
     Offset += FieldOffset;

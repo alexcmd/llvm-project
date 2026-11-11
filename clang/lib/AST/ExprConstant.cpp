@@ -19546,13 +19546,11 @@ struct MSFieldOffsetEvaluator {
       return false;
     uint64_t FieldOffset = Ctx.getFieldOffset(F) / Ctx.getCharWidth();
     if (BaseRD != F->getParent()) {
-      // Inherited field. cl accepts the direct path (any depth, multi-base
-      // included) and computes the true offset there. It also accepts paths
-      // through a NAMED member of a derived type but computes a wrong value
-      // there (true - sizeof of the leading prefix: OFFSET(Outer, inner.first)
-      // measures 4 on cl while the true offset is 8, probe4.cmd MARK E/F);
-      // this evaluator keeps the true offset for that shape, a recorded
-      // divergence for the reviewer.
+      // Inherited field. cl accepts the idiom for base members at any depth
+      // and through named members of derived types, always at the true
+      // object offset (D:\Build\ort-p33-negtests: probe2.cmd MARK A,
+      // probe4.cmd MARK E/F, probe5.cmd MARK G - direct, nested and
+      // multi-base shapes all agree with the true offset there).
       const auto *BaseCXX = dyn_cast<CXXRecordDecl>(BaseRD);
       const auto *FieldRD = dyn_cast<CXXRecordDecl>(F->getParent());
       int64_t BaseOffset = 0;

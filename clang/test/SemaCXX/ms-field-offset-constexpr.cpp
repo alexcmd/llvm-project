@@ -37,14 +37,14 @@ static_assert(OFFSET(Derived2, second) == 8);
 static_assert(OFFSET(Multi2, right) == 4);
 static_assert(OFFSET(Multi2, left) == 0);
 
-// Through a named member of derived type: cl also evaluates this idiom but
-// computes a wrong value there (it loses one base-size: OFFSET(OffsetOuter,
-// offInner.first) measures 4 on cl 19.50.35739 while the true offset is 8;
-// probe4.cmd MARK E/F). This evaluator keeps the true offset - a recorded
-// divergence from cl for the reviewer.
+// Through a named member of derived type: cl accepts this too and computes
+// the true offset there as well (probe4.cmd MARK E/F: OFFSET(OffsetOuter2,
+// inner.first) measures 4 on cl - inner sits at 4 after the int prefix - and
+// inner.second is 8; both are the true object offsets, so the walk matches
+// cl across the whole measured inherited-field surface).
 struct OffsetOuter2 { int prefix; Derived2 inner; };
-static_assert(OFFSET(OffsetOuter2, inner.first) == 8);
-static_assert(OFFSET(OffsetOuter2, inner.second) == 12);
+static_assert(OFFSET(OffsetOuter2, inner.first) == 4);
+static_assert(OFFSET(OffsetOuter2, inner.second) == 8);
 
 // A reference member is not address-of-able as a field offset: cl rejects
 // with C2131 and clang keeps the normal evaluator (probe2.cmd MARK B).

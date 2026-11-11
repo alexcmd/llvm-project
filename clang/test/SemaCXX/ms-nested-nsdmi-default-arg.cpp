@@ -20,6 +20,15 @@ void f(UStaticMesh &m) { m.Build(); }
 
 // The exception specification follows the initializers once they are parsed
 // (cl 14.51: noexcept(N1()) is false, noexcept(N2()) true after the class).
+//
+// Delta-review follow-up classification, measured on the pre-patch p32 build
+// (D:\Build\ort-p33-negtests\p32-0013-classification.log, 6 errors): the
+// original UStaticMesh assert plus the N1, Throwing/Member/Base,
+// ReverseOrder::B asserts fail without the patch (fails-without-fix). The
+// N2, SafeMember and NestedParse asserts also pass pre-patch - they are
+// regression-only guards for the revisit machinery (no eager-evaluation
+// discriminator was found for the safe direction; the safe side has no
+// observable timing difference on the measured shapes).
 static_assert(noexcept(UStaticMesh::FBuildParameters()));
 #ifdef MS
 int mayThrow();

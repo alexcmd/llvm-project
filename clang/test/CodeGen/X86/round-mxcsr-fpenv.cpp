@@ -15,11 +15,17 @@
 // RUN: %clang_cc1 -triple x86_64-unknown-windows-msvc -target-feature +sse4.1 -ffreestanding -O2 %s -emit-llvm -o - | FileCheck %s --check-prefix=OPT
 // RUN: %clang_cc1 -triple x86_64-unknown-windows-msvc -target-feature +sse4.1 -ffreestanding -ffp-exception-behavior=strict -frounding-math -O2 %s -emit-llvm -o - | FileCheck %s --check-prefix=OPT
 
-// Runtime differential for the standalone repro (direct-mxcsr.cpp, exit code
-// 0 expected after the fix, 2 before) -- run this with the patched clang-cl:
-//   cmd /c call "C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\vcvars64.bat" -vcvars_ver=14.50
-//   clang-cl /O2 /Fe:direct-mxcsr-patched.exe direct-mxcsr.cpp /link /SUBSYSTEM:CONSOLE /ENTRY:mainCRTStartup
-//   direct-mxcsr-patched.exe && echo PASS || echo FAIL
+// The test stays header-free: declare the vector type the builtins operate on
+// (matches the xmmintrin.h definition).
+typedef float __v4sf __attribute__((__vector_size__(16)));
+
+// Runtime differential for the standalone repro (direct-mxcsr.cpp). Measured
+// 2026-11-11 (D:\Build\ort-p34\fails-before-20261111\README.md): the Nov-10
+// compiler candidate returned 2 before the fix; the shipped p33r5 build
+// outlines the two identical rounding bodies into one helper called twice, so
+// both shapes stay correct (exit 0) with and without the fix, and cl 19.50
+// itself returns 2 (it hoists all three ldmxcsr above both roundps). The lit
+// check above, not this differential, is the pre/post discriminator.
 
 // A current-direction rounding must not be reused across an MXCSR change:
 // both roundings (and both ldmxcsr writes) must survive the optimizer.

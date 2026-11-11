@@ -637,7 +637,10 @@ let TargetPrefix = "x86" in {  // All intrinsics start with "llvm.x86.".
 // In SelectionDAG the call is built as INTRINSIC_W_CHAIN from the callee
 // declaration's effects (the call site's are deliberately ignored there);
 // X86 lowers the six round forms through IntrinsicsWithChain and the
-// ROUNDP/ROUNDS cases in LowerINTRINSIC_W_CHAIN.
+// ROUNDP/ROUNDS cases in LowerINTRINSIC_W_CHAIN. There a current-direction
+// immediate expands to a strict (chained) VRNDSCALE node, so DAG-level CSE
+// cannot merge two roundings separated by an MXCSR update; a fixed direction
+// keeps the pure, still-mergeable expansion.
 // See clang/test/CodeGen/X86/round-mxcsr-fpenv.cpp.
 let TargetPrefix = "x86" in {  // All intrinsics start with "llvm.x86.".
   def int_x86_sse41_round_ss

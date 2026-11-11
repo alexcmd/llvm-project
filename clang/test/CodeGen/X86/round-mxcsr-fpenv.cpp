@@ -198,11 +198,14 @@ round256ps_fixed_across_setcsr(__v8sf x, unsigned a, unsigned b) {
 // CODEGEN-LABEL: {{^}}round256ps_fixed_across_setcsr:
 // CODEGEN-COUNT-2: vroundps
 
-// -O2 codegen: the chain keeps both roundings and both MXCSR writes alive
-// and in order (a round MI also reads the MXCSR pseudo-register - LDMXCSR
-// writes it - so no scheduler may move one across an ldmxcsr), while the
-// fixed-form calls and the no-change current-form calls still CSE down to a
-// single instruction.
+// -O2 codegen: a current-direction call expands to a strict (chained)
+// VRNDSCALE node, so two such calls keep separate values in SelectionDAG
+// even when all their other operands match - a pure node would be CSE'd
+// across the MXCSR update into one rounding executing under the wrong state
+// (passing the chain through MERGE_VALUES does not prevent that). The round
+// MI also reads the MXCSR pseudo-register - LDMXCSR writes it - so no
+// scheduler may move one across an ldmxcsr either. Fixed-form calls and the
+// no-change current-form calls still CSE down to a single instruction.
 
 // OPTCODEGEN-LABEL: {{^}}round_cur_across_setcsr:
 // OPTCODEGEN: ldmxcsr

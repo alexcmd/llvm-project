@@ -5612,7 +5612,7 @@ let ExeDomain = SSEPackedDouble, hasSideEffects = 0, isCodeGenOnly = 1 in {
 multiclass sse41_fp_unop_s_int<bits<8> opcss, bits<8> opcsd,
                                string OpcodeStr, X86FoldableSchedWrite sched,
                                ValueType VT32, ValueType VT64,
-                               SDNode OpNode, bit Is2Addr = 1> {
+                               SDPatternOperator OpNode, bit Is2Addr = 1> {
 let Uses = [MXCSR], mayRaiseFPException = 1 in {
 let ExeDomain = SSEPackedSingle in {
   def SSri_Int : SS4AIi8<opcss, MRMSrcReg,
@@ -5685,7 +5685,7 @@ let Predicates = [HasAVX, NoVLX] in {
 }
 let Predicates = [UseAVX] in {
   defm VROUND  : sse41_fp_unop_s_int<0x0A, 0x0B, "vround", SchedWriteFRnd.Scl,
-                                     v4f32, v2f64, X86RndScales, 0>,
+                                     v4f32, v2f64, X86any_VRndScales, 0>,
                                      VEX, VVVV, VEX_LIG, WIG, SIMD_EXC;
   defm VROUND  : avx_fp_unop_rm<0x0A, 0x0B, "vround", SchedWriteFRnd.Scl>,
                                 VEX, VVVV, VEX_LIG, WIG, SIMD_EXC;
@@ -5716,7 +5716,7 @@ defm ROUND  : sse41_fp_unop_s<0x0A, 0x0B, "round", SchedWriteFRnd.Scl>;
 
 let Constraints = "$src1 = $dst" in
 defm ROUND  : sse41_fp_unop_s_int<0x0A, 0x0B, "round", SchedWriteFRnd.Scl,
-                                  v4f32, v2f64, X86RndScales>;
+                                  v4f32, v2f64, X86any_VRndScales>;
 
 let Predicates = [UseSSE41] in {
   def : Pat<(X86any_VRndScale FR32:$src1, timm:$src2),

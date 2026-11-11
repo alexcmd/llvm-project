@@ -634,6 +634,12 @@ DiagnosticIDs::getDiagnosticSeverity(unsigned DiagID, SourceLocation Loc,
   if (!Mapping.isPragma() && Diag.isSuppressedViaMapping(DiagID, Loc))
     return diag::Severity::Ignored;
 
+  // "\#pragma warning(suppress : n)" turns the mapped warning off on the line
+  // after the pragma; the window also wins over an error promotion there (cl
+  // 14.50). Empty unless such a pragma was seen, so this is not hot.
+  if (Diag.isMSWarningSuppressed(DiagID, Loc))
+    return diag::Severity::Ignored;
+
   return Result;
 }
 

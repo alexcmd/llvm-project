@@ -23,6 +23,7 @@
 #include "clang/Basic/Specifiers.h"
 #include "clang/Basic/TokenKinds.h"
 #include "llvm/ADT/IntrusiveRefCntPtr.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringMap.h"
@@ -120,7 +121,10 @@ bool DiagnosticsEngine::popMappings(SourceLocation Loc) {
   return true;
 }
 
-void DiagnosticsEngine::ResetPragmas() { DiagStatesByLoc.clear(/*Soft=*/true); }
+void DiagnosticsEngine::ResetPragmas() {
+  DiagStatesByLoc.clear(/*Soft=*/true);
+  MSWarningSuppressWindows.clear();
+}
 
 void DiagnosticsEngine::Reset(bool soft /*=false*/) {
   ErrorOccurred = false;
@@ -140,6 +144,7 @@ void DiagnosticsEngine::Reset(bool soft /*=false*/) {
     DiagStates.clear();
     DiagStatesByLoc.clear(false);
     DiagStateOnPushStack.clear();
+    MSWarningSuppressWindows.clear();
 
     // Create a DiagState and DiagStatePoint representing diagnostic changes
     // through command-line.
@@ -601,6 +606,70 @@ bool DiagnosticsEngine::isSuppressedViaMapping(diag::kind DiagId,
   if (!hasSourceManager() || !DiagSuppressionMapping)
     return false;
   return DiagSuppressionMapping(DiagId, DiagLoc, getSourceManager());
+}
+
+void DiagnosticsEngine::suppressMSWarningsForNextLine(
+    ArrayRef<diag::Group> Groups, SourceLocation PragmaLoc) {
+  if (Groups.empty() || !SourceMgr || !PragmaLoc.isValid())
+    return;
+
+  // The diag set of a "disable" on the same numbers (what cl switches off).
+  SmallVector<diag::kind, 64> MappedDiags;
+  for (diag::Group G : Groups)
+    getDiagnosticIDs()->getDiagnosticsInGroup(
+        diag::Flavor::WarningOrError,
+        DiagnosticIDs::getWarningOptionForGroup(G), MappedDiags);
+  llvm::sort(MappedDiags);
+  MappedDiags.erase(llvm::unique(MappedDiags), MappedDiags.end());
+  if (MappedDiags.empty())
+    return;
+
+  // Expansion location, so a "__pragma(warning(suppress : n))" inside a macro
+  // arms the line after the macro's use, the way cl attributes it.
+  auto [FID, Offset] = SourceMgr->getDecomposedExpansionLoc(PragmaLoc);
+  if (!FID.isValid())
+    return;
+  bool Invalid = false;
+  unsigned Line = SourceMgr->getLineNumber(FID, Offset, &Invalid);
+  if (Invalid)
+    return;
+
+  MSWarningSuppressWindow &Window = MSWarningSuppressWindows.emplace_back();
+  Window.File = FID;
+  Window.Line = Line + 1;
+  Window.Diags = std::move(MappedDiags);
+}
+
+bool DiagnosticsEngine::isMSWarningSuppressed(diag::kind DiagId,
+                                              SourceLocation DiagLoc) const {
+  if (MSWarningSuppressWindows.empty() || !SourceMgr || !DiagLoc.isValid())
+    return false;
+
+  // Same decomposition as the window's: a diagnostic reported inside a macro
+  // expansion on the window line is covered, as cl attributes it to the
+  // expansion line.
+  auto [FID, Offset] = SourceMgr->getDecomposedExpansionLoc(DiagLoc);
+  if (!FID.isValid())
+    return false;
+
+  // The line is only worth computing once a window in this file names the
+  // diagnostic.
+  unsigned Line = 0;
+  bool HaveLine = false;
+  for (const MSWarningSuppressWindow &Window : MSWarningSuppressWindows) {
+    if (Window.File != FID || !llvm::binary_search(Window.Diags, DiagId))
+      continue;
+    if (!HaveLine) {
+      bool Invalid = false;
+      Line = SourceMgr->getLineNumber(FID, Offset, &Invalid);
+      if (Invalid)
+        return false;
+      HaveLine = true;
+    }
+    if (Window.Line == Line)
+      return true;
+  }
+  return false;
 }
 
 void DiagnosticsEngine::Report(const StoredDiagnostic &storedDiag) {

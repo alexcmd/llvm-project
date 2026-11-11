@@ -3477,7 +3477,7 @@ _mm_loadl_epi64(__m128i_u const *__p) {
   struct __mm_loadl_epi64_struct {
     long long __u;
   } __attribute__((__packed__, __may_alias__));
-  return __extension__(__m128i){
+  return (__m128i)__extension__(__v2di){
       ((const struct __mm_loadl_epi64_struct *)__p)->__u, 0};
 }
 

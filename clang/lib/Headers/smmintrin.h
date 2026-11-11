@@ -27,6 +27,17 @@
 #define __DEFAULT_FN_ATTRS_CONSTEXPR __DEFAULT_FN_ATTRS
 #endif
 
+/* In MSVC identity mode, permit baseline callers of the rounding intrinsics.
+ * Keep the SSE4.1 target on the helpers: a caller without SSE4.1 may need an
+ * out-of-line call, and execution still requires SSE4.1-capable hardware.
+ * Clang identity mode retains the usual always-inline feature diagnostics. */
+#if defined(_MSC_VER) && !defined(__clang__)
+#define __MS_ROUND_FN_ATTRS                                                    \
+  __attribute__((__nodebug__, __target__("sse4.1"), __min_vector_width__(128)))
+#else
+#define __MS_ROUND_FN_ATTRS __DEFAULT_FN_ATTRS
+#endif
+
 /* SSE4 Rounding macros. */
 #define _MM_FROUND_TO_NEAREST_INT 0x00
 #define _MM_FROUND_TO_NEG_INF 0x01
@@ -246,7 +257,7 @@
 /* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
 extern "C++" {
 template <int __I_M>
-static __inline__ __m128 __DEFAULT_FN_ATTRS __ms__mm_round_ps(__m128 __p_X) {
+static __inline__ __m128 __MS_ROUND_FN_ATTRS __ms__mm_round_ps(__m128 __p_X) {
   return ((__m128)__builtin_ia32_roundps((__v4sf)(__m128)(__p_X), (__I_M)));
 }
 }
@@ -298,7 +309,7 @@ static __inline__ __m128 __DEFAULT_FN_ATTRS __ms__mm_round_ps(__m128 __p_X) {
 /* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
 extern "C++" {
 template <int __I_M>
-static __inline__ __m128 __DEFAULT_FN_ATTRS __ms__mm_round_ss(__m128 __p_X, __m128 __p_Y) {
+static __inline__ __m128 __MS_ROUND_FN_ATTRS __ms__mm_round_ss(__m128 __p_X, __m128 __p_Y) {
   return ((__m128)__builtin_ia32_roundss((__v4sf)(__m128)(__p_X), (__v4sf)(__m128)(__p_Y), (__I_M)));
 }
 }
@@ -343,7 +354,7 @@ static __inline__ __m128 __DEFAULT_FN_ATTRS __ms__mm_round_ss(__m128 __p_X, __m1
 /* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
 extern "C++" {
 template <int __I_M>
-static __inline__ __m128d __DEFAULT_FN_ATTRS __ms__mm_round_pd(__m128d __p_X) {
+static __inline__ __m128d __MS_ROUND_FN_ATTRS __ms__mm_round_pd(__m128d __p_X) {
   return ((__m128d)__builtin_ia32_roundpd((__v2df)(__m128d)(__p_X), (__I_M)));
 }
 }
@@ -395,7 +406,7 @@ static __inline__ __m128d __DEFAULT_FN_ATTRS __ms__mm_round_pd(__m128d __p_X) {
 /* MS-compat C++: immediate is a template argument, so the builtin operand stays constant. */
 extern "C++" {
 template <int __I_M>
-static __inline__ __m128d __DEFAULT_FN_ATTRS __ms__mm_round_sd(__m128d __p_X, __m128d __p_Y) {
+static __inline__ __m128d __MS_ROUND_FN_ATTRS __ms__mm_round_sd(__m128d __p_X, __m128d __p_Y) {
   return ((__m128d)__builtin_ia32_roundsd((__v2df)(__m128d)(__p_X), (__v2df)(__m128d)(__p_Y), (__I_M)));
 }
 }
@@ -405,6 +416,8 @@ static __inline__ __m128d __DEFAULT_FN_ATTRS __ms__mm_round_sd(__m128d __p_X, __
   ((__m128d)__builtin_ia32_roundsd((__v2df)(__m128d)(X), (__v2df)(__m128d)(Y), \
                                    (M)))
 #endif
+
+#undef __MS_ROUND_FN_ATTRS
 
 /* SSE4 Packed Blending Intrinsics.  */
 /// Returns a 128-bit vector of [2 x double] where the values are

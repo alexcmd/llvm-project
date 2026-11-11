@@ -6980,6 +6980,14 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
       CLWarningsAsErrors = false;
   }
 
+  // UE-WE-LASTWINS continued: the UE-WE-LASTWINS rule ("whatever the order
+  // of the two") only holds if the id flags do not render before a later /W,
+  // whose -Wall/-WCL4 would switch the group back on (measured on cl 14.50:
+  // /wd4717 /W4 and /w44101 /W3 are silent, both orders). These flags wait
+  // below the loop, after every /W and CL-WARNING-DEFAULTS flag; their own
+  // command-line order (the lastwins rule between them) is kept.
+  llvm::SmallVector<const char *, 16> CLIDArgs;
+
   for (const Arg *A : Args.filtered(options::OPT_W_Group, options::OPT__SLASH_wd,
                                     options::OPT__SLASH_we,
                                     options::OPT__SLASH_wo,
@@ -7040,21 +7048,26 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
         StringRef Name = DiagnosticIDs::getWarningOptionForGroup(Group);
         if (A->getOption().matches(options::OPT__SLASH_wd) || Level == 0 ||
             (IsWL && !CLLevelsOff && Level > CLLevel)) {
-          CmdArgs.push_back(Args.MakeArgString("-Wno-" + Name));
+          CLIDArgs.push_back(Args.MakeArgString("-Wno-" + Name));
         } else if (A->getOption().matches(options::OPT__SLASH_we)) {
-          CmdArgs.push_back(Args.MakeArgString("-Werror=" + Name));
+          CLIDArgs.push_back(Args.MakeArgString("-Werror=" + Name));
         } else {
           // CLANG-CL-GAP(wo-warn-once): clang has no warn-once switch, so /wo
           // enables the group as a normal warning.
           if (!CLWarningsAsErrors)
-            CmdArgs.push_back(Args.MakeArgString("-Wno-error=" + Name));
-          CmdArgs.push_back(Args.MakeArgString("-W" + Name));
+            CLIDArgs.push_back(Args.MakeArgString("-Wno-error=" + Name));
+          CLIDArgs.push_back(Args.MakeArgString("-W" + Name));
         }
       }
       continue;
     }
     A->render(Args, CmdArgs);
   }
+
+  // UE-WE-LASTWINS continued: the id flags go last, after every /W (and the
+  // CL-WARNING-DEFAULTS flags that follow it), as in cl.
+  for (const char *S : CLIDArgs)
+    CmdArgs.push_back(S);
 
   if (CLStrictStrings)
     CmdArgs.push_back("-Werror=writable-strings");

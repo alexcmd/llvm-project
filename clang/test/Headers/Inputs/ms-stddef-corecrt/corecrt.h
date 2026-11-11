@@ -1,5 +1,2 @@
-#ifndef TEST_CORECRT_H
-#define TEST_CORECRT_H
-#define _Check_return_
-#define TEST_CORECRT_INCLUDED 1
-#endif
+// A runtime can include stddef.h while its corecrt dependencies are incomplete.
+#error stddef.h must not include corecrt.h to obtain SAL annotations

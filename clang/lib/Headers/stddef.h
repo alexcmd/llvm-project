@@ -35,8 +35,9 @@
 
 #else
 
-/* In the cl personality the vendor's stddef.h also exposes the CRT's SAL
- * declarations (C clients such as mimalloc rely on _Check_return_). Keep
+/* In the cl personality, clients of stddef.h can expect SAL annotations such
+ * as _Check_return_. Include SAL directly: a runtime header may be including
+ * stddef.h before it has defined the macros required by corecrt.h. Keep
  * partial __need_ includes and freestanding/resource-only use independent. */
 #if defined(_MSC_VER) && !defined(__clang__) && __STDC_HOSTED__ &&            \
     !defined(__need_ptrdiff_t) && !defined(__need_size_t) &&                  \
@@ -44,8 +45,8 @@
     !defined(__need_NULL) && !defined(__need_wint_t) &&                       \
     !defined(__need_max_align_t) && !defined(__need_offsetof) &&              \
     !defined(__need_nullptr_t) && !defined(__need_unreachable)
-#if __has_include(<corecrt.h>)
-#include <corecrt.h>
+#if __has_include(<sal.h>)
+#include <sal.h>
 #endif
 #endif
 

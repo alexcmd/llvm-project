@@ -516,6 +516,23 @@ private:
   /// so we can get back at it when we 'pop'.
   std::vector<DiagState *> DiagStateOnPushStack;
 
+  /// One "\#pragma warning(suppress : n...)" clause: the diagnostics the
+  /// numbers map to are turned off on the single line following the pragma,
+  /// which is what cl does (the state resumes on the line after that).
+  /// Diags is the sorted, deduplicated set of diagnostics in the mapped
+  /// groups, i.e. exactly what "disable : n" would switch off.
+  struct MSWarningSuppressWindow {
+    FileID File;
+    unsigned Line;
+    SmallVector<diag::kind, 8> Diags;
+  };
+
+  /// Every suppress window seen in this translation unit. They are keyed by
+  /// location instead of consumed, so one diagnostic checked twice gets the
+  /// same answer and each occurrence on the window line is covered, like cl.
+  /// A window is independent of the push/pop state and of error promotion.
+  SmallVector<MSWarningSuppressWindow, 4> MSWarningSuppressWindows;
+
   DiagState *GetCurDiagState() const {
     return DiagStatesByLoc.getCurDiagState();
   }
@@ -996,6 +1013,19 @@ public:
   /// clang-diagnostics pragmas.
   void setDiagSuppressionMapping(llvm::MemoryBuffer &Input);
   bool isSuppressedViaMapping(diag::kind DiagId, SourceLocation DiagLoc) const;
+
+  /// Turn off the diagnostics in \p Groups (the groups the numbers of one
+  /// "\#pragma warning(suppress : n...)" clause map to) on the line following
+  /// \p PragmaLoc, then the prior state resumes on the line after that. The
+  /// window is a location, not a state change: it never carries past its line
+  /// (a pop cannot push it forward, a blank line consumes it) and it wins over
+  /// a promotion of the number to an error, as measured on cl 14.50.
+  void suppressMSWarningsForNextLine(ArrayRef<diag::Group> Groups,
+                                     SourceLocation PragmaLoc);
+
+  /// Whether an MSVC warning-suppression window covers \p DiagId at
+  /// \p DiagLoc.
+  bool isMSWarningSuppressed(diag::kind DiagId, SourceLocation DiagLoc) const;
 
   /// Issue the message to the client.
   ///

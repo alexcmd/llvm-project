@@ -1396,9 +1396,11 @@ struct PragmaHdrstopHandler : public PragmaHandler {
   }
 };
 
-/// "\#pragma warning(...)".  MSVC's diagnostics do not map cleanly to clang's
-/// diagnostics, so we don't really implement this pragma.  We parse it and
-/// ignore it to avoid -Wunknown-pragma warnings.
+/// "\#pragma warning(...)".  push/pop and disable act on the groups the wd
+/// table maps the numbers to; suppress turns those groups off for the single
+/// line after the pragma (see DiagnosticsEngine::suppressMSWarningsForNextLine).
+/// MSVC's diagnostics do not map cleanly to clang's, so numbers the table does
+/// not know stay silent, and error/once/default are parsed and ignored.
 struct PragmaWarningHandler : public PragmaHandler {
   PragmaWarningHandler() : PragmaHandler("warning") {}
 
@@ -1410,6 +1412,13 @@ struct PragmaWarningHandler : public PragmaHandler {
     // warning(disable : 1 2 3 ; error : 4 5 6 ; suppress : 7 8 9)
     SourceLocation DiagLoc = Tok.getLocation();
     PPCallbacks *Callbacks = PP.getPPCallbacks();
+
+    // The numbers of a suppress clause are collected per clause here; a
+    // clause's window is armed only once that clause has parsed cleanly: cl
+    // discards the numbers of a clause that breaks ("suppress : 4996, 4189"),
+    // but keeps an earlier complete clause of the same pragma
+    // ("suppress : 4996 ; <garbage>").
+    SmallVector<diag::Group, 4> SuppressGroups;
 
     PP.Lex(Tok);
     if (Tok.isNot(tok::l_paren)) {
@@ -1509,7 +1518,7 @@ struct PragmaWarningHandler : public PragmaHandler {
           Ids.push_back(int(Value));
         }
 
-        // Only act on disable for now.
+        // Act on disable now; suppress arms a window below.
         diag::Severity SV = diag::Severity();
         if (Specifier == PPCallbacks::PWS_Disable)
           SV = diag::Severity::Ignored;
@@ -1523,6 +1532,10 @@ struct PragmaWarningHandler : public PragmaHandler {
               (void)unknownDiag;
             }
           }
+        if (Specifier == PPCallbacks::PWS_Suppress)
+          for (int Id : Ids)
+            for (diag::Group Group : diagGroupsFromCLWarningID(Id))
+              SuppressGroups.push_back(Group);
 
         if (Callbacks)
           Callbacks->PragmaWarning(DiagLoc, Specifier, Ids);
@@ -1530,6 +1543,13 @@ struct PragmaWarningHandler : public PragmaHandler {
         // Parse the next specifier if there is a semicolon.
         if (Tok.isNot(tok::semi))
           break;
+
+        // The clause parsed cleanly up to the ';': arm its window.
+        if (!SuppressGroups.empty()) {
+          PP.getDiagnostics().suppressMSWarningsForNextLine(SuppressGroups,
+                                                            DiagLoc);
+          SuppressGroups.clear();
+        }
         PP.Lex(Tok);
       }
     }
@@ -1538,6 +1558,11 @@ struct PragmaWarningHandler : public PragmaHandler {
       PP.Diag(Tok, diag::warn_pragma_warning_expected) << ")";
       return;
     }
+
+    // The last clause ended at the ')': its window counts too.
+    if (!SuppressGroups.empty())
+      PP.getDiagnostics().suppressMSWarningsForNextLine(SuppressGroups,
+                                                        DiagLoc);
 
     PP.Lex(Tok);
     if (Tok.isNot(tok::eod))

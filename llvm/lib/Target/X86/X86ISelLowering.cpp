@@ -28586,14 +28586,23 @@ static SDValue LowerINTRINSIC_W_CHAIN(SDValue Op, const X86Subtarget &Subtarget,
   }
   case ROUNDP: {
     assert(IntrData->Opc0 == X86ISD::VRNDSCALE && "Unexpected opcode");
-    // The legacy MXCSR-aware rounding intrinsics model a read of the FP
-    // environment, so they arrive chained (see IntrinsicsWithChain). Expand
-    // to the same pure VRNDSCALE node the chain-less lowering used and pass
-    // the chain through; the rounding itself stays schedulable.
     // Clear the upper bits of the rounding immediate so that the legacy
     // intrinsic can't trigger the scaling behavior of VRNDSCALE.
     uint64_t Round = Op.getConstantOperandVal(3);
     SDValue RoundingMode = DAG.getTargetConstant(Round & 0xf, dl, MVT::i32);
+    if (Round & 0x4) { // _MM_FROUND_CUR_DIRECTION: reads the MXCSR rounding mode.
+      // The rounding result depends on MXCSR, which ldmxcsr/stmxcsr update
+      // through the MXCSR pseudo-register. Keep the value chained to the call
+      // chain (strict node, chain is the first operand) so SelectionDAG CSE
+      // cannot fold two current-direction roundings separated by an MXCSR
+      // update into a single node executed under one of the two states.
+      return DAG.getNode(X86ISD::STRICT_VRNDSCALE, dl,
+                         { Op->getValueType(0), MVT::Other },
+                         { Op.getOperand(0), Op.getOperand(2), RoundingMode });
+    }
+    // Fixed rounding direction: no MXCSR dependency, so expand to the same
+    // pure node the chain-less lowering used and pass the chain through;
+    // identical calls remain CSE-able (see also IntrinsicsWithChain).
     SDValue Res = DAG.getNode(IntrData->Opc0, dl, Op->getValueType(0),
                               Op.getOperand(2), RoundingMode);
     return DAG.getNode(ISD::MERGE_VALUES, dl, Op->getVTList(), Res,
@@ -28605,6 +28614,15 @@ static SDValue LowerINTRINSIC_W_CHAIN(SDValue Op, const X86Subtarget &Subtarget,
     // intrinsic can't trigger the scaling behavior of VRNDSCALE.
     uint64_t Round = Op.getConstantOperandVal(4);
     SDValue RoundingMode = DAG.getTargetConstant(Round & 0xf, dl, MVT::i32);
+    if (Round & 0x4) { // _MM_FROUND_CUR_DIRECTION: reads the MXCSR rounding mode.
+      // See the ROUNDP case: keep the scalar result chained so it stays apart
+      // from an identical rounding across an MXCSR update.
+      return DAG.getNode(X86ISD::STRICT_VRNDSCALES, dl,
+                         { Op->getValueType(0), MVT::Other },
+                         { Op.getOperand(0), Op.getOperand(2),
+                           Op.getOperand(3), RoundingMode });
+    }
+    // Fixed rounding direction: pure node, chain passed through (ROUNDP).
     SDValue Res = DAG.getNode(IntrData->Opc0, dl, Op->getValueType(0),
                               Op.getOperand(2), Op.getOperand(3),
                               RoundingMode);

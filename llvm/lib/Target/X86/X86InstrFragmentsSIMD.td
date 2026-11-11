@@ -673,6 +673,17 @@ def X86any_VRndScale    : PatFrags<(ops node:$src1, node:$src2),
                                     [(X86strict_VRndScale node:$src1, node:$src2),
                                     (X86VRndScale node:$src1, node:$src2)]>;
 
+// Scalar (V)ROUND{SS,SD} forms of the legacy MXCSR-aware rounding intrinsics.
+// The strict (chained) variant keeps two current-direction roundings apart in
+// SelectionDAG CSE when an MXCSR update sits between them.
+let IsStrictFP = true in
+def X86strict_VRndScales : SDNode<"X86ISD::STRICT_VRNDSCALES", SDTFPBinOpImm,
+                                   [SDNPHasChain]>;
+
+def X86any_VRndScales    : PatFrags<(ops node:$src1, node:$src2, node:$src3),
+                                     [(X86strict_VRndScales node:$src1, node:$src2, node:$src3),
+                                     (X86RndScales node:$src1, node:$src2, node:$src3)]>;
+
 // Extract Normalized Mantissas.
 def X86VGetMant    : SDNode<"X86ISD::VGETMANT",      SDTFPUnaryOpImm>;
 def X86VGetMantSAE : SDNode<"X86ISD::VGETMANT_SAE",  SDTFPUnaryOpImm>;

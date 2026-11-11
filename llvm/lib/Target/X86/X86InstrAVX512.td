@@ -9660,7 +9660,7 @@ multiclass avx512_rndscale_scalar<bits<8> opc, string OpcodeStr,
   defm rri : AVX512_maskable_scalar<opc, MRMSrcReg, _, (outs _.RC:$dst),
                            (ins _.RC:$src1, _.RC:$src2, i32u8imm:$src3), OpcodeStr,
                            "$src3, $src2, $src1", "$src1, $src2, $src3",
-                           (_.VT (X86RndScales (_.VT _.RC:$src1), (_.VT _.RC:$src2),
+                           (_.VT (X86any_VRndScales (_.VT _.RC:$src1), (_.VT _.RC:$src2),
                            (i32 timm:$src3))), "_Int">,
                            Sched<[sched]>, SIMD_EXC;
 
@@ -9677,7 +9677,7 @@ multiclass avx512_rndscale_scalar<bits<8> opc, string OpcodeStr,
                          (ins _.RC:$src1, _.IntScalarMemOp:$src2, i32u8imm:$src3),
                          OpcodeStr,
                          "$src3, $src2, $src1", "$src1, $src2, $src3",
-                         (_.VT (X86RndScales _.RC:$src1,
+                         (_.VT (X86any_VRndScales _.RC:$src1,
                                 (_.ScalarIntMemFrags addr:$src2), (i32 timm:$src3))), "_Int">,
                          Sched<[sched.Folded, sched.ReadAfterFold]>, SIMD_EXC;
 

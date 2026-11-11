@@ -19528,7 +19528,17 @@ struct MSFieldOffsetEvaluator {
     if (!F || F->isBitField() || F->getType()->isReferenceType() ||
         F->getParent()->isInvalidDecl())
       return false;
-    QualType BaseTy = M->getBase()->getType();
+    // An inherited-member access carries an implicit derived-to-base cast on
+    // the object expression (UncheckedDerivedToBase for the arrow idiom), so
+    // M->getBase()'s type is the BASE, not the named object type. The true
+    // static type - and the base the offset walk starts from - lives in the
+    // cast's subexpression.
+    const Expr *BaseE = M->getBase()->IgnoreParens();
+    if (const auto *BC = dyn_cast<CastExpr>(BaseE))
+      if (BC->getCastKind() == CK_UncheckedDerivedToBase ||
+          BC->getCastKind() == CK_DerivedToBase)
+        BaseE = BC->getSubExpr()->IgnoreParens();
+    QualType BaseTy = BaseE->getType();
     if (M->isArrow())
       BaseTy = BaseTy->getPointeeType();
     const auto *BaseRD = BaseTy->getAsRecordDecl();
@@ -19555,7 +19565,7 @@ struct MSFieldOffsetEvaluator {
       return false;
     Offset += FieldOffset;
     HasField = true;
-    return M->isArrow() ? pointer(M->getBase()) : object(M->getBase());
+    return M->isArrow() ? pointer(BaseE) : object(BaseE);
   }
 };
 } // namespace

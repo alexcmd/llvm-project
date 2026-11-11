@@ -39,11 +39,14 @@
 // ORDERWE0-NOT: "-Wno-infinite-recursion"
 // ORDERWE0: "-Werror=infinite-recursion"
 
-// RUN: %clang_cl --target=x86_64-pc-windows-msvc /we4717 /W0 -fsyntax-only -- %s 2>&1 \
+// not: the run is expected to fail (cl exits nonzero on the promoted
+// error); lit defaults to pipefail, so a bare pipeline would fail on the
+// producer's exit code before FileCheck even runs.
+// RUN: not %clang_cl --target=x86_64-pc-windows-msvc /we4717 /W0 -fsyntax-only -- %s 2>&1 \
 // RUN:   | FileCheck --check-prefix=WE %s
-// RUN: %clang_cl --target=x86_64-pc-windows-msvc /W0 /we4717 -fsyntax-only -- %s 2>&1 \
+// RUN: not %clang_cl --target=x86_64-pc-windows-msvc /W0 /we4717 -fsyntax-only -- %s 2>&1 \
 // RUN:   | FileCheck --check-prefix=WE %s
-// RUN: %clang_cl --target=x86_64-pc-windows-msvc /we4717 /W4 -fsyntax-only -- %s 2>&1 \
+// RUN: not %clang_cl --target=x86_64-pc-windows-msvc /we4717 /W4 -fsyntax-only -- %s 2>&1 \
 // RUN:   | FileCheck --check-prefix=WE %s
 // WE: error: all paths through this function will call itself [-Werror,-Winfinite-recursion]
 

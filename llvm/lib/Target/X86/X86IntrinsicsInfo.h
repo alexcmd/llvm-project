@@ -100,6 +100,11 @@ struct IntrinsicData {
  * the alphabetical order.
  */
 static const IntrinsicData IntrinsicsWithChain[] = {
+    // The legacy MXCSR-aware rounding intrinsics read the FP environment
+    // (immediate bit 0b100 follows MXCSR), so they carry a chain; see the
+    // ROUNDP/ROUNDS cases in LowerINTRINSIC_W_CHAIN.
+    X86_INTRINSIC_DATA(avx_round_pd_256, ROUNDP, X86ISD::VRNDSCALE, 0),
+    X86_INTRINSIC_DATA(avx_round_ps_256, ROUNDP, X86ISD::VRNDSCALE, 0),
     X86_INTRINSIC_DATA(avx2_gather_d_d, GATHER_AVX2, 0, 0),
     X86_INTRINSIC_DATA(avx2_gather_d_d_256, GATHER_AVX2, 0, 0),
     X86_INTRINSIC_DATA(avx2_gather_d_pd, GATHER_AVX2, 0, 0),
@@ -337,6 +342,10 @@ static const IntrinsicData IntrinsicsWithChain[] = {
     X86_INTRINSIC_DATA(rdseed_64, RDSEED, X86ISD::RDSEED, 0),
     X86_INTRINSIC_DATA(rdtsc, RDTSC, X86::RDTSC, 0),
     X86_INTRINSIC_DATA(rdtscp, RDTSC, X86::RDTSCP, 0),
+    X86_INTRINSIC_DATA(sse41_round_pd, ROUNDP, X86ISD::VRNDSCALE, 0),
+    X86_INTRINSIC_DATA(sse41_round_ps, ROUNDP, X86ISD::VRNDSCALE, 0),
+    X86_INTRINSIC_DATA(sse41_round_sd, ROUNDS, X86ISD::VRNDSCALES, 0),
+    X86_INTRINSIC_DATA(sse41_round_ss, ROUNDS, X86ISD::VRNDSCALES, 0),
     X86_INTRINSIC_DATA(xgetbv, XGETBV, X86::XGETBV, 0),
     X86_INTRINSIC_DATA(xtest, XTEST, X86ISD::XTEST, 0),
 };
@@ -380,8 +389,6 @@ static const IntrinsicData IntrinsicsWithoutChain[] = {
     X86_INTRINSIC_DATA(avx_movmsk_pd_256, INTR_TYPE_1OP, X86ISD::MOVMSK, 0),
     X86_INTRINSIC_DATA(avx_movmsk_ps_256, INTR_TYPE_1OP, X86ISD::MOVMSK, 0),
     X86_INTRINSIC_DATA(avx_rcp_ps_256, INTR_TYPE_1OP, X86ISD::FRCP, 0),
-    X86_INTRINSIC_DATA(avx_round_pd_256, ROUNDP, X86ISD::VRNDSCALE, 0),
-    X86_INTRINSIC_DATA(avx_round_ps_256, ROUNDP, X86ISD::VRNDSCALE, 0),
     X86_INTRINSIC_DATA(avx_rsqrt_ps_256, INTR_TYPE_1OP, X86ISD::FRSQRT, 0),
     X86_INTRINSIC_DATA(avx_vpermilvar_pd, INTR_TYPE_2OP, X86ISD::VPERMILPV, 0),
     X86_INTRINSIC_DATA(avx_vpermilvar_pd_256, INTR_TYPE_2OP, X86ISD::VPERMILPV,
@@ -2025,10 +2032,6 @@ static const IntrinsicData IntrinsicsWithoutChain[] = {
     X86_INTRINSIC_DATA(sse41_packusdw, INTR_TYPE_2OP, X86ISD::PACKUS, 0),
     X86_INTRINSIC_DATA(sse41_pblendvb, BLENDV, X86ISD::BLENDV, 0),
     X86_INTRINSIC_DATA(sse41_phminposuw, INTR_TYPE_1OP, X86ISD::PHMINPOS, 0),
-    X86_INTRINSIC_DATA(sse41_round_pd, ROUNDP, X86ISD::VRNDSCALE, 0),
-    X86_INTRINSIC_DATA(sse41_round_ps, ROUNDP, X86ISD::VRNDSCALE, 0),
-    X86_INTRINSIC_DATA(sse41_round_sd, ROUNDS, X86ISD::VRNDSCALES, 0),
-    X86_INTRINSIC_DATA(sse41_round_ss, ROUNDS, X86ISD::VRNDSCALES, 0),
     X86_INTRINSIC_DATA(sse4a_extrqi, INTR_TYPE_3OP, X86ISD::EXTRQI, 0),
     X86_INTRINSIC_DATA(sse4a_insertqi, INTR_TYPE_4OP_IMM8, X86ISD::INSERTQI, 0),
     X86_INTRINSIC_DATA(ssse3_pabs_b, INTR_TYPE_CAST_MMX, 0, 0),

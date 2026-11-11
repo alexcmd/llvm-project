@@ -625,21 +625,35 @@ let TargetPrefix = "x86" in {  // All intrinsics start with "llvm.x86.".
 // SSE4.1
 
 // FP rounding ops
+//
+// Rounding with the "current rounding direction" immediate (bit 2 set, e.g.
+// _MM_FROUND_CUR_DIRECTION) follows MXCSR, so these intrinsics model a read
+// of the floating-point environment: memory(inaccessiblemem: read), the same
+// way AArch64 models reads of FPMR. Without this the results of two
+// current-direction calls get CSE'd across an intervening llvm.x86.sse.ldmxcsr
+// (which models unknown effects), miscompiling code that changes MXCSR at
+// runtime. Clang emits memory(none) at call sites whose immediate selects a
+// fixed direction, so those calls keep their old pure-call optimizations.
+// See clang/test/CodeGen/X86/round-mxcsr-fpenv.cpp.
 let TargetPrefix = "x86" in {  // All intrinsics start with "llvm.x86.".
   def int_x86_sse41_round_ss
       : DefaultAttrsIntrinsic<[llvm_v4f32_ty],
                               [llvm_v4f32_ty, llvm_v4f32_ty, llvm_i32_ty],
-                              [IntrNoMem, ImmArg<ArgIndex<2>>]>;
+                              [IntrRead<[InaccessibleMem]>, IntrReadOnly,
+                               ImmArg<ArgIndex<2>>]>;
   def int_x86_sse41_round_ps
       : DefaultAttrsIntrinsic<[llvm_v4f32_ty], [llvm_v4f32_ty, llvm_i32_ty],
-                              [IntrNoMem, ImmArg<ArgIndex<1>>]>;
+                              [IntrRead<[InaccessibleMem]>, IntrReadOnly,
+                               ImmArg<ArgIndex<1>>]>;
   def int_x86_sse41_round_sd
       : DefaultAttrsIntrinsic<[llvm_v2f64_ty],
                               [llvm_v2f64_ty, llvm_v2f64_ty, llvm_i32_ty],
-                              [IntrNoMem, ImmArg<ArgIndex<2>>]>;
+                              [IntrRead<[InaccessibleMem]>, IntrReadOnly,
+                               ImmArg<ArgIndex<2>>]>;
   def int_x86_sse41_round_pd
       : DefaultAttrsIntrinsic<[llvm_v2f64_ty], [llvm_v2f64_ty, llvm_i32_ty],
-                              [IntrNoMem, ImmArg<ArgIndex<1>>]>;
+                              [IntrRead<[InaccessibleMem]>, IntrReadOnly,
+                               ImmArg<ArgIndex<1>>]>;
 }
 
 // Vector min element
@@ -923,12 +937,16 @@ let TargetPrefix = "x86" in {  // All intrinsics start with "llvm.x86.".
   def int_x86_avx_rcp_ps_256 : ClangBuiltin<"__builtin_ia32_rcpps256">,
       DefaultAttrsIntrinsic<[llvm_v8f32_ty], [llvm_v8f32_ty], [IntrNoMem]>;
 
+  // See int_x86_sse41_round_ps above: the current-direction forms read the
+  // FP environment; clang marks fixed-direction call sites memory(none).
   def int_x86_avx_round_pd_256
       : DefaultAttrsIntrinsic<[llvm_v4f64_ty], [llvm_v4f64_ty, llvm_i32_ty],
-                              [IntrNoMem, ImmArg<ArgIndex<1>>]>;
+                              [IntrRead<[InaccessibleMem]>, IntrReadOnly,
+                               ImmArg<ArgIndex<1>>]>;
   def int_x86_avx_round_ps_256
       : DefaultAttrsIntrinsic<[llvm_v8f32_ty], [llvm_v8f32_ty, llvm_i32_ty],
-                              [IntrNoMem, ImmArg<ArgIndex<1>>]>;
+                              [IntrRead<[InaccessibleMem]>, IntrReadOnly,
+                               ImmArg<ArgIndex<1>>]>;
 }
 
 // Horizontal ops

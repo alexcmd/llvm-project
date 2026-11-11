@@ -241,6 +241,10 @@ static const CLWarningLevel CLLevels[] = {
     // Child of "enum-compare".
     {"deprecated-enum-compare", 4, "enum-compare", nullptr},
     // Kept from the cl.exe level of the matching warning.
+    // UE-C4717: cl reports the recursive call by default (level 1: fires
+    // with no /W flag and at /W1../W4, silent at /W0). The group is
+    // DefaultIgnore and -Wall only reaches it through -Wmost, so Enable.
+    {"infinite-recursion", 1, nullptr, nullptr, true},
     {"constant-conversion", 2, nullptr, nullptr},
     {"delete-incomplete", 2, nullptr, nullptr},
     {"implicit-const-int-float-conversion", 2, nullptr, nullptr},

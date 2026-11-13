@@ -441,6 +441,37 @@ def pgo_flag_spdembed : F<"SPDEMBED">;  // LLD-GAP(pgo)
 def pgo_p_spd : P_priv<"SPD">;  // LLD-GAP(pgo)
 def pgo_p_spdin : P_priv<"SPDIN">;  // LLD-GAP(pgo)
 
+// link.exe options that take a value lld-link does not implement, but that are
+// also fully declared here so their BARE form is LNK1146, not LNK4044. link.exe
+// 14.51 rejects every one of these without a value (probed 2026-11-13, see
+// tasks/compat/14); leaving them undeclared sends them down the generic
+// unknown-option path (LNK4044, exit 0) and the parity rows read as
+// mismatch:exit+class+code. The value-bearing form is handled in Driver.cpp.
+def clip_arg_arm64xfunctionpadminx64 : P_priv<"ARM64XFUNCTIONPADMINX64">;  // LLD-GAP(arm64x)
+def clip_arg_clrsignhash : P_priv<"CLRSIGNHASH">;  // LLD-GAP(clr)
+def clip_arg_experimental : P_priv<"EXPERIMENTAL">;  // LLD-GAP(experimental)
+def clip_arg_minpdbpathlen : P_priv<"MINPDBPATHLEN">;  // LLD-GAP(misc)
+def clip_arg_mt : P_priv<"MT">;  // LLD-GAP(misc)
+def clip_arg_pdbpath : P_priv<"PDBPATH">;  // LLD-GAP(misc)
+def clip_arg_trimfile : P_priv<"trimfile">;  // LLD-GAP(misc)
+def clip_arg_pgd : P_priv<"PGD">;  // LLD-GAP(pgo)
+def clip_arg_pathmap : P_priv<"PATHMAP">;  // LLD-GAP(experimental)
+def clip_arg_weakorder : P_priv<"WEAKORDER">;  // LLD-GAP(misc)
+def clip_arg_sourcemap : P_priv<"SOURCEMAP">;  // LLD-GAP(clr)
+def clip_arg_importcalloptimization : P_priv<"IMPORTCALLOPTIMIZATION">;  // LLD-GAP(misc)
+def clip_arg_spdidstr : P_priv<"SPDIDSTR">;  // LLD-GAP(pgo)
+def clip_arg_spdindex : P_priv<"SPDINDEX">;  // LLD-GAP(pgo)
+def clip_arg_winmdsignhash : P_priv<"WINMDSIGNHASH">;  // LLD-GAP(clr)
+// /Fe is link.exe's documented "rename the output" spelling, but 14.51 ignores
+// it whenever /OUT is present and, with /OUT absent, still writes <stem>.exe
+// (probed: /Fe:afe.dll produced p.dll). Accepted and ignored, like /OUT-less
+// link lines expect; /OUT remains the only way lld-link names its output.
+def clip_arg_fe : P_priv<"Fe">;  // LLD-GAP(ignored)
+// The two PGO flags whose bare form is NOT LNK1146: link.exe accepts the flag
+// and reports the missing dependency instead (LNK1220). Declared so they parse.
+def pgo_flag_pogonoshare : F<"POGONOSHARE">;  // LLD-GAP(pgo)
+def pgo_flag_pogosafemode : F<"POGOSAFEMODE">;  // LLD-GAP(pgo)
+
 // Accepted and ignored (LLD-GAP): no effect on the image that lld-link
 // produces here. Kept so that link lines copied from MSVC projects parse.
 def gap_p_sourcelink : P_priv<"SOURCELINK">;  // LLD-GAP(ignored)

@@ -1,0 +1,63 @@
+# link.exe 14.51 treats every one of these as a KNOWN option that takes a value:
+# the bare form is LNK1146 (exit 1146), never LNK4044. lld-link used to leave
+# them undeclared, so they fell through to the generic unknown-option path and
+# the CLI parity rows read mismatch:exit+class+code (tasks/compat/14, 18 rows).
+# Each line below is a probed recording, not an assumption: see the table in
+# tasks/compat/14-link-missing-options.md ("wave 3").
+#
+# One check prefix per option. FileCheck restarts at the top of the check file
+# for every RUN line, so a shared prefix would make all of them match the FIRST
+# `BARE:` line (the /ARM64... one) and silently assert nothing after it.
+RUN: yaml2obj %p/Inputs/ret42.yaml -o %t.obj
+
+RUN: not lld-link /entry:main %t.obj /ARM64XFUNCTIONPADMINX64 2>&1 | FileCheck --check-prefix=OARM64XFUNCTIONPADMINX64 %s
+OARM64XFUNCTIONPADMINX64: LINK : fatal error LNK1146: no argument specified with option '/ARM64XFUNCTIONPADMINX64'
+RUN: not lld-link /entry:main %t.obj /CLRSIGNHASH 2>&1 | FileCheck --check-prefix=OCLRSIGNHASH %s
+OCLRSIGNHASH: LINK : fatal error LNK1146: no argument specified with option '/CLRSIGNHASH'
+RUN: not lld-link /entry:main %t.obj /EXPERIMENTAL 2>&1 | FileCheck --check-prefix=OEXPERIMENTAL %s
+OEXPERIMENTAL: LINK : fatal error LNK1146: no argument specified with option '/EXPERIMENTAL'
+RUN: not lld-link /entry:main %t.obj /Fe 2>&1 | FileCheck --check-prefix=OFE %s
+OFE: LINK : fatal error LNK1146: no argument specified with option '/Fe'
+RUN: not lld-link /entry:main %t.obj /IMPORTCALLOPTIMIZATION 2>&1 | FileCheck --check-prefix=OIMPORTCALLOPTIMIZATION %s
+OIMPORTCALLOPTIMIZATION: LINK : fatal error LNK1146: no argument specified with option '/IMPORTCALLOPTIMIZATION'
+RUN: not lld-link /entry:main %t.obj /MINPDBPATHLEN 2>&1 | FileCheck --check-prefix=OMINPDBPATHLEN %s
+OMINPDBPATHLEN: LINK : fatal error LNK1146: no argument specified with option '/MINPDBPATHLEN'
+RUN: not lld-link /entry:main %t.obj /MT 2>&1 | FileCheck --check-prefix=OMT %s
+OMT: LINK : fatal error LNK1146: no argument specified with option '/MT'
+RUN: not lld-link /entry:main %t.obj /PATHMAP 2>&1 | FileCheck --check-prefix=OPATHMAP %s
+OPATHMAP: LINK : fatal error LNK1146: no argument specified with option '/PATHMAP'
+RUN: not lld-link /entry:main %t.obj /PDBPATH 2>&1 | FileCheck --check-prefix=OPDBPATH %s
+OPDBPATH: LINK : fatal error LNK1146: no argument specified with option '/PDBPATH'
+RUN: not lld-link /entry:main %t.obj /PGD 2>&1 | FileCheck --check-prefix=OPGD %s
+OPGD: LINK : fatal error LNK1146: no argument specified with option '/PGD'
+RUN: not lld-link /entry:main %t.obj /SOURCEMAP 2>&1 | FileCheck --check-prefix=OSOURCEMAP %s
+OSOURCEMAP: LINK : fatal error LNK1146: no argument specified with option '/SOURCEMAP'
+RUN: not lld-link /entry:main %t.obj /SPDIDSTR 2>&1 | FileCheck --check-prefix=OSPDIDSTR %s
+OSPDIDSTR: LINK : fatal error LNK1146: no argument specified with option '/SPDIDSTR'
+RUN: not lld-link /entry:main %t.obj /SPDINDEX 2>&1 | FileCheck --check-prefix=OSPDINDEX %s
+OSPDINDEX: LINK : fatal error LNK1146: no argument specified with option '/SPDINDEX'
+RUN: not lld-link /entry:main %t.obj /WEAKORDER 2>&1 | FileCheck --check-prefix=OWEAKORDER %s
+OWEAKORDER: LINK : fatal error LNK1146: no argument specified with option '/WEAKORDER'
+RUN: not lld-link /entry:main %t.obj /WINMDSIGNHASH 2>&1 | FileCheck --check-prefix=OWINMDSIGNHASH %s
+OWINMDSIGNHASH: LINK : fatal error LNK1146: no argument specified with option '/WINMDSIGNHASH'
+RUN: not lld-link /entry:main %t.obj /trimfile 2>&1 | FileCheck --check-prefix=OTRIMFILE %s
+OTRIMFILE: LINK : fatal error LNK1146: no argument specified with option '/trimfile'
+
+# The value-bearing spellings must be accepted, not rejected as unknown.
+# /Fe: is accept-and-ignore in link.exe even when /OUT is absent (14.51 wrote
+# <stem>.dll, not the /Fe name), so lld-link keeps /OUT authoritative for naming.
+RUN: lld-link /entry:main %t.obj /out:%t.exe /Fe:%t2.exe 2>&1 | count 0
+RUN: lld-link /entry:main %t.obj /out:%t.exe /MINPDBPATHLEN:260 /MT:1 /trimfile:%t.trim 2>&1 | count 0
+
+# LNK1220: the two PGO flags whose bare form is NOT LNK1146. link.exe accepts
+# the flag and reports the missing dependency, keyed on /LTCG.
+RUN: not lld-link /entry:main %t.obj /out:%t.exe /POGONOSHARE 2>&1 | FileCheck --check-prefix=PGO1 %s
+PGO1: LINK : fatal error LNK1220: '/POGONOSHARE' requires '/LTCG:PGINSTRUMENT' specification
+RUN: not lld-link /entry:main %t.obj /out:%t.exe /POGOSAFEMODE 2>&1 | FileCheck --check-prefix=PGO2 %s
+PGO2: LINK : fatal error LNK1220: '/POGOSAFEMODE' requires '/LTCG:PGINSTRUMENT' specification
+# Probed: link.exe 14.51 stopped complaining at /LTCG:PGINSTRUMENT (it then
+# failed later, on LNK1264), so the dependency check alone must pass. lld-link
+# accepts /LTCG and carries on, so this RUN line is NOT prefixed with `not`:
+# only the absence of LNK1220 is asserted.
+RUN: lld-link /entry:main %t.obj /out:%t.exe /POGONOSHARE /LTCG:PGINSTRUMENT 2>&1 | FileCheck --check-prefix=NOPG %s
+NOPG-NOT: LNK1220

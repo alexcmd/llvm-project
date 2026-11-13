@@ -1955,6 +1955,32 @@ void LinkerDriver::linkerMain(ArrayRef<const char *> argsArr) {
       exitLld(1146);
     }
 
+  // link.exe dependency checks, in the order 14.51 reports them (probed
+  // 2026-11-13). Each of these is a valid option whose bare form is already
+  // LNK1146 through the empty-value check above; what is missing is the
+  // LNK1220 that link.exe emits when the value is present but the option it
+  // depends on is not. Reuse that machinery rather than inventing a new one.
+  if (args.hasArg(OPT_pgo_flag_pogonoshare) ||
+      args.hasArg(OPT_pgo_flag_pogosafemode)) {
+    // link.exe: "'/POGONOSHARE' requires '/LTCG:PGINSTRUMENT' specification".
+    // It keys on /LTCG:PGINSTRUMENT specifically, not on /GENPROFILE (which is
+    // lld's own spelling) - probed: /POGONOSHARE /LTCG:PGINSTRUMENT got past
+    // this check and failed later on LNK1264.
+    StringRef ltcg;
+    if (auto *a = args.getLastArg(OPT_ltcg_opt))
+      ltcg = a->getValue();
+    if (ltcg.empty() ||
+        (ltcg.compare_insensitive("PGINSTRUMENT") != 0 &&
+         ltcg.compare_insensitive("PGOPTIMIZE") != 0)) {
+      const char *spelling = args.hasArg(OPT_pgo_flag_pogonoshare)
+                                 ? "/POGONOSHARE"
+                                 : "/POGOSAFEMODE";
+      llvm::errs() << "LINK : fatal error LNK1220: '" << spelling
+                   << "' requires '/LTCG:PGINSTRUMENT' specification\n";
+      exitLld(1220);
+    }
+  }
+
   // Handle /force or /force:unresolved
   if (args.hasArg(OPT_force, OPT_force_unresolved))
     config->forceUnresolved = true;

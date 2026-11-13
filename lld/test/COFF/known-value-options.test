@@ -57,7 +57,8 @@ RUN: not lld-link /entry:main %t.obj /out:%t.exe /POGOSAFEMODE 2>&1 | FileCheck 
 PGO2: LINK : fatal error LNK1220: '/POGOSAFEMODE' requires '/LTCG:PGINSTRUMENT' specification
 # Probed: link.exe 14.51 stopped complaining at /LTCG:PGINSTRUMENT (it then
 # failed later, on LNK1264), so the dependency check alone must pass. lld-link
-# accepts /LTCG and carries on, so this RUN line is NOT prefixed with `not`:
-# only the absence of LNK1220 is asserted.
-RUN: lld-link /entry:main %t.obj /out:%t.exe /POGONOSHARE /LTCG:PGINSTRUMENT 2>&1 | FileCheck --check-prefix=NOPG %s
-NOPG-NOT: LNK1220
+# accepts /LTCG, carries on and says nothing, so this RUN line is NOT prefixed
+# with `not`. `count 0` is what is asserted: FileCheck cannot express "no output"
+# (it errors on an empty input stream), and "no output at all" is stronger than
+# "no LNK1220 line", since a stray warning would fail it too.
+RUN: lld-link /entry:main %t.obj /out:%t.exe /POGONOSHARE /LTCG:PGINSTRUMENT 2>&1 | count 0

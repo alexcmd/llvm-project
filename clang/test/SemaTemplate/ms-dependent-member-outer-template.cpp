@@ -8,11 +8,15 @@
 
 // MS-MEMBER-TEMPLATE-LOOKUP. x.name < ... with a type-dependent x: before
 // C++23, [basic.lookup.classref] also looks name up in the enclosing scope, and
-// a class template found there turns '<' into a template-argument list. cl
-// accepts every case below in all /std and /permissive modes (nlohmann/json
-// unit-regression1). In MS compatibility mode the enclosing-scope class
-// template is kept only when a '>' closes the would-be argument list and is
-// followed by '::' or '('.
+// a class template found there turns '<' into a template-argument list.
+// Measured with cl 14.50 /permissive- (compile results only; nlohmann/json
+// unit-regression1): the '<' is a less-than when no '>' closes the list, when
+// the list is ill-formed (unbalanced '?'), or when an identifier or a numeric
+// or character literal follows the closing '>'. Any other follower keeps the
+// template-id reading. Every case below compiles with cl in all /std modes.
+// Not matched: cl /permissive also reads the '> (' and '> ::' shapes
+// (x.nf < a > (b), x.nf < a > ::c) as comparisons; clang-cl follows
+// /permissive- there and keeps the template-id reading.
 
 template <typename T> class number_float {};
 
@@ -72,11 +76,57 @@ template <typename T> int member_tmpl(const wrap<T> &w) {
 struct plain { double number_float; };
 bool non_dependent(plain a, plain b) { return a.number_float < b.number_float; }
 
-// cl reads this as two comparisons (C4804 on bool > int).
+// Identifier or literal after the closing '>': two comparisons for cl.
 template <typename T> struct ivalue { int number_float; };
 template <typename T> bool chain(ivalue<T> x, int a, int b) {
   return x.number_float < a > b; // std-error {{expected ';' after return statement}}
 }
+template <typename T> bool chain_lit(ivalue<T> x, int a) {
+  return x.number_float < a > 1; // std-error {{expected ';' after return statement}}
+}
+template <typename T> bool chain_paren(ivalue<T> x, int a, int b, int c) {
+  return x.number_float < a > b > (c); // std-error {{expected ';' after return statement}}
+}
+// Ill-formed would-be list ('?' without ':' before the '>').
+template <typename T> int ternary(ivalue<T> x, int a, int b, int c) {
+  return x.number_float < a ? b > (c) : 0; // std-error {{expected ':'}} std-note {{to match this '?'}} std-error {{expected expression}}
+}
+// Braces in the list: a ';' or '>' inside a lambda body neither ends nor
+// closes it.
+template <typename T> bool lambda_in(ivalue<T> x, int a, int b) {
+  return x.number_float < [&] { int t = a; return t > b; }(); // std-error {{expected '>'}} std-note {{to match this '<'}} std-error {{expected unqualified-id}}
+}
+
+// Operator, '>' (also the second half of '>>') or '(' after the closing '>':
+// cl keeps the template-id reading, so a static member variable template
+// still gets the enclosing-scope class template's help. A less-than reading
+// would fail here ("requires template arguments"). No new "use 'template'
+// keyword" warning either (-verify).
+template <typename T> struct svt {
+  template <int N> static constexpr int number_float = N;
+  template <typename U> static constexpr int typed = 2;
+};
+template <typename T> class typed {};
+template <typename T> int var_tmpl(const svt<T> &x) {
+  return x.number_float<1> + 1;
+}
+template <typename T> bool var_tmpl_shr(const svt<T> &x) {
+  return x.number_float < 1 >> 1;
+}
+template <typename T> bool var_tmpl_gt(const svt<T> &x) {
+  return x.typed<int> > 1;
+}
+template <typename T> int var_tmpl_typed(const svt<T> &x) {
+  return x.typed<int> + 1;
+}
+template <typename T> int var_tmpl_brace(const svt<T> &x) {
+  return x.number_float < int{1} > + 1;
+}
+#if __cplusplus >= 201703L
+template <typename T> int var_tmpl_lambda(const svt<T> &x) {
+  return x.number_float < [] { int t = 1; return t; }() > + 1;
+}
+#endif
 
 bool use() {
   holder<int> h{};
@@ -87,4 +137,16 @@ bool use() {
          h.call(1, 2) && // std-note {{in instantiation of member function 'holder<int>::call' requested here}}
          d.lt(d) && explicit_kw(w) && D<int>{}.g() && qualified(dd) &&
          member_tmpl(w) && non_dependent({}, {});
+}
+
+bool use2() {
+  ivalue<int> iv{1};
+  svt<int> sv;
+  // chain* stay uninstantiated: clang diagnoses chained comparisons there.
+  return ternary(iv, 2, 3, 4) && lambda_in(iv, 2, 3) && var_tmpl(sv) &&
+         var_tmpl_shr(sv) && var_tmpl_gt(sv) && var_tmpl_typed(sv) &&
+#if __cplusplus >= 201703L
+         var_tmpl_lambda(sv) &&
+#endif
+         var_tmpl_brace(sv);
 }

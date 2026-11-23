@@ -492,14 +492,17 @@ bool Parser::ParseOptionalCXXScopeSpecifier(
       UnqualifiedId TemplateName;
       TemplateName.setIdentifier(&II, Tok.getLocation());
       bool MemberOfUnknownSpecialization;
-      // MS-MEMBER-TEMPLATE-LOOKUP: no scope = no enclosing-scope candidate.
-      bool MSMemberLess =
-          SS.isEmpty() && isMSDependentMemberLessThan(ObjectType, 1);
       if (TemplateNameKind TNK = Actions.isTemplateName(
-              MSMemberLess ? nullptr : getCurScope(), SS,
+              getCurScope(), SS,
               /*hasTemplateKeyword=*/false, TemplateName, ObjectType,
               EnteringContext, Template, MemberOfUnknownSpecialization,
-              /*AllowTypoCorrection=*/!Disambiguation && !MSMemberLess)) {
+              /*AllowTypoCorrection=*/!Disambiguation);
+          TNK != TNK_Non_template &&
+          // MS-MEMBER-TEMPLATE-LOOKUP
+          !(SS.isEmpty() &&
+            isMSDependentMemberLessThan(TemplateName, ObjectType,
+                                        EnteringContext, /*LessOffset=*/1,
+                                        MemberOfUnknownSpecialization))) {
         // If lookup didn't find anything, we treat the name as a template-name
         // anyway. C++20 requires this, and in prior language modes it improves
         // error recovery. But before we commit to this, check that we actually
@@ -2229,14 +2232,17 @@ bool Parser::ParseUnqualifiedIdTemplateId(
                                       /*AllowInjectedClassName*/ true);
     } else {
       bool MemberOfUnknownSpecialization;
-      // MS-MEMBER-TEMPLATE-LOOKUP: no scope = no enclosing-scope candidate.
-      bool MSMemberLess = TemplateKWLoc.isInvalid() && SS.isEmpty() &&
-                          isMSDependentMemberLessThan(ObjectType, 0);
-      TNK = Actions.isTemplateName(MSMemberLess ? nullptr : getCurScope(), SS,
+      TNK = Actions.isTemplateName(getCurScope(), SS,
                                    TemplateKWLoc.isValid(), Id,
                                    ObjectType, EnteringContext, Template,
-                                   MemberOfUnknownSpecialization,
-                                   /*AllowTypoCorrection=*/!MSMemberLess);
+                                   MemberOfUnknownSpecialization);
+      // MS-MEMBER-TEMPLATE-LOOKUP
+      if (TNK != TNK_Non_template && TemplateKWLoc.isInvalid() &&
+          SS.isEmpty() &&
+          isMSDependentMemberLessThan(Id, ObjectType, EnteringContext,
+                                      /*LessOffset=*/0,
+                                      MemberOfUnknownSpecialization))
+        TNK = TNK_Non_template;
       // If lookup found nothing but we're assuming that this is a template
       // name, double-check that makes sense syntactically before committing
       // to it.

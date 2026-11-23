@@ -2004,59 +2004,125 @@ Parser::TPResult Parser::isTemplateArgumentList(unsigned TokensToSkip) {
 // MS-MEMBER-TEMPLATE-LOOKUP. In x.name < ... with a type-dependent x where
 // name is not found in x's class, [basic.lookup.classref] (before C++23)
 // also looks name up in the enclosing scope, and a class template found there
-// makes '<' a template-argument list. cl does not: it accepts
-//   template <class T> class number_float {};
-//   ... a.v.number_float < b.v.number_float;   // inside a template
-// in every /std and /permissive mode (nlohmann/json unit-regression1), and
-// reads x.number_float < a > b as two comparisons, while still accepting
-// x.Base<T>::f() and x.member_tmpl<3>() with the same enclosing-scope class
-// template. Rule matching all of that: keep the enclosing-scope candidate only
-// when a '>' closes the would-be argument list and is followed by '::'
-// (nested-name-specifier) or '(' (member template call); otherwise the
-// template-id reading could only end in a parse error.
-bool Parser::isMSDependentMemberLessThan(ParsedType ObjectType,
-                                         unsigned LessOffset) {
+// makes '<' a template-argument list. cl 14.50 /permissive- (measured by
+// compile results; nlohmann/json unit-regression1 is the motivating case)
+// instead reads the '<' as less-than when
+//   - no '>' closes the would-be argument list before the expression ends
+//     (v.number_float < o.v.number_float), or
+//   - the argument list is not well-formed (x.nf < a ? b > (c) : 0), or
+//   - the token after the closing '>' is an identifier or a numeric or
+//     character literal (x.nf < a > b, x.nf < a > 1).
+// After any other follower, an operator ('+', '>', ';', ...), '(', '::', a
+// keyword or a string literal, it keeps the template-id reading, so
+// x.vt<1> + 1 (static member variable template), x.Base<T>::f() and
+// x.f<3>() still use the enclosing-scope class template. For '>>' closing
+// one level, the second '>' is the follower.
+// Not matched: cl /permissive (its default below /std:c++20) also accepts
+// the '> (' and '> ::' shapes as comparisons; clang-cl follows /permissive-.
+// Not checked here: well-formedness beyond an unbalanced '?'.
+bool Parser::isMSDependentMemberLessThan(const UnqualifiedId &Name,
+                                         ParsedType ObjectType,
+                                         bool EnteringContext,
+                                         unsigned LessOffset,
+                                         bool &MemberOfUnknownSpecialization) {
   if (!getLangOpts().MSVCCompat || !ObjectType ||
-      !ObjectType.get()->isDependentType())
+      !ObjectType.get()->isDependentType() ||
+      Name.getKind() != UnqualifiedIdKind::IK_Identifier)
     return false;
+
+  // Only a template that came from the enclosing scope: without a scope, the
+  // lookup sees the class of the object expression alone.
+  CXXScopeSpec NoSS;
+  TemplateTy Ignored;
+  bool IgnoredUnknown;
+  if (Actions.isTemplateName(/*S=*/nullptr, NoSS, /*hasTemplateKeyword=*/false,
+                             Name, ObjectType, EnteringContext, Ignored,
+                             IgnoredUnknown,
+                             /*AllowTypoCorrection=*/false) !=
+      TNK_Non_template)
+    return false;
+
+  if (!isMSMemberLessThanByLookAhead(LessOffset))
+    return false;
+  MemberOfUnknownSpecialization = false;
+  return true;
+}
+
+bool Parser::isMSMemberLessThanByLookAhead(unsigned LessOffset) {
+  SourceManager &SM = PP.getSourceManager();
+  auto InRegion = [&](SourceLocation L) {
+    if (MSMemberLessRegionBegin.isInvalid() || !L.isFileID())
+      return false;
+    FileIDAndOffset B = SM.getDecomposedLoc(MSMemberLessRegionBegin);
+    FileIDAndOffset E = SM.getDecomposedLoc(MSMemberLessRegionEnd);
+    FileIDAndOffset X = SM.getDecomposedLoc(L);
+    return X.first == B.first && B.first == E.first && B.second < X.second &&
+           X.second < E.second;
+  };
+  if (InRegion(GetLookAheadToken(LessOffset).getLocation()))
+    return true;
 
   RevertingTentativeParsingAction PA(*this);
   for (; LessOffset; --LessOffset)
     ConsumeAnyToken();
+  SourceLocation LessLoc = Tok.getLocation();
   if (!TryConsumeToken(tok::less))
     return false;
 
   unsigned Depth = 1;
+  unsigned OpenQuestions = 0;    // '?' without its ':' at the outer level.
+  bool PlainRegion = true;       // No bracket group skipped, no '>' seen.
   while (true) {
     switch (Tok.getKind()) {
     case tok::less:
       ++Depth;
       break;
+    case tok::question:
+      if (Depth == 1)
+        ++OpenQuestions;
+      break;
+    case tok::colon:
+      if (Depth == 1 && OpenQuestions)
+        --OpenQuestions;
+      break;
     case tok::greater:
     case tok::greatergreater:
     case tok::greatergreatergreater: {
-      unsigned Closes = Tok.is(tok::greater) ? 1
-                        : Tok.is(tok::greatergreater) ? 2 : 3;
-      if (Closes >= Depth) {
-        ConsumeAnyToken();
-        return !Tok.isOneOf(tok::coloncolon, tok::l_paren);
+      PlainRegion = false;
+      unsigned Closes = Tok.is(tok::greater)          ? 1
+                        : Tok.is(tok::greatergreater) ? 2
+                                                      : 3;
+      if (Closes < Depth) {
+        Depth -= Closes;
+        break;
       }
-      Depth -= Closes;
-      break;
+      if (OpenQuestions)
+        return true; // Ill-formed argument list.
+      if (Closes > Depth)
+        return false; // The follower is the next '>' of this token.
+      ConsumeAnyToken();
+      return Tok.isOneOf(tok::identifier, tok::numeric_constant,
+                         tok::char_constant, tok::wide_char_constant,
+                         tok::utf8_char_constant, tok::utf16_char_constant,
+                         tok::utf32_char_constant);
     }
     case tok::l_paren:
+      PlainRegion = false;
       ConsumeParen();
       if (!SkipUntil(tok::r_paren, StopAtSemi))
         return true;
       continue;
     case tok::l_square:
+      PlainRegion = false;
       ConsumeBracket();
       if (!SkipUntil(tok::r_square, StopAtSemi))
         return true;
       continue;
     case tok::l_brace:
+      // No StopAtSemi: a lambda body may sit in the list.
+      PlainRegion = false;
       ConsumeBrace();
-      if (!SkipUntil(tok::r_brace, StopAtSemi))
+      if (!SkipUntil(tok::r_brace))
         return true;
       continue;
     case tok::r_paren:
@@ -2068,7 +2134,12 @@ bool Parser::isMSDependentMemberLessThan(ParsedType ObjectType,
     case tok::annot_module_end:
     case tok::annot_module_include:
     case tok::annot_repl_input_end:
-      return true; // The expression ends without a closing '>'.
+      // The expression ends without a closing '>'.
+      if (PlainRegion && LessLoc.isFileID() && Tok.getLocation().isFileID()) {
+        MSMemberLessRegionBegin = LessLoc;
+        MSMemberLessRegionEnd = Tok.getLocation();
+      }
+      return true;
     default:
       break;
     }

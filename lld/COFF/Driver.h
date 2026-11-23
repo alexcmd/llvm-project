@@ -210,6 +210,7 @@ private:
   std::string vcToolChainPath;
   llvm::SmallString<128> diaPath;
   bool useWinSysRootLibPath = false;
+  bool vcAutodetect = false; // /vcautodetect given (last of the two flags)
   llvm::SmallString<128> universalCRTLibPath;
   int sdkMajor = 0;
   llvm::SmallString<128> windowsSdkLibPath;

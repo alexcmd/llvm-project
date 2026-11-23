@@ -33,3 +33,28 @@ NONE: LINK : fatal error LNK1181: input file 'std64.lib' was not found
 # RUN: lld-link %p/Inputs/hello64.obj /novcautodetect \
 # RUN:   /libpath:%t.dir/sysroot/VC/Tools/MSVC/1.1.1.1/lib/x64 \
 # RUN:   /defaultlib:std64 /entry:main /out:%t.exe
+
+/winsdkdir alone adds the Windows SDK lib path with no VC toolchain, and std64.lib
+is found there. (Verbose lines are only printed on a successful link here.)
+# RUN: mkdir -p %t.dir/sdk/Include/10.0.1.1 %t.dir/sdk/Lib/10.0.1.1/um/x64
+# RUN: cp %p/Inputs/std64.lib %t.dir/sdk/Lib/10.0.1.1/um/x64
+# RUN: env -u LIB lld-link %p/Inputs/hello64.obj /winsdkdir:%t.dir/sdk \
+# RUN:   /defaultlib:std64 /entry:main /out:%t.exe /verbose 2>&1 \
+# RUN:   | FileCheck --check-prefix=SDK --implicit-check-not="VC toolchain:" %s
+
+SDK: Windows SDK lib path: {{.*}}sdk{{[/\\]}}Lib{{[/\\]}}10.0.1.1{{[/\\]}}um
+
+With /winsdkdir alone and LIB set, LIB is ignored and the user is told why. (The
+link succeeds from the SDK dir: lit's LLD_IN_TEST drops buffered warnings on a
+fatal exit, so the warning is checked on a successful link.)
+# RUN: env LIB=%t.dir/sysroot/VC/Tools/MSVC/1.1.1.1/lib/x64 \
+# RUN:   lld-link %p/Inputs/hello64.obj /winsdkdir:%t.dir/sdk \
+# RUN:   /defaultlib:std64 /entry:main /out:%t.exe > %t.warn.txt 2>&1
+# RUN: FileCheck --check-prefix=WARN %s < %t.warn.txt
+
+WARN: warning: ignoring %LIB%: no VC toolchain was resolved
+
+/vctoolsversion alone resolves no toolchain and does not suppress LIB.
+# RUN: env LIB=%t.dir/sysroot/VC/Tools/MSVC/1.1.1.1/lib/x64 \
+# RUN:   lld-link %p/Inputs/hello64.obj /vctoolsversion:1.1.1.1 \
+# RUN:   /defaultlib:std64 /entry:main /out:%t.exe

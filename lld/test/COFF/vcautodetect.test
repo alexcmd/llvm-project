@@ -1,12 +1,17 @@
 Check that lld-link behaves like link.exe by default: it does not search for a
-Visual Studio install from %VCToolsInstallDir% or the like, and a library missing
-from the command line and %LIB% is not taken from one. /vcautodetect restores
-the upstream search. Explicit /winsysroot and LIB keep working.
+Visual Studio install from VCToolsInstallDir or VCINSTALLDIR, and a library
+missing from the command line and LIB is not taken from one. /vcautodetect
+restores the upstream search. Explicit /winsysroot and LIB keep working.
 
-# RUN: rm -rf %t.dir && mkdir -p %t.dir/sysroot/VC/Tools/MSVC/1.1.1.1/lib/x64
+Limit: the VS setup configuration (COM) and the registry cannot be faked from
+lit. The default cases prove those lookups are skipped only on a host with VS,
+where they would find one; they sit behind the same guard as the env lookup.
+
+# RUN: rm -rf %t.dir && mkdir -p %t.dir/sysroot/VC/Tools/MSVC/1.1.1.1/lib/x64 %t.dir/oldvc/lib/amd64 %t.dir/empty
 # RUN: cp %p/Inputs/std64.lib %t.dir/sysroot/VC/Tools/MSVC/1.1.1.1/lib/x64
+# RUN: cp %p/Inputs/std64.lib %t.dir/oldvc/lib/amd64
 
-Default: %VCToolsInstallDir% is not consulted, so std64.lib is not found.
+Default: VCToolsInstallDir is not consulted, so std64.lib is not found.
 # RUN: env -u LIB VCToolsInstallDir=%t.dir/sysroot/VC/Tools/MSVC/1.1.1.1 \
 # RUN:   not lld-link %p/Inputs/hello64.obj /defaultlib:std64 /entry:main \
 # RUN:   /out:%t.exe /verbose 2>&1 \
@@ -16,19 +21,37 @@ Default: %VCToolsInstallDir% is not consulted, so std64.lib is not found.
 
 NONE: LINK : fatal error LNK1181: input file 'std64.lib' was not found
 
-Default: the VS setup/registry-derived variables are not consulted either.
-# RUN: env -u LIB VCINSTALLDIR=%t.dir/sysroot/VC \
-# RUN:   not lld-link %p/Inputs/hello64.obj /defaultlib:std64 /entry:main \
+Default: the older-layout VCINSTALLDIR is not consulted either. The lit host may
+export VCTOOLSINSTALLDIR (vcvars), which takes precedence; `env -u` (Git's msys
+env on this host) does not remove it, so these cases run lld-link through
+%python, which drops LIB and VCTOOLSINSTALLDIR and sets VCINSTALLDIR.
+# RUN: not %python -c "import os,subprocess,shutil,sys; e=dict(os.environ); e.pop('LIB',None); e.pop('VCTOOLSINSTALLDIR',None); e['VCINSTALLDIR']=sys.argv[1]; sys.exit(subprocess.call([shutil.which('lld-'+'link')]+sys.argv[2:], env=e))" %t.dir/oldvc \
+# RUN:   %p/Inputs/hello64.obj /defaultlib:std64 /entry:main \
 # RUN:   /out:%t.exe /verbose 2>&1 \
 # RUN:   | FileCheck --check-prefix=NONE --implicit-check-not="VC toolchain:" %s
 
-/vcautodetect restores the environment search.
+Control: /vcautodetect restores the VCToolsInstallDir search.
 # RUN: env -u LIB VCToolsInstallDir=%t.dir/sysroot/VC/Tools/MSVC/1.1.1.1 \
 # RUN:   lld-link %p/Inputs/hello64.obj /vcautodetect /defaultlib:std64 \
 # RUN:   /entry:main /out:%t.exe /verbose 2>&1 \
-# RUN:   | FileCheck --check-prefix=FOUND %s
+# RUN:   | FileCheck --check-prefix=FOUND --implicit-check-not="note: lld-link" %s
 
 FOUND: VC toolchain: {{.*}}sysroot{{[/\\]}}VC{{[/\\]}}Tools{{[/\\]}}MSVC{{[/\\]}}1.1.1.1
+
+Control: /vcautodetect restores the VCINSTALLDIR search (older layout).
+# RUN: %python -c "import os,subprocess,shutil,sys; e=dict(os.environ); e.pop('LIB',None); e.pop('VCTOOLSINSTALLDIR',None); e['VCINSTALLDIR']=sys.argv[1]; sys.exit(subprocess.call([shutil.which('lld-'+'link')]+sys.argv[2:], env=e))" %t.dir/oldvc \
+# RUN:   %p/Inputs/hello64.obj /vcautodetect /defaultlib:std64 \
+# RUN:   /entry:main /out:%t.exe /verbose > %t.foundold.txt 2>&1
+# RUN: FileCheck --check-prefix=FOUNDOLD %s < %t.foundold.txt
+
+FOUNDOLD: VC toolchain: {{.*}}oldvc
+
+/vcautodetect with LIB set: the environment is consulted and LIB is searched.
+# RUN: env LIB=%t.dir/sysroot/VC/Tools/MSVC/1.1.1.1/lib/x64 \
+# RUN:   VCToolsInstallDir=%t.dir/sysroot/VC/Tools/MSVC/1.1.1.1 \
+# RUN:   lld-link %p/Inputs/hello64.obj /vcautodetect /defaultlib:std64 \
+# RUN:   /entry:main /out:%t.exe /verbose 2>&1 \
+# RUN:   | FileCheck --check-prefix=FOUND %s
 
 Explicit /winsysroot works with VS variables set and no /vcautodetect.
 # RUN: env -u LIB VCToolsInstallDir=%t.dir/doesnotexist \
@@ -37,7 +60,32 @@ Explicit /winsysroot works with VS variables set and no /vcautodetect.
 # RUN:   | FileCheck --check-prefix=FOUND %s
 
 LIB is still searched by default.
-# RUN: env -u VCToolsInstallDir -u VCINSTALLDIR \
+# RUN: env -u VCTOOLSINSTALLDIR -u VCINSTALLDIR \
 # RUN:   LIB=%t.dir/sysroot/VC/Tools/MSVC/1.1.1.1/lib/x64 \
 # RUN:   lld-link %p/Inputs/hello64.obj /defaultlib:std64 /entry:main \
 # RUN:   /out:%t.exe
+
+The last of /vcautodetect and /novcautodetect wins, in both orders.
+# RUN: env -u LIB VCToolsInstallDir=%t.dir/sysroot/VC/Tools/MSVC/1.1.1.1 \
+# RUN:   not lld-link %p/Inputs/hello64.obj /vcautodetect /novcautodetect \
+# RUN:   /defaultlib:std64 /entry:main /out:%t.exe /verbose 2>&1 \
+# RUN:   | FileCheck --check-prefix=NONE --implicit-check-not="VC toolchain:" %s
+# RUN: env -u LIB VCToolsInstallDir=%t.dir/sysroot/VC/Tools/MSVC/1.1.1.1 \
+# RUN:   lld-link %p/Inputs/hello64.obj /novcautodetect /vcautodetect \
+# RUN:   /defaultlib:std64 /entry:main /out:%t.exe /verbose 2>&1 \
+# RUN:   | FileCheck --check-prefix=FOUND %s
+
+The hint names the cause when VS variables are set and LIB is not.
+# RUN: env -u LIB VCToolsInstallDir=%t.dir/sysroot/VC/Tools/MSVC/1.1.1.1 \
+# RUN:   not lld-link %p/Inputs/hello64.obj /defaultlib:std64 /entry:main \
+# RUN:   /out:%t.exe 2>&1 | FileCheck --check-prefix=HINT %s
+
+HINT: LINK : note: lld-link does not search for Visual Studio by default (like link.exe); set LIB (run vcvars) or pass /vcautodetect
+HINT: LINK : fatal error LNK1181: input file 'std64.lib' was not found
+
+No hint when LIB is set (the missing library is then a plain LIB problem).
+# RUN: env LIB=%t.dir/empty VCToolsInstallDir=%t.dir/sysroot/VC/Tools/MSVC/1.1.1.1 \
+# RUN:   not lld-link %p/Inputs/hello64.obj /defaultlib:std64 /entry:main \
+# RUN:   /out:%t.exe 2>&1 | FileCheck --check-prefix=NOHINT --implicit-check-not="note: lld-link" %s
+
+NOHINT: LINK : fatal error LNK1181: input file 'std64.lib' was not found

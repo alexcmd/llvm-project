@@ -86,8 +86,8 @@ def noopenrtlibmap : F<"noopenrtlibmap">,
     HelpText<"Ignore the library name map declared by the openrt layout "
              "around lld-link (<bin>/../manifest.json \"libmap\")">;
 def novcautodetect : F<"novcautodetect">,
-    HelpText<"No-op: lld-link does not search for Visual Studio or the Windows "
-             "SDK by default (openrt); kept for compatibility">;
+    HelpText<"openrt: turn off /vcautodetect (the default); the last of the "
+             "two flags wins">;
 def vcautodetect : F<"vcautodetect">,
     HelpText<"openrt extension: also search for Visual Studio and the Windows "
              "SDK (environment, setup configuration, registry), as upstream "

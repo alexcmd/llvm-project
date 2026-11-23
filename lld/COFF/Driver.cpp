@@ -475,6 +475,15 @@ void LinkerDriver::enqueuePath(StringRef path, bool lazy, InputOpt inputOpt) {
       // directory.
       std::string nearest;
       if (ctx.optTable.findNearest(pathStr, nearest) > 1) {
+        // openrt: a missing .lib with VS variables set but no LIB is the
+        // usual cause; name it (this exits, so the note prints once).
+        if (StringRef(pathStr).ends_with_insensitive(".lib") && !vcAutodetect &&
+            Process::GetEnv("LIB").value_or("").empty() &&
+            (Process::GetEnv("VCToolsInstallDir") ||
+             Process::GetEnv("VSINSTALLDIR")))
+          llvm::errs() << "LINK : note: lld-link does not search for Visual "
+                          "Studio by default (like link.exe); set LIB (run "
+                          "vcvars) or pass /vcautodetect\n";
         // link.exe: LNK1181 is fatal and exits 1181 (probed 14.51.36231).
         llvm::errs() << "LINK : fatal error LNK1181: input file '"
                      << pathStr << "' was not found\n";
@@ -897,9 +906,8 @@ void LinkerDriver::detectWinSysRoot(const opt::InputArgList &Args,
   IntrusiveRefCntPtr<vfs::FileSystem> VFS = vfs::getRealFileSystem();
 
   // Check the command line first, that's the user explicitly telling us what to
-  // use. Check the environment next, in case we're being invoked from a VS
-  // command prompt. Failing that, just try to find the newest Visual Studio
-  // version we can and use its default VC toolchain.
+  // use. Only with /vcautodetect (openrt) also check the environment, the VS
+  // setup configuration and the registry, in that order.
   std::optional<StringRef> VCToolsDir, VCToolsVersion, WinSysRoot;
   // BIN-RELATIVE-LOOKUP: an openrt-<ver> layout around lld-link
   // (<bin>\..\manifest.json) acts as /vctoolsdir:<root>, ahead of env, setup
@@ -928,18 +936,25 @@ void LinkerDriver::detectWinSysRoot(const opt::InputArgList &Args,
   if (auto *A = Args.getLastArg(OPT_winsysroot))
     WinSysRoot = A->getValue();
   // openrt: link.exe never probes for a VS install, so without /vcautodetect
-  // only the command line (/vctoolsdir, /vctoolsversion, /winsysroot,
-  // /winsdkdir) and LIB count. /novcautodetect is accepted as a no-op.
-  bool autodetect = Args.hasArg(OPT_vcautodetect);
-  if (!findVCToolChainViaCommandLine(*VFS, VCToolsDir, VCToolsVersion,
-                                     WinSysRoot, vcToolChainPath, vsLayout) &&
-      (!autodetect ||
-       ((Args.hasArg(OPT_lldignoreenv) ||
-         !findVCToolChainViaEnvironment(*VFS, vcToolChainPath, vsLayout)) &&
-        !findVCToolChainViaSetupConfig(*VFS, {}, vcToolChainPath, vsLayout) &&
-        !findVCToolChainViaRegistry(vcToolChainPath, vsLayout))))
+  // only the command line (/vctoolsdir, /winsysroot) and LIB count. The last
+  // of /vcautodetect and /novcautodetect wins.
+  const opt::Arg *AutoArg =
+      Args.getLastArg(OPT_vcautodetect, OPT_novcautodetect);
+  bool autodetect = AutoArg && AutoArg->getOption().getID() == OPT_vcautodetect;
+  vcAutodetect = autodetect;
+  bool haveVC =
+      findVCToolChainViaCommandLine(*VFS, VCToolsDir, VCToolsVersion,
+                                    WinSysRoot, vcToolChainPath, vsLayout) ||
+      (autodetect &&
+       ((!Args.hasArg(OPT_lldignoreenv) &&
+         findVCToolChainViaEnvironment(*VFS, vcToolChainPath, vsLayout)) ||
+        findVCToolChainViaSetupConfig(*VFS, {}, vcToolChainPath, vsLayout) ||
+        findVCToolChainViaRegistry(vcToolChainPath, vsLayout)));
+  // /winsdkdir alone still gets its SDK library paths, without a VC toolchain.
+  if (haveVC)
+    Log(ctx) << "VC toolchain: " << vcToolChainPath;
+  else if (!Args.hasArg(OPT_winsdkdir))
     return;
-  Log(ctx) << "VC toolchain: " << vcToolChainPath;
 
   // If the VC environment hasn't been configured (perhaps because the user did
   // not run vcvarsall), try to build a consistent link environment.  If the
@@ -951,9 +966,10 @@ void LinkerDriver::detectWinSysRoot(const opt::InputArgList &Args,
     if (A->getOption().getID() == OPT_winsysroot)
       path::append(diaPath, "DIA SDK");
   }
-  useWinSysRootLibPath = binRelative || !Process::GetEnv("LIB") ||
-                         Args.hasArg(OPT_lldignoreenv, OPT_vctoolsdir,
-                                     OPT_vctoolsversion, OPT_winsysroot);
+  // Without a VC toolchain there is no VC lib dir to add.
+  useWinSysRootLibPath =
+      haveVC && (binRelative || !Process::GetEnv("LIB") ||
+                 Args.hasArg(OPT_lldignoreenv, OPT_vctoolsdir, OPT_winsysroot));
   if (binRelative || !Process::GetEnv("LIB") ||
       Args.hasArg(OPT_lldignoreenv, OPT_winsdkdir, OPT_winsdkversion,
                   OPT_winsysroot)) {
@@ -972,7 +988,8 @@ void LinkerDriver::detectWinSysRoot(const opt::InputArgList &Args,
     if (!autodetect && !WinSdkDir && !WinSysRoot)
       return;
 
-    if (useUniversalCRT(vsLayout, vcToolChainPath, getArch(), *VFS)) {
+    // With no VC toolchain the UCRT is the only C runtime to add.
+    if (!haveVC || useUniversalCRT(vsLayout, vcToolChainPath, getArch(), *VFS)) {
       std::string UniversalCRTSdkPath;
       std::string UCRTVersion;
       if (getUniversalCRTSdkDir(*VFS, WinSdkDir, WinSdkVersion, WinSysRoot,
@@ -1894,9 +1911,15 @@ void LinkerDriver::linkerMain(ArrayRef<const char *> argsArr) {
       // installations when operating in mingw mode. (This also makes LLD ignore
       // winsysroot and vctoolsdir arguments.)
       detectWinSysRoot(args, argsArr[0]);
+      // /vctoolsversion alone resolves no toolchain, so it does not suppress
+      // %LIB%. Where the flags suppress it with no toolchain, say so.
       if (!args.hasArg(OPT_lldignoreenv, OPT_winsysroot, OPT_vctoolsdir,
-                       OPT_vctoolsversion, OPT_winsdkdir, OPT_winsdkversion))
+                       OPT_winsdkdir, OPT_winsdkversion))
         addLibSearchPaths();
+      else if (vcToolChainPath.empty() && !args.hasArg(OPT_lldignoreenv) &&
+               Process::GetEnv("LIB"))
+        Warn(ctx) << "ignoring %LIB%: no VC toolchain was resolved from "
+                     "/vctoolsdir, /winsysroot or /winsdkdir alone";
     } else {
       if (args.hasArg(OPT_vctoolsdir, OPT_winsysroot))
         Warn(ctx) << "ignoring /vctoolsdir or /winsysroot flags in MinGW mode";

@@ -24,7 +24,7 @@ it off. lld-link locates itself, so it is copied into the fake layout.
 # RUN: llvm-lib /out:helper.lib helper.obj
 
 .drectve /defaultlib:fakecrt of an object: mapped, found in <root>\lib\x64.
-# RUN: env -u LIB -u VCToolsInstallDir -u VCINSTALLDIR \
+# RUN: %python %p/Inputs/scrub-env.py -- \
 # RUN:   %t.dir/root/bin/lld-link.exe main.obj /entry:main /out:a.exe /verbose 2>&1 \
 # RUN:   | FileCheck --check-prefix=VERBOSE %s
 VERBOSE: openrt libmap: {{.*}}openrt-libmap.txt (4 names)
@@ -33,45 +33,45 @@ VERBOSE: Reading {{.*}}openfake_md.lib
 
 .drectve of an archive member, /defaultlib and a plain input on the command
 line, any case, with or without ".lib".
-# RUN: env -u LIB -u VCToolsInstallDir -u VCINSTALLDIR \
+# RUN: %python %p/Inputs/scrub-env.py -- \
 # RUN:   %t.dir/root/bin/lld-link.exe usehelper.obj helper.lib /entry:main /out:a.exe
-# RUN: env -u LIB -u VCToolsInstallDir -u VCINSTALLDIR \
+# RUN: %python %p/Inputs/scrub-env.py -- \
 # RUN:   %t.dir/root/bin/lld-link.exe plain.obj /defaultlib:FAKECRT.LIB /entry:main /out:a.exe
-# RUN: env -u LIB -u VCToolsInstallDir -u VCINSTALLDIR \
+# RUN: %python %p/Inputs/scrub-env.py -- \
 # RUN:   %t.dir/root/bin/lld-link.exe plain.obj /defaultlib:FakeCrt /entry:main /out:a.exe
-# RUN: env -u LIB -u VCToolsInstallDir -u VCINSTALLDIR \
+# RUN: %python %p/Inputs/scrub-env.py -- \
 # RUN:   %t.dir/root/bin/lld-link.exe plain.obj fakecrt.lib /entry:main /out:a.exe
 
 /nodefaultlib:<original> and /nodefaultlib:<mapped> both drop the library,
 also from a response file.
-# RUN: env -u LIB -u VCToolsInstallDir -u VCINSTALLDIR \
-# RUN:   not %t.dir/root/bin/lld-link.exe main.obj /nodefaultlib:fakecrt /entry:main /out:a.exe 2>&1 \
+# RUN: not %python %p/Inputs/scrub-env.py -- \
+# RUN:   %t.dir/root/bin/lld-link.exe main.obj /nodefaultlib:fakecrt /entry:main /out:a.exe 2>&1 \
 # RUN:   | FileCheck --check-prefix=UNDEF %s
-# RUN: env -u LIB -u VCToolsInstallDir -u VCINSTALLDIR \
-# RUN:   not %t.dir/root/bin/lld-link.exe main.obj /nodefaultlib:FAKECRT.lib /entry:main /out:a.exe 2>&1 \
+# RUN: not %python %p/Inputs/scrub-env.py -- \
+# RUN:   %t.dir/root/bin/lld-link.exe main.obj /nodefaultlib:FAKECRT.lib /entry:main /out:a.exe 2>&1 \
 # RUN:   | FileCheck --check-prefix=UNDEF %s
-# RUN: env -u LIB -u VCToolsInstallDir -u VCINSTALLDIR \
-# RUN:   not %t.dir/root/bin/lld-link.exe main.obj /nodefaultlib:openfake_md /entry:main /out:a.exe 2>&1 \
+# RUN: not %python %p/Inputs/scrub-env.py -- \
+# RUN:   %t.dir/root/bin/lld-link.exe main.obj /nodefaultlib:openfake_md /entry:main /out:a.exe 2>&1 \
 # RUN:   | FileCheck --check-prefix=UNDEF %s
-# RUN: env -u LIB -u VCToolsInstallDir -u VCINSTALLDIR \
-# RUN:   not %t.dir/root/bin/lld-link.exe plain.obj /defaultlib:openfake_md /nodefaultlib:fakecrt.lib /entry:main /out:a.exe 2>&1 \
+# RUN: not %python %p/Inputs/scrub-env.py -- \
+# RUN:   %t.dir/root/bin/lld-link.exe plain.obj /defaultlib:openfake_md /nodefaultlib:fakecrt.lib /entry:main /out:a.exe 2>&1 \
 # RUN:   | FileCheck --check-prefix=UNDEF %s
 # RUN: echo /nodefaultlib:fakecrt > nodef.rsp
-# RUN: env -u LIB -u VCToolsInstallDir -u VCINSTALLDIR \
-# RUN:   not %t.dir/root/bin/lld-link.exe main.obj @nodef.rsp /entry:main /out:a.exe 2>&1 \
+# RUN: not %python %p/Inputs/scrub-env.py -- \
+# RUN:   %t.dir/root/bin/lld-link.exe main.obj @nodef.rsp /entry:main /out:a.exe 2>&1 \
 # RUN:   | FileCheck --check-prefix=UNDEF %s
 UNDEF: undefined symbol: fakefn
 
 %LIB% set, no /lldignoreenv: the layout is not the toolchain, the map still
 applies (the library is found through %LIB%).
-# RUN: env -u VCToolsInstallDir -u VCINSTALLDIR LIB=%t.dir/root/lib/x64 \
+# RUN: %python %p/Inputs/scrub-env.py LIB=%t.dir/root/lib/x64 -- \
 # RUN:   %t.dir/root/bin/lld-link.exe main.obj /entry:main /out:a.exe
 
 /noopenrtlibmap, or a layout without "libmap": names pass through.
-# RUN: env -u LIB -u VCToolsInstallDir -u VCINSTALLDIR \
-# RUN:   not %t.dir/root/bin/lld-link.exe main.obj /noopenrtlibmap /entry:main /out:a.exe 2>&1 \
+# RUN: not %python %p/Inputs/scrub-env.py -- \
+# RUN:   %t.dir/root/bin/lld-link.exe main.obj /noopenrtlibmap /entry:main /out:a.exe 2>&1 \
 # RUN:   | FileCheck --check-prefix=NOTFOUND %s
-# RUN: env -u LIB -u VCToolsInstallDir -u VCINSTALLDIR \
+# RUN: %python %p/Inputs/scrub-env.py -- \
 # RUN:   %t.dir/nomap/bin/lld-link.exe main.obj /entry:main /out:a.exe /verbose 2>&1 \
 # RUN:   | FileCheck --check-prefix=NOMAP %s
 NOTFOUND: input file 'fakecrt.lib' was not found

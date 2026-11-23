@@ -8830,6 +8830,14 @@ private:
   /// never be wrong if it returns True or False.
   TPResult isTemplateArgumentList(unsigned TokensToSkip);
 
+  /// MS-MEMBER-TEMPLATE-LOOKUP: true if, in MS compatibility mode, the '<'
+  /// after a member name (look-ahead index \p LessOffset, 0 = Tok) of a
+  /// type-dependent object expression must not be read as a template-argument
+  /// list on the strength of a class template found in the enclosing scope
+  /// (no '>' closes it, or the closing '>' is not followed by '::' or '(').
+  bool isMSDependentMemberLessThan(ParsedType ObjectType,
+                                   unsigned LessOffset);
+
   /// Determine whether an '(' after an 'explicit' keyword is part of a C++20
   /// 'explicit(bool)' declaration, in earlier language modes where that is an
   /// extension.

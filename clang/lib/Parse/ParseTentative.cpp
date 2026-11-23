@@ -2001,6 +2001,81 @@ Parser::TPResult Parser::isTemplateArgumentList(unsigned TokensToSkip) {
   return TPResult::False;
 }
 
+// MS-MEMBER-TEMPLATE-LOOKUP. In x.name < ... with a type-dependent x where
+// name is not found in x's class, [basic.lookup.classref] (before C++23)
+// also looks name up in the enclosing scope, and a class template found there
+// makes '<' a template-argument list. cl does not: it accepts
+//   template <class T> class number_float {};
+//   ... a.v.number_float < b.v.number_float;   // inside a template
+// in every /std and /permissive mode (nlohmann/json unit-regression1), and
+// reads x.number_float < a > b as two comparisons, while still accepting
+// x.Base<T>::f() and x.member_tmpl<3>() with the same enclosing-scope class
+// template. Rule matching all of that: keep the enclosing-scope candidate only
+// when a '>' closes the would-be argument list and is followed by '::'
+// (nested-name-specifier) or '(' (member template call); otherwise the
+// template-id reading could only end in a parse error.
+bool Parser::isMSDependentMemberLessThan(ParsedType ObjectType,
+                                         unsigned LessOffset) {
+  if (!getLangOpts().MSVCCompat || !ObjectType ||
+      !ObjectType.get()->isDependentType())
+    return false;
+
+  RevertingTentativeParsingAction PA(*this);
+  for (; LessOffset; --LessOffset)
+    ConsumeAnyToken();
+  if (!TryConsumeToken(tok::less))
+    return false;
+
+  unsigned Depth = 1;
+  while (true) {
+    switch (Tok.getKind()) {
+    case tok::less:
+      ++Depth;
+      break;
+    case tok::greater:
+    case tok::greatergreater:
+    case tok::greatergreatergreater: {
+      unsigned Closes = Tok.is(tok::greater) ? 1
+                        : Tok.is(tok::greatergreater) ? 2 : 3;
+      if (Closes >= Depth) {
+        ConsumeAnyToken();
+        return !Tok.isOneOf(tok::coloncolon, tok::l_paren);
+      }
+      Depth -= Closes;
+      break;
+    }
+    case tok::l_paren:
+      ConsumeParen();
+      if (!SkipUntil(tok::r_paren, StopAtSemi))
+        return true;
+      continue;
+    case tok::l_square:
+      ConsumeBracket();
+      if (!SkipUntil(tok::r_square, StopAtSemi))
+        return true;
+      continue;
+    case tok::l_brace:
+      ConsumeBrace();
+      if (!SkipUntil(tok::r_brace, StopAtSemi))
+        return true;
+      continue;
+    case tok::r_paren:
+    case tok::r_square:
+    case tok::r_brace:
+    case tok::semi:
+    case tok::eof:
+    case tok::annot_module_begin:
+    case tok::annot_module_end:
+    case tok::annot_module_include:
+    case tok::annot_repl_input_end:
+      return true; // The expression ends without a closing '>'.
+    default:
+      break;
+    }
+    ConsumeAnyToken();
+  }
+}
+
 Parser::TPResult Parser::isExplicitBool() {
   assert(Tok.is(tok::l_paren) && "expected to be looking at a '(' token");
 

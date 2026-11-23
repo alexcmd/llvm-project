@@ -1,0 +1,43 @@
+Check that lld-link behaves like link.exe by default: it does not search for a
+Visual Studio install from %VCToolsInstallDir% or the like, and a library missing
+from the command line and %LIB% is not taken from one. /vcautodetect restores
+the upstream search. Explicit /winsysroot and LIB keep working.
+
+# RUN: rm -rf %t.dir && mkdir -p %t.dir/sysroot/VC/Tools/MSVC/1.1.1.1/lib/x64
+# RUN: cp %p/Inputs/std64.lib %t.dir/sysroot/VC/Tools/MSVC/1.1.1.1/lib/x64
+
+Default: %VCToolsInstallDir% is not consulted, so std64.lib is not found.
+# RUN: env -u LIB VCToolsInstallDir=%t.dir/sysroot/VC/Tools/MSVC/1.1.1.1 \
+# RUN:   not lld-link %p/Inputs/hello64.obj /defaultlib:std64 /entry:main \
+# RUN:   /out:%t.exe /verbose 2>&1 \
+# RUN:   | FileCheck --check-prefix=NONE --implicit-check-not="VC toolchain:" \
+# RUN:     --implicit-check-not="SDK lib path:" \
+# RUN:     --implicit-check-not="UCRT lib path:" %s
+
+NONE: LINK : fatal error LNK1181: input file 'std64.lib' was not found
+
+Default: the VS setup/registry-derived variables are not consulted either.
+# RUN: env -u LIB VCINSTALLDIR=%t.dir/sysroot/VC \
+# RUN:   not lld-link %p/Inputs/hello64.obj /defaultlib:std64 /entry:main \
+# RUN:   /out:%t.exe /verbose 2>&1 \
+# RUN:   | FileCheck --check-prefix=NONE --implicit-check-not="VC toolchain:" %s
+
+/vcautodetect restores the environment search.
+# RUN: env -u LIB VCToolsInstallDir=%t.dir/sysroot/VC/Tools/MSVC/1.1.1.1 \
+# RUN:   lld-link %p/Inputs/hello64.obj /vcautodetect /defaultlib:std64 \
+# RUN:   /entry:main /out:%t.exe /verbose 2>&1 \
+# RUN:   | FileCheck --check-prefix=FOUND %s
+
+FOUND: VC toolchain: {{.*}}sysroot{{[/\\]}}VC{{[/\\]}}Tools{{[/\\]}}MSVC{{[/\\]}}1.1.1.1
+
+Explicit /winsysroot works with VS variables set and no /vcautodetect.
+# RUN: env -u LIB VCToolsInstallDir=%t.dir/doesnotexist \
+# RUN:   lld-link %p/Inputs/hello64.obj /winsysroot:%t.dir/sysroot \
+# RUN:   /defaultlib:std64 /entry:main /out:%t.exe /verbose 2>&1 \
+# RUN:   | FileCheck --check-prefix=FOUND %s
+
+LIB is still searched by default.
+# RUN: env -u VCToolsInstallDir -u VCINSTALLDIR \
+# RUN:   LIB=%t.dir/sysroot/VC/Tools/MSVC/1.1.1.1/lib/x64 \
+# RUN:   lld-link %p/Inputs/hello64.obj /defaultlib:std64 /entry:main \
+# RUN:   /out:%t.exe

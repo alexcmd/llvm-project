@@ -903,7 +903,7 @@ void LinkerDriver::detectWinSysRoot(const opt::InputArgList &Args,
   std::optional<StringRef> VCToolsDir, VCToolsVersion, WinSysRoot;
   // BIN-RELATIVE-LOOKUP: an openrt-<ver> layout around lld-link
   // (<bin>\..\manifest.json) acts as /vctoolsdir:<root>, ahead of env, setup
-  // config and registry. It is not autodetection: /novcautodetect keeps it.
+  // config and registry. It is not autodetection: it works without /vcautodetect.
   // Skipped with /vctoolsdir or /winsysroot, or a non-empty %LIB% without
   // /lldignoreenv. manifest.json sdk.* stand in for a missing /winsdkdir.
   std::string layoutRoot, layoutSdkDir, layoutSdkVersion;
@@ -927,12 +927,10 @@ void LinkerDriver::detectWinSysRoot(const opt::InputArgList &Args,
     VCToolsVersion = A->getValue();
   if (auto *A = Args.getLastArg(OPT_winsysroot))
     WinSysRoot = A->getValue();
-  // /novcautodetect: use only what the command line names (/vctoolsdir,
-  // /vctoolsversion, /winsysroot, /winsdkdir); never consult the environment
-  // (%VCToolsInstallDir%, cl.exe on %PATH%), the VS setup configuration COM API
-  // or the registry. Lets a self-contained toolchain link hermetically on a
-  // machine that also has Visual Studio installed.
-  bool autodetect = !Args.hasArg(OPT_novcautodetect);
+  // openrt: link.exe never probes for a VS install, so without /vcautodetect
+  // only the command line (/vctoolsdir, /vctoolsversion, /winsysroot,
+  // /winsdkdir) and LIB count. /novcautodetect is accepted as a no-op.
+  bool autodetect = Args.hasArg(OPT_vcautodetect);
   if (!findVCToolChainViaCommandLine(*VFS, VCToolsDir, VCToolsVersion,
                                      WinSysRoot, vcToolChainPath, vsLayout) &&
       (!autodetect ||
@@ -970,7 +968,7 @@ void LinkerDriver::detectWinSysRoot(const opt::InputArgList &Args,
     if (auto *A = Args.getLastArg(OPT_winsdkversion))
       WinSdkVersion = A->getValue();
     // Without /winsdkdir or /winsysroot the SDK lookups below fall back to the
-    // registry, which /novcautodetect forbids.
+    // registry, which needs /vcautodetect.
     if (!autodetect && !WinSdkDir && !WinSysRoot)
       return;
 

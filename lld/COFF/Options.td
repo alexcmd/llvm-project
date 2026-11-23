@@ -86,9 +86,12 @@ def noopenrtlibmap : F<"noopenrtlibmap">,
     HelpText<"Ignore the library name map declared by the openrt layout "
              "around lld-link (<bin>/../manifest.json \"libmap\")">;
 def novcautodetect : F<"novcautodetect">,
-    HelpText<"Do not search for Visual Studio or the Windows SDK (environment, "
-             "setup configuration, registry); use only /vctoolsdir, "
-             "/winsysroot, /winsdkdir and /libpath">;
+    HelpText<"No-op: lld-link does not search for Visual Studio or the Windows "
+             "SDK by default (openrt); kept for compatibility">;
+def vcautodetect : F<"vcautodetect">,
+    HelpText<"openrt extension: also search for Visual Studio and the Windows "
+             "SDK (environment, setup configuration, registry), as upstream "
+             "lld-link does by default">;
 def lldltocache : P<"lldltocache",
     "Path to ThinLTO cached object file directory">;
 def lldltocachepolicy : P<"lldltocachepolicy",

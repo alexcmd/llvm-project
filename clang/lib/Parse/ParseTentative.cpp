@@ -11,6 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "clang/Lex/LiteralSupport.h"
 #include "clang/Parse/Parser.h"
 #include "clang/Parse/RAIIObjectsForParser.h"
 #include "clang/Sema/ParsedTemplate.h"
@@ -2011,14 +2012,21 @@ Parser::TPResult Parser::isTemplateArgumentList(unsigned TokensToSkip) {
 //     (v.number_float < o.v.number_float), or
 //   - the argument list is not well-formed (x.nf < a ? b > (c) : 0), or
 //   - the token after the closing '>' is an identifier or a numeric or
-//     character literal (x.nf < a > b, x.nf < a > 1).
+//     character literal without ud-suffix (x.nf < a > b, x.nf < a > 1).
 // After any other follower, an operator ('+', '>', ';', ...), '(', '::', a
-// keyword or a string literal, it keeps the template-id reading, so
-// x.vt<1> + 1 (static member variable template), x.Base<T>::f() and
-// x.f<3>() still use the enclosing-scope class template. For '>>' closing
-// one level, the second '>' is the follower.
-// Not matched: cl /permissive (its default below /std:c++20) also accepts
-// the '> (' and '> ::' shapes as comparisons; clang-cl follows /permissive-.
+// keyword, a string or user-defined literal, it keeps the template-id
+// reading, so x.vt<1> + 1 (static member variable template), x.Base<T>::f()
+// and x.f<3>() still use the enclosing-scope class template. For '>>'
+// closing one level, the second '>' is the follower.
+// Nesting: an inner '<' opens a level only after a template name, decided by
+// lookup (current scope, or qualified with '::'), after 'template name', or
+// after a named cast (x.nf < static_cast<double>(y), as in json.hpp);
+// any other inner '<' is a less-than (x.vt<1 < 2> + 1 and x.vt<N < M> with a
+// constexpr N stay template-ids; x.nf < a < b > + c is the template reading).
+// Names after '.' or '->' inside the list are not looked up and do not nest.
+// Not matched: cl /permissive (its default below /std:c++20) accepts every
+// shape whose comparison reading is valid (x.nf < a > + b, x.nf < a > (b),
+// x.nf < a > ::c, ...); clang-cl follows /permissive-.
 // Not checked here: well-formedness beyond an unbalanced '?'.
 bool Parser::isMSDependentMemberLessThan(const UnqualifiedId &Name,
                                          ParsedType ObjectType,
@@ -2070,12 +2078,47 @@ bool Parser::isMSMemberLessThanByLookAhead(unsigned LessOffset) {
     return false;
 
   unsigned Depth = 1;
-  unsigned OpenQuestions = 0;    // '?' without its ':' at the outer level.
-  bool PlainRegion = true;       // No bracket group skipped, no '>' seen.
+  unsigned OpenQuestions = 0; // '?' without its ':' at the outer level.
+  bool PlainRegion = true;    // No bracket group skipped, no '>' seen.
+  tok::TokenKind Prev = tok::less, Prev2 = tok::unknown;
   while (true) {
-    switch (Tok.getKind()) {
+    tok::TokenKind Cur = Tok.getKind();
+    switch (Cur) {
     case tok::less:
-      ++Depth;
+      // An inner '<' nests only after a template name. Names in the current
+      // scope or after '::' were annotated below (their '<...>' is inside the
+      // annot_template_id); here 'template name <' and the named casts are
+      // left. Any other '<' is a less-than: x.vt<1 < 2> + 1,
+      // x.nf < a < b > + c.
+      if ((Prev == tok::identifier && Prev2 == tok::kw_template) ||
+          Prev == tok::kw_static_cast || Prev == tok::kw_dynamic_cast ||
+          Prev == tok::kw_reinterpret_cast || Prev == tok::kw_const_cast ||
+          Prev == tok::kw_addrspace_cast)
+        ++Depth;
+      break;
+    case tok::identifier:
+    case tok::coloncolon:
+      // Decide by a real lookup whether a name followed by '<' or '::' starts
+      // a template-id: annotate it, as isCXXDeclarationSpecifier does. A name
+      // after '.' or '->' is a member of an object whose type the scan does
+      // not know; it is not looked up and its '<' is a less-than (cl decides
+      // such names at instantiation; it nests after y.t<1> when t is a member
+      // template of the dependent y; not matched).
+      if (Prev != tok::period && Prev != tok::arrow &&
+          Prev != tok::kw_template && Prev != tok::coloncolon &&
+          Prev != tok::annot_cxxscope &&
+          (Cur == tok::coloncolon ||
+           NextToken().isOneOf(tok::less, tok::coloncolon))) {
+        if (TryAnnotateTypeOrScopeToken())
+          return false;
+        if (Tok.isAnnotation()) {
+          PlainRegion = false;
+          Prev2 = Prev;
+          Prev = Tok.getKind();
+          ConsumeAnnotationToken();
+          continue;
+        }
+      }
       break;
     case tok::question:
       if (Depth == 1)
@@ -2101,22 +2144,44 @@ bool Parser::isMSMemberLessThanByLookAhead(unsigned LessOffset) {
       if (Closes > Depth)
         return false; // The follower is the next '>' of this token.
       ConsumeAnyToken();
-      return Tok.isOneOf(tok::identifier, tok::numeric_constant,
-                         tok::char_constant, tok::wide_char_constant,
-                         tok::utf8_char_constant, tok::utf16_char_constant,
-                         tok::utf32_char_constant);
+      // A user-defined literal (1_k, 'a'_c) keeps the template-id reading.
+      if (Tok.is(tok::numeric_constant)) {
+        // The lexer flags no ud-suffix on numbers; ask the literal parser,
+        // quietly (the real parse reports any problem with the literal).
+        SmallString<32> Buffer;
+        bool Invalid = false;
+        StringRef Spelling = PP.getSpelling(Tok, Buffer, &Invalid);
+        if (Invalid)
+          return false;
+        DiagnosticsEngine &Diags = PP.getDiagnostics();
+        bool OldSuppress = Diags.getSuppressAllDiagnostics();
+        Diags.setSuppressAllDiagnostics(true);
+        NumericLiteralParser Literal(Spelling, Tok.getLocation(),
+                                     PP.getSourceManager(), PP.getLangOpts(),
+                                     PP.getTargetInfo(), Diags);
+        Diags.setSuppressAllDiagnostics(OldSuppress);
+        return !Literal.hadError && !Literal.hasUDSuffix();
+      }
+      return Tok.isOneOf(tok::identifier, tok::char_constant,
+                         tok::wide_char_constant, tok::utf8_char_constant,
+                         tok::utf16_char_constant, tok::utf32_char_constant) &&
+             !Tok.hasUDSuffix();
     }
     case tok::l_paren:
       PlainRegion = false;
       ConsumeParen();
       if (!SkipUntil(tok::r_paren, StopAtSemi))
         return true;
+      Prev2 = Prev;
+      Prev = tok::r_paren;
       continue;
     case tok::l_square:
       PlainRegion = false;
       ConsumeBracket();
       if (!SkipUntil(tok::r_square, StopAtSemi))
         return true;
+      Prev2 = Prev;
+      Prev = tok::r_square;
       continue;
     case tok::l_brace:
       // No StopAtSemi: a lambda body may sit in the list.
@@ -2124,6 +2189,8 @@ bool Parser::isMSMemberLessThanByLookAhead(unsigned LessOffset) {
       ConsumeBrace();
       if (!SkipUntil(tok::r_brace))
         return true;
+      Prev2 = Prev;
+      Prev = tok::r_brace;
       continue;
     case tok::r_paren:
     case tok::r_square:
@@ -2143,6 +2210,8 @@ bool Parser::isMSMemberLessThanByLookAhead(unsigned LessOffset) {
     default:
       break;
     }
+    Prev2 = Prev;
+    Prev = Cur;
     ConsumeAnyToken();
   }
 }

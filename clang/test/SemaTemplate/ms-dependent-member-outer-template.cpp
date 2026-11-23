@@ -4,19 +4,20 @@
 // RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -std=c++20 -fms-extensions -fms-compatibility -fdelayed-template-parsing -fsyntax-only -verify=ms %s
 // RUN: %clang_cl --target=x86_64-pc-windows-msvc /Zs /std:c++17 -Xclang -verify=ms -- %s
 
-// ms-no-diagnostics
-
 // MS-MEMBER-TEMPLATE-LOOKUP. x.name < ... with a type-dependent x: before
 // C++23, [basic.lookup.classref] also looks name up in the enclosing scope, and
 // a class template found there turns '<' into a template-argument list.
 // Measured with cl 14.50 /permissive- (compile results only; nlohmann/json
 // unit-regression1): the '<' is a less-than when no '>' closes the list, when
 // the list is ill-formed (unbalanced '?'), or when an identifier or a numeric
-// or character literal follows the closing '>'. Any other follower keeps the
-// template-id reading. Every case below compiles with cl in all /std modes.
-// Not matched: cl /permissive also reads the '> (' and '> ::' shapes
-// (x.nf < a > (b), x.nf < a > ::c) as comparisons; clang-cl follows
-// /permissive- there and keeps the template-id reading.
+// or character literal without ud-suffix follows the closing '>'. Any other
+// follower keeps the template-id reading. An inner '<' nests only after a
+// template name. Every case below compiles with cl in all /std and
+// /permissive modes, except udl (cl /permissive- rejects it too). The C++20
+// lambda case also tests _MSVC_LANG, so cl sees it without /Zc:__cplusplus.
+// Not matched: cl /permissive accepts every shape whose comparison reading is
+// valid (x.nf < a > + b, x.nf < a > (b), x.nf < a > ::c, ...); clang-cl
+// follows /permissive- there and keeps the template-id reading.
 
 template <typename T> class number_float {};
 
@@ -31,6 +32,10 @@ template <typename T> struct holder {
   value<T> v;
   bool dot(const holder &o) const {
     return v.number_float < o.v.number_float; // std-error {{expected '>'}} std-note {{to match this '<'}} std-error {{expected unqualified-id}}
+  }
+  // Named casts nest (json.hpp: m_value.number_float op static_cast<...>(...)).
+  bool cast(const holder &o) const {
+    return v.number_float < static_cast<double>(o.v.number_float); // std-error {{expected '>'}} std-note {{to match this '<'}} std-error {{expected unqualified-id}}
   }
   bool arrow(const holder *o) const {
     return this->v.number_float < o->v.number_float; // std-error {{expected '>'}} std-note {{to match this '<'}} std-error {{expected unqualified-id}}
@@ -122,18 +127,67 @@ template <typename T> int var_tmpl_typed(const svt<T> &x) {
 template <typename T> int var_tmpl_brace(const svt<T> &x) {
   return x.number_float < int{1} > + 1;
 }
-#if __cplusplus >= 201703L
+#if __cplusplus >= 202002L || (defined(_MSVC_LANG) && _MSVC_LANG >= 202002L)
 template <typename T> int var_tmpl_lambda(const svt<T> &x) {
   return x.number_float < [] { int t = 1; return t; }() > + 1;
 }
 #endif
+
+// An inner '<' nests only after a template name (lookup in the current scope
+// or after '::'). Otherwise it is a less-than inside the argument list.
+constexpr int N = 1, M = 2;
+template <int K> constexpr int gv = K;
+template <bool B> struct Q { static int g() { return B; } };
+template <typename T> struct sq : Q<true> {
+  template <bool B> int number_float() const { return B; }
+};
+template <typename T> int inner_lt(const svt<T> &x) {
+  return x.number_float<1 < 2> + 1;
+}
+int take(int);
+template <typename T> int inner_lt_call(const svt<T> &x) {
+  return take(x.number_float<1 < 2>);
+}
+template <typename T> int inner_lt_semi(const svt<T> &x) {
+  return x.number_float<1 < 2>;
+}
+template <typename T> bool inner_lt_shr(const svt<T> &x) {
+  return x.number_float<1 < 2>> 1;
+}
+template <typename T> int inner_lt_const(const svt<T> &x) {
+  return x.number_float<N < M> + 1;
+}
+template <typename T> int inner_lt_memfn(const sq<T> &x) {
+  return x.number_float<1 < 2>() + x.number_float<sizeof(T) < 8>();
+}
+template <typename T> int inner_lt_qual(const sq<T> &x) {
+  return x.Q<1 < 2>::g();
+}
+// 'a < b >' does not nest, so this is the template-id reading as for cl.
+template <typename T> bool inner_lt_tmpl_reading(const svt<T> &x) {
+  return x.number_float < N < M > + 1 && x.number_float < N < M >> 1;
+}
+// A template name nests: one '>' closes gv<1>, the next the list, and an
+// identifier follows, so for cl these are comparisons.
+template <typename T> bool inner_tmpl_nests(ivalue<T> x, int b) {
+  return x.number_float < gv<1> > b; // std-error {{expected ';' after return statement}}
+}
+template <typename T> bool inner_tmpl_nests_qual(ivalue<T> x, int b) {
+  return x.number_float < Q<true>::g() > b; // std-error {{expected ';' after return statement}}
+}
+// A user-defined literal after the '>' keeps the template-id reading (error
+// for cl too).
+int operator""_k(unsigned long long);
+template <typename T> int udl(ivalue<T> x, int a) {
+  return x.number_float < a > 1_k; // std-error {{expected ';' after return statement}} ms-error {{expected ';' after return statement}} std-error {{no member named 'number_float' in 'ivalue<int>'}} ms-error {{no member named 'number_float' in 'ivalue<int>'}}
+}
 
 bool use() {
   holder<int> h{};
   derived<int> d{};
   wrap<int> w;
   struct DD : B<int> {} dd;
-  return h.dot(h) && h.arrow(&h) && h.paren(1, 2) &&
+  return h.dot(h) && h.cast(h) && h.arrow(&h) && h.paren(1, 2) &&
          h.call(1, 2) && // std-note {{in instantiation of member function 'holder<int>::call' requested here}}
          d.lt(d) && explicit_kw(w) && D<int>{}.g() && qualified(dd) &&
          member_tmpl(w) && non_dependent({}, {});
@@ -145,8 +199,18 @@ bool use2() {
   // chain* stay uninstantiated: clang diagnoses chained comparisons there.
   return ternary(iv, 2, 3, 4) && lambda_in(iv, 2, 3) && var_tmpl(sv) &&
          var_tmpl_shr(sv) && var_tmpl_gt(sv) && var_tmpl_typed(sv) &&
-#if __cplusplus >= 201703L
+#if __cplusplus >= 202002L || (defined(_MSVC_LANG) && _MSVC_LANG >= 202002L)
          var_tmpl_lambda(sv) &&
 #endif
          var_tmpl_brace(sv);
+}
+
+bool use3() {
+  svt<int> sv;
+  sq<int> q;
+  ivalue<int> iv{1};
+  return inner_lt(sv) && inner_lt_call(sv) && inner_lt_semi(sv) &&
+         inner_lt_shr(sv) && inner_lt_const(sv) && inner_lt_memfn(q) &&
+         inner_lt_qual(q) && inner_lt_tmpl_reading(sv) &&
+         udl(iv, 2); // delayed template parsing: parsed only when used. std-note {{in instantiation of function template specialization 'udl<int>' requested here}} ms-note {{in instantiation of function template specialization 'udl<int>' requested here}}
 }

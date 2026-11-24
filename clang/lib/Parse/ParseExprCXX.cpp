@@ -496,7 +496,13 @@ bool Parser::ParseOptionalCXXScopeSpecifier(
               getCurScope(), SS,
               /*hasTemplateKeyword=*/false, TemplateName, ObjectType,
               EnteringContext, Template, MemberOfUnknownSpecialization,
-              /*AllowTypoCorrection=*/!Disambiguation)) {
+              /*AllowTypoCorrection=*/!Disambiguation);
+          TNK != TNK_Non_template &&
+          // MS-MEMBER-TEMPLATE-LOOKUP
+          !(SS.isEmpty() &&
+            isMSDependentMemberLessThan(TemplateName, ObjectType,
+                                        EnteringContext, /*LessOffset=*/1,
+                                        MemberOfUnknownSpecialization))) {
         // If lookup didn't find anything, we treat the name as a template-name
         // anyway. C++20 requires this, and in prior language modes it improves
         // error recovery. But before we commit to this, check that we actually
@@ -2230,6 +2236,13 @@ bool Parser::ParseUnqualifiedIdTemplateId(
                                    TemplateKWLoc.isValid(), Id,
                                    ObjectType, EnteringContext, Template,
                                    MemberOfUnknownSpecialization);
+      // MS-MEMBER-TEMPLATE-LOOKUP
+      if (TNK != TNK_Non_template && TemplateKWLoc.isInvalid() &&
+          SS.isEmpty() &&
+          isMSDependentMemberLessThan(Id, ObjectType, EnteringContext,
+                                      /*LessOffset=*/0,
+                                      MemberOfUnknownSpecialization))
+        TNK = TNK_Non_template;
       // If lookup found nothing but we're assuming that this is a template
       // name, double-check that makes sense syntactically before committing
       // to it.

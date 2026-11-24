@@ -8830,6 +8830,22 @@ private:
   /// never be wrong if it returns True or False.
   TPResult isTemplateArgumentList(unsigned TokensToSkip);
 
+  /// MS-MEMBER-TEMPLATE-LOOKUP: called after \p Name (a member of the
+  /// type-dependent \p ObjectType, no 'template' keyword, no scope specifier)
+  /// was found to be a template. True if, in MS compatibility mode, that
+  /// template came only from the enclosing scope and the '<' (look-ahead index
+  /// \p LessOffset, 0 = Tok) is a less-than for cl; then
+  /// \p MemberOfUnknownSpecialization is cleared.
+  bool isMSDependentMemberLessThan(const UnqualifiedId &Name,
+                                   ParsedType ObjectType, bool EnteringContext,
+                                   unsigned LessOffset,
+                                   bool &MemberOfUnknownSpecialization);
+  /// Token scan behind isMSDependentMemberLessThan.
+  bool isMSMemberLessThanByLookAhead(unsigned LessOffset);
+  /// Last scan region [Begin, End) that held only plain tokens and no '>':
+  /// any '<' inside it is a less-than too (keeps a < b < c ... chains linear).
+  SourceLocation MSMemberLessRegionBegin, MSMemberLessRegionEnd;
+
   /// Determine whether an '(' after an 'explicit' keyword is part of a C++20
   /// 'explicit(bool)' declaration, in earlier language modes where that is an
   /// extension.

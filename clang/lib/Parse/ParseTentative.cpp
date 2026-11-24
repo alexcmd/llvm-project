@@ -2024,6 +2024,11 @@ Parser::TPResult Parser::isTemplateArgumentList(unsigned TokensToSkip) {
 // any other inner '<' is a less-than (x.vt<1 < 2> + 1 and x.vt<N < M> with a
 // constexpr N stay template-ids; x.nf < a < b > + c is the template reading).
 // Names after '.' or '->' inside the list are not looked up and do not nest.
+// Tokens that belong to a member name are left alone: a destructor name
+// (x.q->~A<int>(); its '<' nests), the '::' after a member name
+// (x.y.B::m) and the '>' or '>>' of an operator-function-id
+// (x.y.operator>(b)). A code-completion token ends the scan with the
+// standard reading.
 // Not matched: cl /permissive (its default below /std:c++20) accepts every
 // shape whose comparison reading is valid (x.nf < a > + b, x.nf < a > (b),
 // x.nf < a > ::c, ...); clang-cl follows /permissive-.
@@ -2080,17 +2085,30 @@ bool Parser::isMSMemberLessThanByLookAhead(unsigned LessOffset) {
   unsigned Depth = 1;
   unsigned OpenQuestions = 0; // '?' without its ':' at the outer level.
   bool PlainRegion = true;    // No bracket group skipped, no '>' seen.
+  bool DtorName = false;      // The previous token named a destructor.
   tok::TokenKind Prev = tok::less, Prev2 = tok::unknown;
+  // A bracket group that does not close: the expression ends inside it, or
+  // the completion point is there (SkipUntil stops in front of it).
+  auto UnclosedGroup = [&] { return Tok.isNot(tok::code_completion); };
   while (true) {
     tok::TokenKind Cur = Tok.getKind();
+    bool AfterDtorName = DtorName;
+    DtorName = false;
     switch (Cur) {
+    case tok::code_completion:
+      // Never consume the completion point in a look-ahead (ConsumeAnyToken
+      // would complete an ordinary name here): keep the standard reading and
+      // let the real parse reach it.
+      return false;
     case tok::less:
       // An inner '<' nests only after a template name. Names in the current
       // scope or after '::' were annotated below (their '<...>' is inside the
       // annot_template_id); here 'template name <' and the named casts are
       // left. Any other '<' is a less-than: x.vt<1 < 2> + 1,
-      // x.nf < a < b > + c.
-      if ((Prev == tok::identifier && Prev2 == tok::kw_template) ||
+      // x.nf < a < b > + c. After a destructor name it can only open the
+      // name's own argument list (x.q->~A<int>()).
+      if (AfterDtorName ||
+          (Prev == tok::identifier && Prev2 == tok::kw_template) ||
           Prev == tok::kw_static_cast || Prev == tok::kw_dynamic_cast ||
           Prev == tok::kw_reinterpret_cast || Prev == tok::kw_const_cast ||
           Prev == tok::kw_addrspace_cast)
@@ -2104,6 +2122,20 @@ bool Parser::isMSMemberLessThanByLookAhead(unsigned LessOffset) {
       // not know; it is not looked up and its '<' is a less-than (cl decides
       // such names at instantiation; it nests after y.t<1> when t is a member
       // template of the dependent y; not matched).
+      // Annotations outlive the scan, so tokens of a member name must stay as
+      // they are: the name after '~' in x.q->~A<int>() (the destructor-name
+      // parsers want the identifier; a unary '~' has no '.', '->' or '::' in
+      // front and its operand is annotated: x.nf < ~gv<1> > b), and the '::'
+      // after a member name or its argument list (x.y.B::m is not ::m).
+      if (Cur == tok::identifier && Prev == tok::tilde &&
+          (Prev2 == tok::period || Prev2 == tok::arrow ||
+           Prev2 == tok::coloncolon || Prev2 == tok::annot_cxxscope)) {
+        DtorName = true;
+        break;
+      }
+      if (Cur == tok::coloncolon &&
+          (Prev == tok::identifier || Prev == tok::greater))
+        break;
       if (Prev != tok::period && Prev != tok::arrow &&
           Prev != tok::kw_template && Prev != tok::coloncolon &&
           Prev != tok::annot_cxxscope &&
@@ -2132,6 +2164,9 @@ bool Parser::isMSMemberLessThanByLookAhead(unsigned LessOffset) {
     case tok::greatergreater:
     case tok::greatergreatergreater: {
       PlainRegion = false;
+      // operator> and operator>> are names, not closers.
+      if (Prev == tok::kw_operator)
+        break;
       unsigned Closes = Tok.is(tok::greater)          ? 1
                         : Tok.is(tok::greatergreater) ? 2
                                                       : 3;
@@ -2170,16 +2205,16 @@ bool Parser::isMSMemberLessThanByLookAhead(unsigned LessOffset) {
     case tok::l_paren:
       PlainRegion = false;
       ConsumeParen();
-      if (!SkipUntil(tok::r_paren, StopAtSemi))
-        return true;
+      if (!SkipUntil(tok::r_paren, StopAtSemi | StopAtCodeCompletion))
+        return UnclosedGroup();
       Prev2 = Prev;
       Prev = tok::r_paren;
       continue;
     case tok::l_square:
       PlainRegion = false;
       ConsumeBracket();
-      if (!SkipUntil(tok::r_square, StopAtSemi))
-        return true;
+      if (!SkipUntil(tok::r_square, StopAtSemi | StopAtCodeCompletion))
+        return UnclosedGroup();
       Prev2 = Prev;
       Prev = tok::r_square;
       continue;
@@ -2187,8 +2222,8 @@ bool Parser::isMSMemberLessThanByLookAhead(unsigned LessOffset) {
       // No StopAtSemi: a lambda body may sit in the list.
       PlainRegion = false;
       ConsumeBrace();
-      if (!SkipUntil(tok::r_brace))
-        return true;
+      if (!SkipUntil(tok::r_brace, StopAtCodeCompletion))
+        return UnclosedGroup();
       Prev2 = Prev;
       Prev = tok::r_brace;
       continue;

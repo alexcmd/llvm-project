@@ -182,6 +182,50 @@ template <typename T> int udl(ivalue<T> x, int a) {
   return x.number_float < a > 1_k; // std-error {{expected ';' after return statement}} ms-error {{expected ';' after return statement}} std-error {{no member named 'number_float' in 'ivalue<int>'}} ms-error {{no member named 'number_float' in 'ivalue<int>'}}
 }
 
+// Tokens of a member name inside the list stay as written (annotations made
+// by the look-ahead outlive it): a destructor name, whose '<' opens its own
+// argument list; the '::' after a member name; operator> and operator>>,
+// which close nothing. A unary '~' does not name a destructor: its operand is
+// looked up and nests.
+template <typename T> struct Dt {};
+struct Cmp {
+  int m;
+  bool operator>(int) const { return true; }
+  int operator>>(int) const { return 1; }
+};
+template <typename T> struct mvalue {
+  int number_float;
+  Dt<int> *q;
+  Cmp y;
+};
+template <typename T> int dtor_ternary(mvalue<T> x) {
+  return x.number_float < 0 ? x.q->~Dt<int>(), 4 : 5; // std-error {{expected '>'}} std-note {{to match this '<'}} std-error {{expected unqualified-id}}
+}
+template <typename T> int dtor_comma(mvalue<T> x, int a) {
+  return x.number_float < a, x.q->~Dt<int>(), 4; // std-error {{expected '>'}} std-note {{to match this '<'}} std-error {{expected unqualified-id}}
+}
+template <typename T> bool dtor_dot(mvalue<T> x, int a, int b, int c) {
+  return x.number_float < a, (*x.q).~Dt<int>(), b > c; // std-error {{expected ';' after return statement}}
+}
+template <typename T> bool unary_tilde(mvalue<T> x, int b) {
+  return x.number_float < ~gv<1> > b; // std-error {{expected ';' after return statement}}
+}
+template <typename T> bool member_qual(mvalue<T> x) {
+  return x.number_float < x.y.Cmp::m; // std-error {{expected '>'}} std-note {{to match this '<'}} std-error {{expected unqualified-id}}
+}
+template <typename T> bool member_qual_gt(mvalue<T> x, int a, int b) {
+  return x.number_float < a, x.y.Cmp::m > b; // std-error {{expected ';' after return statement}}
+}
+template <typename T> bool op_greater(mvalue<T> x, int b) {
+  return x.number_float < x.y.operator>(b); // std-error {{expected '>'}} std-note {{to match this '<'}} std-error {{expected unqualified-id}}
+}
+template <typename T> bool op_shr(mvalue<T> x, int b) {
+  return x.number_float < x.y.operator>>(b); // std-error {{expected '>'}} std-note {{to match this '<'}} std-error {{expected unqualified-id}}
+}
+template <typename T> bool op_greater_chain(mvalue<T> x, int b, int c) {
+  return x.number_float < x.y.operator>(b) > c && x.number_float < x.y.operator>>(b) > c; // std-error {{expected ';' after return statement}}
+}
+
 bool use() {
   holder<int> h{};
   derived<int> d{};
@@ -213,4 +257,12 @@ bool use3() {
          inner_lt_shr(sv) && inner_lt_const(sv) && inner_lt_memfn(q) &&
          inner_lt_qual(q) && inner_lt_tmpl_reading(sv) &&
          udl(iv, 2); // delayed template parsing: parsed only when used. std-note {{in instantiation of function template specialization 'udl<int>' requested here}} ms-note {{in instantiation of function template specialization 'udl<int>' requested here}}
+}
+
+bool use4() {
+  // The comma and chained cases stay uninstantiated (unused-value and
+  // chained-comparison warnings).
+  mvalue<int> mv{1, nullptr, {2}};
+  return dtor_ternary(mv) && member_qual(mv) && op_greater(mv, 3) &&
+         op_shr(mv, 3);
 }

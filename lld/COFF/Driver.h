@@ -211,6 +211,7 @@ private:
   llvm::SmallString<128> diaPath;
   bool useWinSysRootLibPath = false;
   bool vcAutodetect = false; // /vcautodetect given (last of the two flags)
+  std::string missingLibNote; // printed before LNK1181 for a .lib; may be empty
   llvm::SmallString<128> universalCRTLibPath;
   int sdkMajor = 0;
   llvm::SmallString<128> windowsSdkLibPath;

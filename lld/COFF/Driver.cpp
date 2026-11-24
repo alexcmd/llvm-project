@@ -475,15 +475,10 @@ void LinkerDriver::enqueuePath(StringRef path, bool lazy, InputOpt inputOpt) {
       // directory.
       std::string nearest;
       if (ctx.optTable.findNearest(pathStr, nearest) > 1) {
-        // openrt: a missing .lib with VS variables set but no LIB is the
-        // usual cause; name it (this exits, so the note prints once).
-        if (StringRef(pathStr).ends_with_insensitive(".lib") && !vcAutodetect &&
-            Process::GetEnv("LIB").value_or("").empty() &&
-            (Process::GetEnv("VCToolsInstallDir") ||
-             Process::GetEnv("VSINSTALLDIR")))
-          llvm::errs() << "LINK : note: lld-link does not search for Visual "
-                          "Studio by default (like link.exe); set LIB (run "
-                          "vcvars) or pass /vcautodetect\n";
+        // openrt: name the likely cause of a missing .lib (see linkerMain;
+        // this exits, so the note prints once).
+        if (StringRef(pathStr).ends_with_insensitive(".lib"))
+          llvm::errs() << missingLibNote;
         // link.exe: LNK1181 is fatal and exits 1181 (probed 14.51.36231).
         llvm::errs() << "LINK : fatal error LNK1181: input file '"
                      << pathStr << "' was not found\n";
@@ -1911,15 +1906,46 @@ void LinkerDriver::linkerMain(ArrayRef<const char *> argsArr) {
       // installations when operating in mingw mode. (This also makes LLD ignore
       // winsysroot and vctoolsdir arguments.)
       detectWinSysRoot(args, argsArr[0]);
-      // /vctoolsversion alone resolves no toolchain, so it does not suppress
-      // %LIB%. Where the flags suppress it with no toolchain, say so.
-      if (!args.hasArg(OPT_lldignoreenv, OPT_winsysroot, OPT_vctoolsdir,
-                       OPT_winsdkdir, OPT_winsdkversion))
+      // LIB is searched unless one of these flags is given (as upstream,
+      // less /vctoolsversion, which alone resolves no toolchain).
+      const char *noLibFlag = nullptr;
+      if (args.hasArg(OPT_lldignoreenv))
+        noLibFlag = "/lldignoreenv";
+      else if (args.hasArg(OPT_winsysroot))
+        noLibFlag = "/winsysroot";
+      else if (args.hasArg(OPT_vctoolsdir))
+        noLibFlag = "/vctoolsdir";
+      else if (args.hasArg(OPT_winsdkdir))
+        noLibFlag = "/winsdkdir";
+      else if (args.hasArg(OPT_winsdkversion))
+        noLibFlag = "/winsdkversion";
+      bool haveLib = !Process::GetEnv("LIB").value_or("").empty();
+      // Ignoring LIB is what the flag asks for, so it is not a warning (that
+      // would fail /WX links); /verbose names the flag.
+      if (!noLibFlag)
         addLibSearchPaths();
-      else if (vcToolChainPath.empty() && !args.hasArg(OPT_lldignoreenv) &&
-               Process::GetEnv("LIB"))
-        Warn(ctx) << "ignoring %LIB%: no VC toolchain was resolved from "
-                     "/vctoolsdir, /winsysroot or /winsdkdir alone";
+      else if (haveLib)
+        Log(ctx) << "ignoring LIB: " << noLibFlag << " given";
+      // Note for a missing .lib (LNK1181), only when the user named no
+      // library directory at all: no /libpath, no toolchain or SDK resolved.
+      if (vcToolChainPath.empty() && universalCRTLibPath.empty() &&
+          windowsSdkLibPath.empty() && !args.hasArg(OPT_libpath) &&
+          !noLibFlag && !haveLib && !vcAutodetect &&
+          (Process::GetEnv("VCToolsInstallDir") ||
+           Process::GetEnv("VCINSTALLDIR") || Process::GetEnv("VSINSTALLDIR")))
+        missingLibNote = "LINK : note: lld-link does not search for Visual "
+                         "Studio by default (like link.exe); set LIB (run "
+                         "vcvars) or pass /vcautodetect\n";
+      // ...or when a non-empty LIB is ignored and no VC toolchain replaces it
+      // (/winsdkdir or /winsdkversion alone); not for /lldignoreenv, which
+      // asks for just that.
+      else if (vcToolChainPath.empty() && !args.hasArg(OPT_libpath) &&
+               noLibFlag && !args.hasArg(OPT_lldignoreenv) && haveLib)
+        missingLibNote = (Twine("LINK : note: LIB is not searched because ") +
+                          noLibFlag +
+                          " was given; name the other library directories "
+                          "with /libpath or /vctoolsdir\n")
+                             .str();
     } else {
       if (args.hasArg(OPT_vctoolsdir, OPT_winsysroot))
         Warn(ctx) << "ignoring /vctoolsdir or /winsysroot flags in MinGW mode";

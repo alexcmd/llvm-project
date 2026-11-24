@@ -44,17 +44,90 @@ is found there. (Verbose lines are only printed on a successful link here.)
 
 SDK: Windows SDK lib path: {{.*}}sdk{{[/\\]}}Lib{{[/\\]}}10.0.1.1{{[/\\]}}um
 
-With /winsdkdir alone and LIB set, LIB is ignored and the user is told why. (The
-link succeeds from the SDK dir: lit's LLD_IN_TEST drops buffered warnings on a
-fatal exit, so the warning is checked on a successful link.)
-# RUN: env LIB=%t.dir/sysroot/VC/Tools/MSVC/1.1.1.1/lib/x64 \
-# RUN:   lld-link %p/Inputs/hello64.obj /winsdkdir:%t.dir/sdk \
-# RUN:   /defaultlib:std64 /entry:main /out:%t.exe > %t.warn.txt 2>&1
-# RUN: FileCheck --check-prefix=WARN %s < %t.warn.txt
+With /winsdkdir alone and LIB set, LIB is ignored as the flag asks. That is
+not a warning: a /WX link still succeeds and prints nothing.
+# RUN: mkdir -p %t.dir/empty
+# RUN: %python %p/Inputs/scrub-env.py LIB=%t.dir/empty -- \
+# RUN:   lld-link %p/Inputs/hello64.obj /winsdkdir:%t.dir/sdk /WX \
+# RUN:   /defaultlib:std64 /entry:main /out:%t.exe > %t.wx.txt 2>&1
+# RUN: count 0 < %t.wx.txt
 
-WARN: warning: ignoring %LIB%: no VC toolchain was resolved
+/verbose names the flag that made lld-link ignore LIB.
+# RUN: %python %p/Inputs/scrub-env.py LIB=%t.dir/empty -- \
+# RUN:   lld-link %p/Inputs/hello64.obj /winsdkdir:%t.dir/sdk /verbose \
+# RUN:   /defaultlib:std64 /entry:main /out:%t.exe 2>&1 \
+# RUN:   | FileCheck --check-prefix=IGN-SDK %s
+# RUN: %python %p/Inputs/scrub-env.py LIB=%t.dir/empty -- \
+# RUN:   lld-link %p/Inputs/hello64.obj /verbose \
+# RUN:   /vctoolsdir:%t.dir/sysroot/VC/Tools/MSVC/1.1.1.1 \
+# RUN:   /defaultlib:std64 /entry:main /out:%t.exe 2>&1 \
+# RUN:   | FileCheck --check-prefix=IGN-VC %s
+# RUN: %python %p/Inputs/scrub-env.py LIB=%t.dir/empty -- \
+# RUN:   lld-link %p/Inputs/hello64.obj /verbose /winsysroot:%t.dir/sysroot \
+# RUN:   /defaultlib:std64 /entry:main /out:%t.exe 2>&1 \
+# RUN:   | FileCheck --check-prefix=IGN-ROOT %s
+# RUN: %python %p/Inputs/scrub-env.py LIB=%t.dir/empty -- \
+# RUN:   lld-link %p/Inputs/hello64.obj /verbose /lldignoreenv \
+# RUN:   /libpath:%t.dir/sdk/Lib/10.0.1.1/um/x64 \
+# RUN:   /defaultlib:std64 /entry:main /out:%t.exe 2>&1 \
+# RUN:   | FileCheck --check-prefix=IGN-ENV %s
+
+IGN-SDK: ignoring LIB: /winsdkdir given
+IGN-VC: ignoring LIB: /vctoolsdir given
+IGN-ROOT: ignoring LIB: /winsysroot given
+IGN-ENV: ignoring LIB: /lldignoreenv given
+
+An empty LIB is no LIB: nothing is reported as ignored.
+# RUN: %python %p/Inputs/scrub-env.py LIB= -- \
+# RUN:   lld-link %p/Inputs/hello64.obj /winsdkdir:%t.dir/sdk /verbose \
+# RUN:   /defaultlib:std64 /entry:main /out:%t.exe 2>&1 \
+# RUN:   | FileCheck --check-prefix=SDK --implicit-check-not="ignoring" %s
+
+A library missing with /winsdkdir alone and LIB set: the note names the flag
+that made lld-link ignore LIB.
+# RUN: not %python %p/Inputs/scrub-env.py LIB=%t.dir/sysroot/VC/Tools/MSVC/1.1.1.1/lib/x64 -- \
+# RUN:   lld-link %p/Inputs/hello64.obj /winsdkdir:%t.dir/sdk \
+# RUN:   /defaultlib:nosuch /entry:main /out:%t.exe 2>&1 \
+# RUN:   | FileCheck --check-prefix=LIBNOTE %s
+
+LIBNOTE: LINK : note: LIB is not searched because /winsdkdir was given; name the other library directories with /libpath or /vctoolsdir
+LIBNOTE-NEXT: LINK : fatal error LNK1181: input file 'nosuch.lib' was not found
+
+No note with /libpath (the user names the directories), with /lldignoreenv
+(ignoring LIB is the request) or with a VC toolchain from /vctoolsdir.
+# RUN: not %python %p/Inputs/scrub-env.py LIB=%t.dir/empty -- \
+# RUN:   lld-link %p/Inputs/hello64.obj /winsdkdir:%t.dir/sdk \
+# RUN:   /libpath:%t.dir/empty /defaultlib:nosuch /entry:main /out:%t.exe 2>&1 \
+# RUN:   | FileCheck --check-prefix=NONOTE --implicit-check-not="LINK : note" %s
+# RUN: not %python %p/Inputs/scrub-env.py LIB=%t.dir/empty -- \
+# RUN:   lld-link %p/Inputs/hello64.obj /winsdkdir:%t.dir/sdk /lldignoreenv \
+# RUN:   /defaultlib:nosuch /entry:main /out:%t.exe 2>&1 \
+# RUN:   | FileCheck --check-prefix=NONOTE --implicit-check-not="LINK : note" %s
+# RUN: not %python %p/Inputs/scrub-env.py LIB=%t.dir/empty -- \
+# RUN:   lld-link %p/Inputs/hello64.obj \
+# RUN:   /vctoolsdir:%t.dir/sysroot/VC/Tools/MSVC/1.1.1.1 \
+# RUN:   /defaultlib:nosuch /entry:main /out:%t.exe 2>&1 \
+# RUN:   | FileCheck --check-prefix=NONOTE --implicit-check-not="LINK : note" %s
+
+NONOTE: LINK : fatal error LNK1181: input file 'nosuch.lib' was not found
+
+/winsdkversion alone makes lld-link ignore LIB too (as upstream; see
+winsysroot.test), and is named the same way.
+# RUN: %python %p/Inputs/scrub-env.py LIB=%t.dir/empty -- \
+# RUN:   lld-link %p/Inputs/hello64.obj /winsdkversion:10.0.1.1 /verbose \
+# RUN:   /libpath:%t.dir/sdk/Lib/10.0.1.1/um/x64 \
+# RUN:   /defaultlib:std64 /entry:main /out:%t.exe 2>&1 \
+# RUN:   | FileCheck --check-prefix=IGN-SDKVER %s
+# RUN: not %python %p/Inputs/scrub-env.py LIB=%t.dir/sysroot/VC/Tools/MSVC/1.1.1.1/lib/x64 -- \
+# RUN:   lld-link %p/Inputs/hello64.obj /winsdkversion:10.0.1.1 \
+# RUN:   /defaultlib:std64 /entry:main /out:%t.exe 2>&1 \
+# RUN:   | FileCheck --check-prefix=LIBNOTE-SDKVER %s
+
+IGN-SDKVER: ignoring LIB: /winsdkversion given
+LIBNOTE-SDKVER: LINK : note: LIB is not searched because /winsdkversion was given; name the other library directories with /libpath or /vctoolsdir
+LIBNOTE-SDKVER-NEXT: LINK : fatal error LNK1181: input file 'std64.lib' was not found
 
 /vctoolsversion alone resolves no toolchain and does not suppress LIB.
-# RUN: env LIB=%t.dir/sysroot/VC/Tools/MSVC/1.1.1.1/lib/x64 \
+# RUN: %python %p/Inputs/scrub-env.py LIB=%t.dir/sysroot/VC/Tools/MSVC/1.1.1.1/lib/x64 -- \
 # RUN:   lld-link %p/Inputs/hello64.obj /vctoolsversion:1.1.1.1 \
 # RUN:   /defaultlib:std64 /entry:main /out:%t.exe

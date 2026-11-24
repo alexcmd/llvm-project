@@ -22,11 +22,10 @@ Default: VCToolsInstallDir is not consulted, so std64.lib is not found.
 NONE: LINK : fatal error LNK1181: input file 'std64.lib' was not found
 
 Default: the older-layout VCINSTALLDIR is not consulted either. The lit host may
-export VCTOOLSINSTALLDIR (vcvars), which takes precedence; `env -u` (Git's msys
-env on this host) does not remove it, so these cases run lld-link through
-%python, which drops LIB and VCTOOLSINSTALLDIR and sets VCINSTALLDIR.
-# RUN: not %python -c "import os,subprocess,shutil,sys; e=dict(os.environ); e.pop('LIB',None); e.pop('VCTOOLSINSTALLDIR',None); e['VCINSTALLDIR']=sys.argv[1]; sys.exit(subprocess.call([shutil.which('lld-'+'link')]+sys.argv[2:], env=e))" %t.dir/oldvc \
-# RUN:   %p/Inputs/hello64.obj /defaultlib:std64 /entry:main \
+export VCTOOLSINSTALLDIR (vcvars), which takes precedence, so these cases run
+through Inputs/scrub-env.py.
+# RUN: not %python %p/Inputs/scrub-env.py VCINSTALLDIR=%t.dir/oldvc -- \
+# RUN:   lld-link %p/Inputs/hello64.obj /defaultlib:std64 /entry:main \
 # RUN:   /out:%t.exe /verbose 2>&1 \
 # RUN:   | FileCheck --check-prefix=NONE --implicit-check-not="VC toolchain:" %s
 
@@ -39,8 +38,8 @@ Control: /vcautodetect restores the VCToolsInstallDir search.
 FOUND: VC toolchain: {{.*}}sysroot{{[/\\]}}VC{{[/\\]}}Tools{{[/\\]}}MSVC{{[/\\]}}1.1.1.1
 
 Control: /vcautodetect restores the VCINSTALLDIR search (older layout).
-# RUN: %python -c "import os,subprocess,shutil,sys; e=dict(os.environ); e.pop('LIB',None); e.pop('VCTOOLSINSTALLDIR',None); e['VCINSTALLDIR']=sys.argv[1]; sys.exit(subprocess.call([shutil.which('lld-'+'link')]+sys.argv[2:], env=e))" %t.dir/oldvc \
-# RUN:   %p/Inputs/hello64.obj /vcautodetect /defaultlib:std64 \
+# RUN: %python %p/Inputs/scrub-env.py VCINSTALLDIR=%t.dir/oldvc -- \
+# RUN:   lld-link %p/Inputs/hello64.obj /vcautodetect /defaultlib:std64 \
 # RUN:   /entry:main /out:%t.exe /verbose > %t.foundold.txt 2>&1
 # RUN: FileCheck --check-prefix=FOUNDOLD %s < %t.foundold.txt
 
@@ -75,17 +74,59 @@ The last of /vcautodetect and /novcautodetect wins, in both orders.
 # RUN:   /defaultlib:std64 /entry:main /out:%t.exe /verbose 2>&1 \
 # RUN:   | FileCheck --check-prefix=FOUND %s
 
-The hint names the cause when VS variables are set and LIB is not.
-# RUN: env -u LIB VCToolsInstallDir=%t.dir/sysroot/VC/Tools/MSVC/1.1.1.1 \
-# RUN:   not lld-link %p/Inputs/hello64.obj /defaultlib:std64 /entry:main \
+The hint names the cause when a VS variable is set, LIB is not, and the command
+line names no library directory. Each of the three VS variables counts.
+# RUN: not %python %p/Inputs/scrub-env.py VCToolsInstallDir=%t.dir/sysroot/VC/Tools/MSVC/1.1.1.1 -- \
+# RUN:   lld-link %p/Inputs/hello64.obj /defaultlib:std64 /entry:main \
+# RUN:   /out:%t.exe 2>&1 | FileCheck --check-prefix=HINT %s
+# RUN: not %python %p/Inputs/scrub-env.py VCINSTALLDIR=%t.dir/oldvc -- \
+# RUN:   lld-link %p/Inputs/hello64.obj /defaultlib:std64 /entry:main \
+# RUN:   /out:%t.exe 2>&1 | FileCheck --check-prefix=HINT %s
+# RUN: not %python %p/Inputs/scrub-env.py VSINSTALLDIR=%t.dir/empty -- \
+# RUN:   lld-link %p/Inputs/hello64.obj /defaultlib:std64 /entry:main \
 # RUN:   /out:%t.exe 2>&1 | FileCheck --check-prefix=HINT %s
 
 HINT: LINK : note: lld-link does not search for Visual Studio by default (like link.exe); set LIB (run vcvars) or pass /vcautodetect
-HINT: LINK : fatal error LNK1181: input file 'std64.lib' was not found
+HINT-NEXT: LINK : fatal error LNK1181: input file 'std64.lib' was not found
 
 No hint when LIB is set (the missing library is then a plain LIB problem).
-# RUN: env LIB=%t.dir/empty VCToolsInstallDir=%t.dir/sysroot/VC/Tools/MSVC/1.1.1.1 \
-# RUN:   not lld-link %p/Inputs/hello64.obj /defaultlib:std64 /entry:main \
-# RUN:   /out:%t.exe 2>&1 | FileCheck --check-prefix=NOHINT --implicit-check-not="note: lld-link" %s
+# RUN: not %python %p/Inputs/scrub-env.py LIB=%t.dir/empty VCToolsInstallDir=%t.dir/sysroot/VC/Tools/MSVC/1.1.1.1 -- \
+# RUN:   lld-link %p/Inputs/hello64.obj /defaultlib:std64 /entry:main \
+# RUN:   /out:%t.exe 2>&1 | FileCheck --check-prefix=NOHINT --implicit-check-not="LINK : note" %s
+
+No hint when the command line names a library directory: with /libpath the
+missing library is a wrong name or a wrong directory.
+# RUN: not %python %p/Inputs/scrub-env.py VCToolsInstallDir=%t.dir/sysroot/VC/Tools/MSVC/1.1.1.1 -- \
+# RUN:   lld-link %p/Inputs/hello64.obj /libpath:%t.dir/empty /defaultlib:std64 \
+# RUN:   /entry:main /out:%t.exe 2>&1 \
+# RUN:   | FileCheck --check-prefix=NOHINT --implicit-check-not="LINK : note" %s
+
+No hint with a flag that makes lld-link ignore LIB ("set LIB" cannot help):
+/winsdkdir, /vctoolsdir, /winsysroot, /lldignoreenv.
+# RUN: mkdir -p %t.dir/sdk/Include/10.0.1.1 %t.dir/sdk/Lib/10.0.1.1/um/x64
+# RUN: not %python %p/Inputs/scrub-env.py VCToolsInstallDir=%t.dir/sysroot/VC/Tools/MSVC/1.1.1.1 -- \
+# RUN:   lld-link %p/Inputs/hello64.obj /winsdkdir:%t.dir/sdk /defaultlib:std64 \
+# RUN:   /entry:main /out:%t.exe 2>&1 \
+# RUN:   | FileCheck --check-prefix=NOHINT --implicit-check-not="LINK : note" %s
+# RUN: not %python %p/Inputs/scrub-env.py VCToolsInstallDir=%t.dir/sysroot/VC/Tools/MSVC/1.1.1.1 -- \
+# RUN:   lld-link %p/Inputs/hello64.obj /vctoolsdir:%t.dir/empty /defaultlib:std64 \
+# RUN:   /entry:main /out:%t.exe 2>&1 \
+# RUN:   | FileCheck --check-prefix=NOHINT --implicit-check-not="LINK : note" %s
+# RUN: not %python %p/Inputs/scrub-env.py VCToolsInstallDir=%t.dir/sysroot/VC/Tools/MSVC/1.1.1.1 -- \
+# RUN:   lld-link %p/Inputs/hello64.obj /winsysroot:%t.dir/empty /defaultlib:std64 \
+# RUN:   /entry:main /out:%t.exe 2>&1 \
+# RUN:   | FileCheck --check-prefix=NOHINT --implicit-check-not="LINK : note" %s
+# RUN: not %python %p/Inputs/scrub-env.py VCToolsInstallDir=%t.dir/sysroot/VC/Tools/MSVC/1.1.1.1 -- \
+# RUN:   lld-link %p/Inputs/hello64.obj /lldignoreenv /defaultlib:std64 \
+# RUN:   /entry:main /out:%t.exe 2>&1 \
+# RUN:   | FileCheck --check-prefix=NOHINT --implicit-check-not="LINK : note" %s
 
 NOHINT: LINK : fatal error LNK1181: input file 'std64.lib' was not found
+
+No hint in MinGW mode, which never searched for Visual Studio.
+# RUN: not %python %p/Inputs/scrub-env.py VCToolsInstallDir=%t.dir/sysroot/VC/Tools/MSVC/1.1.1.1 -- \
+# RUN:   lld-link -lldmingw %p/Inputs/hello64.obj nosuch.lib /entry:main \
+# RUN:   /out:%t.exe 2>&1 \
+# RUN:   | FileCheck --check-prefix=MINGW --implicit-check-not="LINK : note" %s
+
+MINGW: 'nosuch.lib'

@@ -871,7 +871,18 @@ bool Preprocessor::HandleIdentifier(Token &Identifier) {
   if (const MacroDefinition MD = getMacroDefinition(&II)) {
     const auto *MI = MD.getMacroInfo();
     assert(MI && "macro definition with no macro info?");
-    if (!DisableMacroExpansion) {
+    // CL-FEATURE-CHECK-NAMES: to cl the feature-check names mean something
+    // only in #if and #elif; anywhere else they are identifiers, also in front
+    // of a parenthesis (cl 19.44 /E prints "__has_include(<x>)" as written).
+    // The same holds here when the clang identity is hidden.
+    const bool FeatureCheckNameOutsideDirective =
+        MI->isBuiltinMacro() && !getPreprocessorOpts().MSClangIdentity &&
+        !ParsingIfOrElifDirective &&
+        (&II == Ident__has_include || &II == Ident__has_include_next ||
+         &II == Ident__has_cpp_attribute || &II == Ident__has_c_attribute ||
+         &II == Ident__has_feature || &II == Ident__has_extension ||
+         &II == Ident__has_builtin || &II == Ident__building_module);
+    if (!DisableMacroExpansion && !FeatureCheckNameOutsideDirective) {
       if (!Identifier.isExpandDisabled() && MI->isEnabled()) {
         // C99 6.10.3p10: If the preprocessing token immediately after the
         // macro name isn't a '(', this macro should not be expanded.

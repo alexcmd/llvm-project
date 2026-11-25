@@ -365,28 +365,35 @@ void Preprocessor::RegisterBuiltinMacros() {
   Ident__has_feature = RegisterBuiltinMacro("__has_feature");
   Ident__has_extension = RegisterBuiltinMacro("__has_extension");
   Ident__has_builtin = RegisterBuiltinMacro("__has_builtin");
-  Ident__has_constexpr_builtin =
-      RegisterBuiltinMacro("__has_constexpr_builtin");
-  Ident__has_attribute = RegisterBuiltinMacro("__has_attribute");
   if (!getLangOpts().CPlusPlus)
     Ident__has_c_attribute = RegisterBuiltinMacro("__has_c_attribute");
   else
     Ident__has_c_attribute = nullptr;
 
-  Ident__has_declspec = RegisterBuiltinMacro("__has_declspec_attribute");
-  Ident__has_embed = RegisterBuiltinMacro("__has_embed");
   Ident__has_include = RegisterBuiltinMacro("__has_include");
   Ident__has_include_next = RegisterBuiltinMacro("__has_include_next");
-  Ident__has_warning = RegisterBuiltinMacro("__has_warning");
-  Ident__is_identifier = RegisterBuiltinMacro("__is_identifier");
-  Ident__is_target_arch = RegisterBuiltinMacro("__is_target_arch");
-  Ident__is_target_vendor = RegisterBuiltinMacro("__is_target_vendor");
-  Ident__is_target_os = RegisterBuiltinMacro("__is_target_os");
-  Ident__is_target_environment =
-      RegisterBuiltinMacro("__is_target_environment");
-  Ident__is_target_variant_os = RegisterBuiltinMacro("__is_target_variant_os");
+
+  // CL-FEATURE-CHECK-NAMES: cl has none of these, so code written for it may
+  // use the names. Without the clang identity they are not macros (#ifdef is
+  // false). __has_feature, __has_extension, __has_builtin, __has_include_next
+  // and __building_module stay: the compiler's own headers test them.
+  auto RegisterClangOnly = [&](const char *Name) -> IdentifierInfo * {
+    return getPreprocessorOpts().MSClangIdentity ? RegisterBuiltinMacro(Name)
+                                                 : nullptr;
+  };
+  Ident__has_constexpr_builtin = RegisterClangOnly("__has_constexpr_builtin");
+  Ident__has_attribute = RegisterClangOnly("__has_attribute");
+  Ident__has_declspec = RegisterClangOnly("__has_declspec_attribute");
+  Ident__has_embed = RegisterClangOnly("__has_embed");
+  Ident__has_warning = RegisterClangOnly("__has_warning");
+  Ident__is_identifier = RegisterClangOnly("__is_identifier");
+  Ident__is_target_arch = RegisterClangOnly("__is_target_arch");
+  Ident__is_target_vendor = RegisterClangOnly("__is_target_vendor");
+  Ident__is_target_os = RegisterClangOnly("__is_target_os");
+  Ident__is_target_environment = RegisterClangOnly("__is_target_environment");
+  Ident__is_target_variant_os = RegisterClangOnly("__is_target_variant_os");
   Ident__is_target_variant_environment =
-      RegisterBuiltinMacro("__is_target_variant_environment");
+      RegisterClangOnly("__is_target_variant_environment");
 
   // Modules.
   Ident__building_module = RegisterBuiltinMacro("__building_module");

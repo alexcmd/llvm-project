@@ -255,11 +255,20 @@ InputArgList Driver::ParseArgStrings(ArrayRef<const char *> ArgStrings,
 
   // Check for missing argument error.
   if (MissingArgCount) {
-    Diag(diag::err_drv_missing_argument)
-        << Args.getArgString(MissingArgIndex) << MissingArgCount;
-    ContainsError |=
-        Diags.getDiagnosticLevel(diag::err_drv_missing_argument,
-                                 SourceLocation()) > DiagnosticsEngine::Warning;
+    // CL-NO-INPUT: to cl an option at the end that lacks its argument is
+    // D8004 with the name after a slash, however it was written.
+    if (UseDriverMode && IsCLMode()) {
+      Diag(diag::err_drv_cl_requires_argument)
+          << ("/" + StringRef(Args.getArgString(MissingArgIndex)).ltrim("/-"))
+                 .str();
+      ContainsError = true;
+    } else {
+      Diag(diag::err_drv_missing_argument)
+          << Args.getArgString(MissingArgIndex) << MissingArgCount;
+      ContainsError |= Diags.getDiagnosticLevel(diag::err_drv_missing_argument,
+                                                SourceLocation()) >
+                       DiagnosticsEngine::Warning;
+    }
   }
 
   // Check for unsupported options.
@@ -1831,6 +1840,37 @@ Compilation *Driver::BuildCompilation(ArrayRef<const char *> ArgList) {
 
   if (!HandleImmediateArgs(*C))
     return C;
+
+  // CL-NO-INPUT: cl without any argument prints its banner (stderr) and a
+  // usage line (stdout) and exits 0. The banner here is our own, in the shape
+  // tools read: "... Version <a.b.c> for <arch>", an empty line after it.
+  if (IsCLMode() && !ContainsError &&
+      llvm::all_of(ArgList.slice(1), [](const char *A) {
+        return StringRef(A).starts_with("--driver-mode=");
+      })) {
+    StringRef Arch;
+    switch (TC.getTriple().getArch()) {
+    case llvm::Triple::x86:
+      Arch = "x86";
+      break;
+    case llvm::Triple::aarch64:
+      Arch = "ARM64";
+      break;
+    case llvm::Triple::arm:
+    case llvm::Triple::thumb:
+      Arch = "ARM";
+      break;
+    default:
+      Arch = "x64";
+      break;
+    }
+    llvm::errs() << "openrt C/C++ Compiler Version "
+                 << TC.computeMSVCVersion(this, C->getArgs()).getAsString()
+                 << " for " << Arch << "\n\n";
+    llvm::outs()
+        << "usage: cl [ option... ] filename... [ /link linkoption... ]\n";
+    return C;
+  }
 
   // Construct the list of inputs.
   InputList Inputs;
@@ -4674,7 +4714,12 @@ void Driver::BuildActions(Compilation &C, DerivedArgList &Args,
   llvm::PrettyStackTraceString CrashInfo("Building compilation actions");
 
   if (!SuppressMissingInputWarning && Inputs.empty()) {
-    Diag(clang::diag::err_drv_no_input_files);
+    // CL-NO-INPUT: cl's D8003 (exit 2), unless the command line already has
+    // an error (D8004 comes alone).
+    if (!IsCLMode())
+      Diag(clang::diag::err_drv_no_input_files);
+    else if (!Diags.hasErrorOccurred())
+      Diag(clang::diag::err_drv_cl_missing_source);
     return;
   }
 

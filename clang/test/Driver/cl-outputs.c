@@ -74,7 +74,7 @@
 // oCRAZY2:  "-o" "..obj"
 
 // RUN: not %clang_cl /c %s -### /o 2>&1 | FileCheck -check-prefix=oMISSINGARG %s
-// oMISSINGARG: error: argument to '/o' is missing (expected 1 value)
+// oMISSINGARG: error: D8004 : '/o' requires an argument
 
 // RUN: %clang_cl /c /omydir/ -### -- %s %s 2>&1 | FileCheck -check-prefix=CHECK-oMULTIPLESOURCEOK1 %s
 // CHECK-oMULTIPLESOURCEOK1: "-o" "mydir{{[/\\]+}}cl-outputs.obj"
@@ -217,7 +217,7 @@
 // FeoDIRNAMEEXTDLL: "-implib:foo.dir{{[/\\]+}}a.lib"
 
 // RUN: not %clang_cl -### /o 2>&1 | FileCheck -check-prefix=FeoMISSINGARG %s
-// FeoMISSINGARG: error: argument to '/o' is missing (expected 1 value)
+// FeoMISSINGARG: error: D8004 : '/o' requires an argument
 
 // RUN: %clang_cl /ofoo /o bar -### -- %s 2>&1 | FileCheck -check-prefix=FeoOVERRIDE %s
 // FeoOVERRIDE: "-out:bar.exe"

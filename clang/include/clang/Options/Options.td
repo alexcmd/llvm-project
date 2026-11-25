@@ -9873,10 +9873,12 @@ def _SLASH_G2 : CLFlag<"G2">;
 def _SLASH_Ge : CLFlag<"Ge">;
 def _SLASH_Gh : CLFlag<"Gh">;
 def _SLASH_GH : CLFlag<"GH">;
-def _SLASH_GL : CLFlag<"GL">;
-def _SLASH_GL_ : CLFlag<"GL-">;
+// CL-DX-GL-GM: /GL, /GL- and /Gm- are silent in cl 19.44 (/GL is accepted
+// without LTO, option A); /Gm warns D9035 (Driver.cpp).
+def _SLASH_GL : CLIgnoredFlag<"GL">;
+def _SLASH_GL_ : CLIgnoredFlag<"GL-">;
 def _SLASH_Gm : CLFlag<"Gm">;
-def _SLASH_Gm_ : CLFlag<"Gm-">;
+def _SLASH_Gm_ : CLIgnoredFlag<"Gm-">;
 def _SLASH_GT : CLFlag<"GT">;
 def _SLASH_GZ : CLFlag<"GZ">;
 // /H<n> is deprecated (D9035); bare D8004, /H<text> D8021 (Driver.cpp).

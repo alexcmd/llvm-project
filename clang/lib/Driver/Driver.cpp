@@ -4506,6 +4506,12 @@ void Driver::handleArguments(Compilation &C, DerivedArgList &Args,
     A->claim();
     Diag(clang::diag::warn_drv_cl_deprecated_option) << "Ze";
   }
+  // CL-DX-GL-GM: /Gm is D9035 once per occurrence (cl 19.44 also adds D9007
+  // without /Zi, not reproduced); minimal rebuild has no effect here.
+  for (const Arg *A : Args.filtered(options::OPT__SLASH_Gm)) {
+    A->claim();
+    Diag(clang::diag::warn_drv_cl_deprecated_option) << "Gm";
+  }
   for (const Arg *A : Args.filtered(options::OPT__SLASH_Wv_)) {
     A->claim();
     if (A->getValue()[0] == '\0')

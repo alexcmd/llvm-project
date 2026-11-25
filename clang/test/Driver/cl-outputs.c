@@ -37,53 +37,59 @@
 // CHECK-MULTIPLESOURCEOK2: "-o" "cl-outputs.obj"
 // CHECK-MULTIPLESOURCEOK2: "-o" "cl-outputs.obj"
 
+// CL-DX-SLASH-O: cl 19.44 never names the object from /o (or -o): under /c
+// the object keeps the source name, /Fo wins in either order; without /c
+// /o names the executable. /clang:-o keeps clang's -o.
 // RUN: %clang_cl /c /oa -### -- %s 2>&1 | FileCheck -check-prefix=oNAME1 %s
-// oNAME1:  "-o" "a.obj"
+// oNAME1:  "-o" "cl-outputs.obj"
 
 // RUN: %clang_cl /c /o a -### -- %s 2>&1 | FileCheck -check-prefix=oNAME2 %s
-// oNAME2:  "-o" "a.obj"
+// oNAME2:  "-o" "cl-outputs.obj"
 
 // RUN: %clang_cl /c /oa.ext /ob.ext -### -- %s 2>&1 | FileCheck -check-prefix=oNAMEEXT1 %s
-// oNAMEEXT1:  "-o" "b.ext"
+// oNAMEEXT1:  "-o" "cl-outputs.obj"
 
 // RUN: %clang_cl /c /o a.ext /ob.ext -### -- %s 2>&1 | FileCheck -check-prefix=oNAMEEXT2 %s
-// oNAMEEXT2:  "-o" "b.ext"
+// oNAMEEXT2:  "-o" "cl-outputs.obj"
 
 // RUN: %clang_cl /c /ofoo.dir/ -### -- %s 2>&1 | FileCheck -check-prefix=oDIR1 %s
-// oDIR1:  "-o" "foo.dir{{[/\\]+}}cl-outputs.obj"
+// oDIR1:  "-o" "cl-outputs.obj"
 
 // RUN: %clang_cl /c /o foo.dir/ -### -- %s 2>&1 | FileCheck -check-prefix=oDIR2 %s
-// oDIR2:  "-o" "foo.dir{{[/\\]+}}cl-outputs.obj"
+// oDIR2:  "-o" "cl-outputs.obj"
 
 // RUN: %clang_cl /c /ofoo.dir/a -### -- %s 2>&1 | FileCheck -check-prefix=oDIRNAME1 %s
-// oDIRNAME1:  "-o" "foo.dir{{[/\\]+}}a.obj"
+// oDIRNAME1:  "-o" "cl-outputs.obj"
 
 // RUN: %clang_cl /c /o foo.dir/a -### -- %s 2>&1 | FileCheck -check-prefix=oDIRNAME2 %s
-// oDIRNAME2:  "-o" "foo.dir{{[/\\]+}}a.obj"
+// oDIRNAME2:  "-o" "cl-outputs.obj"
 
 // RUN: %clang_cl /c /ofoo.dir/a.ext -### -- %s 2>&1 | FileCheck -check-prefix=oDIRNAMEEXT1 %s
-// oDIRNAMEEXT1:  "-o" "foo.dir{{[/\\]+}}a.ext"
+// oDIRNAMEEXT1:  "-o" "cl-outputs.obj"
 
 // RUN: %clang_cl /c /o foo.dir/a.ext -### -- %s 2>&1 | FileCheck -check-prefix=oDIRNAMEEXT2 %s
-// oDIRNAMEEXT2:  "-o" "foo.dir{{[/\\]+}}a.ext"
+// oDIRNAMEEXT2:  "-o" "cl-outputs.obj"
 
 // RUN: %clang_cl /c /o.. -### -- %s 2>&1 | FileCheck -check-prefix=oCRAZY1 %s
-// oCRAZY1:  "-o" "..obj"
+// oCRAZY1:  "-o" "cl-outputs.obj"
 
 // RUN: %clang_cl /c /o .. -### -- %s 2>&1 | FileCheck -check-prefix=oCRAZY2 %s
-// oCRAZY2:  "-o" "..obj"
+// oCRAZY2:  "-o" "cl-outputs.obj"
 
 // RUN: not %clang_cl /c %s -### /o 2>&1 | FileCheck -check-prefix=oMISSINGARG %s
 // oMISSINGARG: error: D8004 : '/o' requires an argument
 
 // RUN: %clang_cl /c /omydir/ -### -- %s %s 2>&1 | FileCheck -check-prefix=CHECK-oMULTIPLESOURCEOK1 %s
-// CHECK-oMULTIPLESOURCEOK1: "-o" "mydir{{[/\\]+}}cl-outputs.obj"
+// CHECK-oMULTIPLESOURCEOK1: "-o" "cl-outputs.obj"
 
 // RUN: %clang_cl /c /o mydir/ -### -- %s %s 2>&1 | FileCheck -check-prefix=CHECK-oMULTIPLESOURCEOK2 %s
-// CHECK-oMULTIPLESOURCEOK2: "-o" "mydir{{[/\\]+}}cl-outputs.obj"
+// CHECK-oMULTIPLESOURCEOK2: "-o" "cl-outputs.obj"
 
 // RUN: %clang_cl -emit-ast /otest.ast -###  -- %s  2>&1 | FileCheck -check-prefix=oASTNAME %s
 // oASTNAME:  "-o" "test.ast"
+
+// RUN: %clang_cl /c /clang:-otest.obj -###  -- %s  2>&1 | FileCheck -check-prefix=CLANGO %s
+// CLANGO:  "-o" "test.obj"
 
 // RUN: %clang_cl --analyze /otest.plist -###  -- %s  2>&1 | FileCheck -check-prefix=oPLIST %s
 // oPLIST:  "-o" "test.plist"
@@ -92,7 +98,7 @@
 // FooRACE1: "-o" "foo.obj"
 
 // RUN: %clang_cl /c /Fofoo /obar -### -- %s 2>&1 | FileCheck -check-prefix=FooRACE2 %s
-// FooRACE2: "-o" "bar.obj"
+// FooRACE2: "-o" "foo.obj"
 
 
 // RUN: %clang_cl -### -- %s 2>&1 | FileCheck -check-prefix=DEFAULTEXE %s
@@ -322,7 +328,7 @@
 // EMITLLVM_Fo:  "-o" "dir/cl-outputs.bc"
 
 // RUN: %clang_cl /c /odir/ /clang:-emit-llvm -### -- %s 2>&1 | FileCheck -check-prefix=EMITLLVM_o %s
-// EMITLLVM_o:  "-o" "dir/cl-outputs.bc"
+// EMITLLVM_o:  "-o" "cl-outputs.bc"
 
 // RUN: %clang_cl /c /omain.bc /clang:-emit-llvm -### -- %s 2>&1 | FileCheck -check-prefix=EMITLLVM_oNAME %s
-// EMITLLVM_oNAME:  "-o" "main.bc"
+// EMITLLVM_oNAME:  "-o" "cl-outputs.bc"

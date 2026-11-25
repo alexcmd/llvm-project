@@ -52,7 +52,7 @@
 // SINGLE-NOT: "-split-dwarf-output"
 
 // RUN: %clang -### -c -target x86_64 -gsplit-dwarf=single -g -o %tfoo.o %s 2>&1 | FileCheck %s --check-prefix=SINGLE_WITH_FILENAME
-// RUN: %clang_cl -### -c --target=x86_64-unknown-windows-msvc -gsplit-dwarf=single -g -o %tfoo.o -- %s 2>&1 | FileCheck %s --check-prefix=SINGLE_WITH_FILENAME
+// RUN: %clang_cl -### -c --target=x86_64-unknown-windows-msvc -gsplit-dwarf=single -g /Fo%tfoo.o -- %s 2>&1 | FileCheck %s --check-prefix=SINGLE_WITH_FILENAME
 
 // SINGLE_WITH_FILENAME: "-split-dwarf-file" "{{.*}}foo.o"
 // SINGLE_WITH_FILENAME-NOT: "-split-dwarf-output"

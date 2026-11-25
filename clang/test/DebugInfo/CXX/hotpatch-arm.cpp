@@ -7,12 +7,12 @@
 ///
 /// Ensure that we set the hotpatchable flag in the debug information.
 ///
-// RUN: %clang_cl --target=arm-pc-windows-msvc /c /Z7 -o %t.obj -- %s
+// RUN: %clang_cl --target=arm-pc-windows-msvc /c /Z7 /Fo%t.obj -- %s
 // RUN: llvm-pdbutil dump -symbols %t.obj | FileCheck %s --check-prefix=HOTPATCH
 // HOTPATCH: S_COMPILE3 [size = [[#]]]
 // HOTPATCH: flags = hot patchable
 //
-// RUN: %clang_cl --target=arm-pc-windows-msvc /c -o %t.obj -- %s
+// RUN: %clang_cl --target=arm-pc-windows-msvc /c /Fo%t.obj -- %s
 // RUN: llvm-pdbutil dump -symbols %t.obj | FileCheck %s --check-prefix=HOTPATCH
 
 int main() {

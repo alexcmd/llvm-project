@@ -6875,15 +6875,17 @@ const char *Driver::GetNamedOutputPath(Compilation &C, const JobAction &JA,
   // Determine what the derived output name should be.
   const char *NamedOutput;
 
+  // CL-DX-SLASH-O: cl 19.44 never names the object from /o<name> or -o<name>
+  // (the same option for cl): under /c the object keeps the source name or
+  // /Fo, with D9035 only, whichever order; without /c, /o names the
+  // executable and the last of /Fe and /o wins (below). /clang:-o is clang's
+  // -o and keeps naming the output (handled before this function's switch).
   if ((JA.getType() == types::TY_Object || JA.getType() == types::TY_LTO_BC ||
        JA.getType() == types::TY_LLVM_BC ||
        JA.getType() == types::TY_LLVM_IR) &&
-      C.getArgs().hasArg(options::OPT__SLASH_Fo, options::OPT__SLASH_o)) {
-    // The /Fo or /o flag decides the object filename.
-    StringRef Val =
-        C.getArgs()
-            .getLastArg(options::OPT__SLASH_Fo, options::OPT__SLASH_o)
-            ->getValue();
+      C.getArgs().hasArg(options::OPT__SLASH_Fo)) {
+    // The /Fo flag decides the object filename.
+    StringRef Val = C.getArgs().getLastArg(options::OPT__SLASH_Fo)->getValue();
     NamedOutput =
         MakeCLOutputFilename(C.getArgs(), Val, BaseName, JA.getType());
   } else if (JA.getType() == types::TY_Image &&

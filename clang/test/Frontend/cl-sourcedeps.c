@@ -4,14 +4,14 @@
 // Probed with cl 14.51.36231 on the same tree (Inputs/cl-deps).
 // REQUIRES: system-windows
 
-// RUN: %clang_cl /c /showIncludes /I %S/Inputs/cl-deps/inc -o %t.obj -- %S/Inputs/cl-deps/main.c 2>&1 | FileCheck --check-prefix=SHOW %s
+// RUN: %clang_cl /c /showIncludes /I %S/Inputs/cl-deps/inc /Fo%t.obj -- %S/Inputs/cl-deps/main.c 2>&1 | FileCheck --check-prefix=SHOW %s
 // SHOW: Note: including file: {{[^.].*}}a.h
 // SHOW-NEXT: Note: including file:  {{[^.].*}}sub/c.h
 // SHOW-NEXT: Note: including file: {{.*}}inc\b.h
 // SHOW-NEXT: Note: including file:  {{[^.].*}}inc\d.h
 // SHOW-NOT: including file: .
 
-// RUN: %clang_cl /c /sourceDependencies %t.json /I %S/Inputs/cl-deps/inc -o %t.obj -- %S/Inputs/cl-deps/main.c
+// RUN: %clang_cl /c /sourceDependencies %t.json /I %S/Inputs/cl-deps/inc /Fo%t.obj -- %S/Inputs/cl-deps/main.c
 // RUN: FileCheck --input-file=%t.json --check-prefix=JSON %s
 // JSON: {
 // JSON:     "Version": "1.2",
@@ -29,5 +29,5 @@
 
 // A directory (trailing separator) gets <source name>.json.
 // RUN: rm -rf %t.dir && mkdir -p %t.dir
-// RUN: %clang_cl /c /sourceDependencies %t.dir/ /I %S/Inputs/cl-deps/inc -o %t.obj -- %S/Inputs/cl-deps/main.c
+// RUN: %clang_cl /c /sourceDependencies %t.dir/ /I %S/Inputs/cl-deps/inc /Fo%t.obj -- %S/Inputs/cl-deps/main.c
 // RUN: FileCheck --input-file=%t.dir/main.c.json --check-prefix=JSON %s

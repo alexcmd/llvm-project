@@ -266,6 +266,15 @@ void preprocess(StringRef Src, StringRef Dst, const RcOptions &Opts,
       }
     }
   }
+  // openrt LLVM-RC-NO-VC-AUTODETECT: rc.exe searches only the .rc file's
+  // directory, /I and %INCLUDE%. With %INCLUDE% unset or empty (or /X), stop
+  // the clang MSVC driver from autodetecting a Visual Studio / Windows SDK
+  // install: -nostdlibinc keeps clang's builtin headers and -I.
+  if (!Opts.Preprocessor && !Opts.IsWindres) {
+    std::optional<std::string> Inc = sys::Process::GetEnv("INCLUDE");
+    if (!Inc || Inc->empty())
+      Args.push_back("-nostdlibinc");
+  }
   llvm::append_range(Args, Opts.PreprocessArgs);
   Args.push_back(Src);
   Args.push_back("-o");

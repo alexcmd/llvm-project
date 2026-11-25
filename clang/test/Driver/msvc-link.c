@@ -59,7 +59,8 @@
 // RUN:        FileCheck --check-prefix=HYBRID-WARN %s
 // HYBRID-WARN: warning: argument unused during compilation: '-marm64x' [-Wunused-command-line-argument]
 
-// RUN: %clang --target=i686-pc-windows-msvc -g -fuse-ld= -### %s 2>&1 | FileCheck --check-prefix=DEBUG-LINK %s
+// CL-LINK-DEFAULT-LLD: with no linker named the driver starts lld-link.
+// RUN: %clang --target=i686-pc-windows-msvc -g -fuse-ld= -### %s 2>&1 | FileCheck --check-prefix=DEBUG-LLD %s
 // RUN: %clang --target=i686-pc-windows-msvc -g -fuse-ld=link -### %s 2>&1 | FileCheck --check-prefix=DEBUG-LINK %s
 // DEBUG-LINK: link.exe"
 // DEBUG-LINK-SAME: "-debug"

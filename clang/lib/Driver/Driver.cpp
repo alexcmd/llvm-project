@@ -4491,10 +4491,12 @@ void Driver::handleArguments(Compilation &C, DerivedArgList &Args,
         !Args.hasArg(options::OPT_hip_link) &&
         !C.getDefaultToolChain().getTriple().isSPIRV())
       Diag(clang::diag::err_drv_emit_llvm_link);
+    // CL-LINK-DEFAULT-LLD: lld-link is the default, so only a linker that was
+    // named and is not lld cannot do LTO.
+    StringRef NamedLinker = Args.getLastArgValue(options::OPT_fuse_ld_EQ);
     if (C.getDefaultToolChain().getTriple().isWindowsMSVCEnvironment() &&
-        C.getDefaultToolChain().isUsingLTO(Args) &&
-        !Args.getLastArgValue(options::OPT_fuse_ld_EQ)
-             .starts_with_insensitive("lld"))
+        C.getDefaultToolChain().isUsingLTO(Args) && !NamedLinker.empty() &&
+        !NamedLinker.starts_with_insensitive("lld"))
       Diag(clang::diag::err_drv_lto_without_lld);
 
     // If -dumpdir is not specified, give a default prefix derived from the link

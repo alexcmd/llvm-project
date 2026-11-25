@@ -1462,6 +1462,32 @@ bool Driver::loadDefaultConfigFiles(llvm::cl::ExpansionContext &ExpCtx) {
   return false;
 }
 
+// CL-NO-INPUT / CL-DX-BANNER: our banner in cl's shape, "openrt C/C++ Compiler
+// Version <a.b.c> for <x64|x86|ARM64|ARM>", the version that _MSC_FULL_VER
+// reports.
+static std::string CLBanner(const ToolChain &TC, Compilation &C) {
+  StringRef Arch;
+  switch (TC.getTriple().getArch()) {
+  case llvm::Triple::x86:
+    Arch = "x86";
+    break;
+  case llvm::Triple::aarch64:
+    Arch = "ARM64";
+    break;
+  case llvm::Triple::arm:
+  case llvm::Triple::thumb:
+    Arch = "ARM";
+    break;
+  default:
+    Arch = "x64";
+    break;
+  }
+  return ("openrt C/C++ Compiler Version " +
+          TC.computeMSVCVersion(&TC.getDriver(), C.getArgs()).getAsString() +
+          " for " + Arch)
+      .str();
+}
+
 Compilation *Driver::BuildCompilation(ArrayRef<const char *> ArgList) {
   llvm::PrettyStackTraceString CrashInfo("Compilation construction");
 
@@ -1870,29 +1896,17 @@ Compilation *Driver::BuildCompilation(ArrayRef<const char *> ArgList) {
       llvm::all_of(ArgList.slice(1), [](const char *A) {
         return StringRef(A).starts_with("--driver-mode=");
       })) {
-    StringRef Arch;
-    switch (TC.getTriple().getArch()) {
-    case llvm::Triple::x86:
-      Arch = "x86";
-      break;
-    case llvm::Triple::aarch64:
-      Arch = "ARM64";
-      break;
-    case llvm::Triple::arm:
-    case llvm::Triple::thumb:
-      Arch = "ARM";
-      break;
-    default:
-      Arch = "x64";
-      break;
-    }
-    llvm::errs() << "openrt C/C++ Compiler Version "
-                 << TC.computeMSVCVersion(this, C->getArgs()).getAsString()
-                 << " for " << Arch << "\n\n";
+    llvm::errs() << CLBanner(TC, *C) << "\n\n";
     llvm::outs()
         << "usage: cl [ option... ] filename... [ /link linkoption... ]\n";
     return C;
   }
+  // CL-DX-BANNER: cl 19.44 prints its banner on stderr before every run
+  // without /nologo (observed: also with /E, /Zs and command-line errors).
+  // Not with -###, which cl does not have.
+  if (IsCLMode() && !C->getArgs().hasArg(options::OPT__SLASH_nologo) &&
+      !C->getArgs().hasArg(options::OPT__HASH_HASH_HASH))
+    llvm::errs() << CLBanner(TC, *C) << "\n";
 
   // Construct the list of inputs.
   InputList Inputs;

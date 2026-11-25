@@ -3149,9 +3149,12 @@ def IsoVolatileStore : MSLangBuiltin, Int8_16_32_64Template {
   let Prototype = "void(T volatile*, T)";
 }
 
+// CL-DX-NOOP: cl parses the arguments of __noop and nothing else (no
+// conversion, no copy, no evaluation); custom type checking keeps them as
+// written instead of passing them through "...".
 def Noop : MSLangBuiltin {
   let Spellings = ["__noop"];
-  let Attributes = [NoThrow, Constexpr];
+  let Attributes = [NoThrow, CustomTypeChecking, UnevaluatedArguments, Constexpr];
   let Prototype = "int(...)";
 }
 

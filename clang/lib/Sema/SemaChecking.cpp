@@ -3246,6 +3246,17 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
     if (BuiltinComplex(TheCall))
       return ExprError();
     break;
+  case Builtin::BI__noop:
+    // CL-DX-NOOP: the arguments stay unconverted (a non-copyable class lvalue
+    // is fine); only placeholders such as an overload set are resolved.
+    for (unsigned I = 0, N = TheCall->getNumArgs(); I != N; ++I) {
+      ExprResult Arg = CheckPlaceholderExpr(TheCall->getArg(I));
+      if (Arg.isInvalid())
+        return ExprError();
+      TheCall->setArg(I, Arg.get());
+    }
+    TheCall->setType(Context.IntTy);
+    break;
   case Builtin::BI__builtin_classify_type:
   case Builtin::BI__builtin_constant_p: {
     if (checkArgCount(TheCall, 1))

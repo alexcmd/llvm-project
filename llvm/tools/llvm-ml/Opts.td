@@ -67,6 +67,8 @@ def gmtime : LLVMFlag<"gmtime">, Alias<utc>;
 def help : MLFlag<"?">,
            HelpText<"Display available options">;
 def help_long : MLFlag<"help">, Alias<help>;
+// ML-UNKNOWN-OPTION: --help as every LLVM tool, not an unknown option.
+def help_llvm : Flag<["--"], "help">, Alias<help>, Flags<[HelpHidden]>;
 def version : LLVMFlag<"version">,
            HelpText<"Display the llvm-ml version (openrt build identity)">;
 def assemble_only : MLFlag<"c">, HelpText<"Assemble only; do not link">;
@@ -105,6 +107,11 @@ def ml64_bugcompat : MLFlag<"ml64-bugcompat">,
 def guard : MLJoined<"guard:">, Values<"cf,cf-,ehcont,ehcont-">,
             HelpText<"ehcont: mark the object for EH continuation metadata "
                      "(@feat.00 0x4000); cf: accepted, no effect (ML64.EXE)">;
+// ML-ERRORREPORT: ML64.EXE takes /errorReport:{prompt,queue,send,none} in this
+// exact spelling and does nothing with it; any other spelling or value is an
+// unknown option (warning A4018).
+def error_report : MLJoined<"errorReport:">,
+                   HelpText<"Accepted, no effect (ML64.EXE)">;
 def ignore_include_envvar : MLFlag<"X">,
                             HelpText<"Ignore the INCLUDE environment variable">;
 
@@ -115,10 +122,9 @@ def preserve_identifier_case : UnsupportedFlag<"Cp">, HelpText<"">;
 def uppercase_identifiers : UnsupportedFlag<"Cu">, HelpText<"">;
 def preserve_extern_case : UnsupportedFlag<"Cx">, HelpText<"">;
 def output_preprocessed : UnsupportedFlag<"EP">, HelpText<"">;
-def errorreport : UnsupportedJoined<"ERRORREPORT">, HelpText<"">;
 def stacksize : UnsupportedSeparate<"F">, HelpText<"">;
 def executable_file : UnsupportedSeparate<"Fe">, HelpText<"">;
-def code_listing_file : UnsupportedJoined<"FI">, HelpText<"">;
+def code_listing_file : UnsupportedJoined<"Fl">, HelpText<"">;
 def linker_map_file : UnsupportedJoined<"Fm">, HelpText<"">;
 def fp_emulator_fixups : UnsupportedFlag<"FPi">, HelpText<"">;
 def source_browser_file : UnsupportedJoined<"Fr">, HelpText<"">;

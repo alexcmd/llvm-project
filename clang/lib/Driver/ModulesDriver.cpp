@@ -22,7 +22,9 @@
 #include "clang/Driver/Tool.h"
 #include "clang/Driver/ToolChain.h"
 #include "clang/Driver/Types.h"
+#include "clang/Frontend/CompilerInvocation.h"
 #include "clang/Frontend/StandaloneDiagnostic.h"
+#include "clang/Frontend/TextDiagnosticPrinter.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/DepthFirstIterator.h"
 #include "llvm/ADT/DirectedGraph.h"
@@ -1694,4 +1696,176 @@ void driver::modules::runModulesDriver(
 
   fixupNamedModuleCommandLines(C, Graph);
   feedJobsBackIntoCompilation(C, std::move(Graph));
+}
+
+//===----------------------------------------------------------------------===//
+// cl.exe /scanDependencies (CL-SCAN-DEPENDENCIES)
+//===----------------------------------------------------------------------===//
+
+namespace {
+/// Receives the C++20 named modules a translation unit provides and requires.
+class P1689Consumer : public deps::DependencyConsumer {
+public:
+  void handleProvidedAndRequiredStdCXXModules(
+      std::optional<deps::P1689ModuleInfo> Provided,
+      std::vector<deps::P1689ModuleInfo> Requires) override {
+    this->Provided = std::move(Provided);
+    this->Requires = std::move(Requires);
+  }
+
+  void handleDependencyOutputOpts(const DependencyOutputOptions &) override {}
+  void handleFileDependency(StringRef) override {}
+  void handlePrebuiltModuleDependency(deps::PrebuiltModuleDep) override {}
+  void handleModuleDependency(deps::ModuleDeps) override {}
+  void handleDirectModuleDependency(deps::ModuleID) override {}
+  void handleVisibleModule(std::string) override {}
+  void handleContextHash(std::string) override {}
+
+  std::optional<deps::P1689ModuleInfo> Provided;
+  std::vector<deps::P1689ModuleInfo> Requires;
+};
+
+/// The scanner drops every dependency output of the scanned command; cl still
+/// lists the headers for /showIncludes, on stderr as when it preprocesses.
+class CLScanController : public deps::DependencyActionController {
+public:
+  CLScanController(bool ShowIncludes, bool SystemHeaders)
+      : ShowIncludes(ShowIncludes), SystemHeaders(SystemHeaders) {}
+
+  std::unique_ptr<deps::DependencyActionController> clone() const override {
+    return std::make_unique<CLScanController>(*this);
+  }
+
+  // Only Clang modules have an output to look up.
+  std::string lookupModuleOutput(const deps::ModuleDeps &,
+                                 deps::ModuleOutputKind) override {
+    return "";
+  }
+
+  void initializeScanInvocation(CompilerInvocation &ScanInvocation) override {
+    if (!ShowIncludes)
+      return;
+    auto &DepOpts = ScanInvocation.getDependencyOutputOpts();
+    DepOpts.ShowIncludesDest = ShowIncludesDestination::Stderr;
+    DepOpts.IncludeSystemHeaders = SystemHeaders;
+  }
+
+private:
+  bool ShowIncludes;
+  bool SystemHeaders;
+};
+} // anonymous namespace
+
+/// cl spells the source of a provided module as a full path with backslashes
+/// in lower case (as in /sourceDependencies).
+static std::string getCLSourcePath(StringRef Filename, StringRef CWD) {
+  SmallString<256> Path(Filename);
+  llvm::sys::path::make_absolute(CWD, Path);
+  llvm::sys::path::remove_dots(Path, /*remove_dot_dot=*/true,
+                               llvm::sys::path::Style::windows_backslash);
+  for (char &C : Path)
+    C = llvm::toLower(C == '/' ? '\\' : C);
+  return std::string(Path);
+}
+
+/// The .ifc cl names as an output of a unit that provides \p ModuleName:
+/// /ifcOutput when that is a file, else the module name with '-' before the
+/// partition, in the /ifcOutput directory if one is given.
+static std::string getCLIfcOutput(const ArgList &Args, StringRef ModuleName) {
+  StringRef IfcOutput = Args.getLastArgValue(options::OPT__SLASH_ifcOutput);
+  if (!IfcOutput.empty() && !llvm::sys::path::is_separator(IfcOutput.back()))
+    return IfcOutput.str();
+  std::string Name = ModuleName.str();
+  llvm::replace(Name, ':', '-');
+  return (IfcOutput + Name + ".ifc").str();
+}
+
+static void writeP1689Rule(raw_ostream &OS, StringRef PrimaryOutput,
+                           ArrayRef<std::string> Outputs,
+                           const P1689Consumer &Deps, StringRef SourcePath) {
+  llvm::json::OStream J(OS, /*IndentSize=*/4);
+  J.object([&] {
+    J.attribute("version", 1);
+    J.attribute("revision", 0);
+    J.attributeArray("rules", [&] {
+      J.object([&] {
+        J.attribute("primary-output", PrimaryOutput);
+        J.attributeArray("outputs", [&] {
+          for (const std::string &Output : Outputs)
+            J.value(Output);
+        });
+        if (Deps.Provided) {
+          J.attributeArray("provides", [&] {
+            J.object([&] {
+              J.attribute("logical-name", Deps.Provided->ModuleName);
+              J.attribute("source-path", SourcePath);
+              J.attribute("is-interface",
+                          Deps.Provided->IsStdCXXModuleInterface);
+            });
+          });
+        }
+        J.attributeArray("requires", [&] {
+          for (const deps::P1689ModuleInfo &Required : Deps.Requires)
+            J.object([&] { J.attribute("logical-name", Required.ModuleName); });
+        });
+      });
+    });
+  });
+}
+
+void driver::modules::runCLScanDependencies(Compilation &C,
+                                            StringRef OutputFile) {
+  llvm::PrettyStackTraceString CrashInfo("Running cl /scanDependencies.");
+
+  // Nothing is compiled or linked. Each compile job describes one translation
+  // unit: its cc1 command line is what gets scanned, its output is the object
+  // the rule is about.
+  auto Jobs = C.getJobs().takeJobs();
+
+  DiagnosticsEngine &Diags = C.getDriver().getDiags();
+  auto MaybeCWD = C.getDriver().getVFS().getCurrentWorkingDirectory();
+  const auto CWD = MaybeCWD ? std::move(*MaybeCWD) : ".";
+
+  deps::DependencyScanningServiceOptions Opts;
+  deps::DependencyScanningService ScanningService(std::move(Opts));
+  deps::DependencyScanningWorker Worker(ScanningService);
+
+  for (const auto &Job : Jobs) {
+    if (!isDependencyScannableJob(*Job) || Job->getOutputFilenames().empty())
+      continue;
+
+    // As cl: the file is created first and stays empty when the scan fails;
+    // with several sources the last one is what is left in it.
+    std::error_code EC;
+    llvm::raw_fd_ostream OS(OutputFile, EC);
+    if (EC) {
+      Diags.Report(diag::err_cannot_open_file) << OutputFile << EC.message();
+      return;
+    }
+
+    const auto &JobArgs = Job->getArguments();
+    auto HasArg = [&](StringRef Name) {
+      return llvm::any_of(JobArgs,
+                          [&](const char *Arg) { return Name == Arg; });
+    };
+    CLScanController Controller(HasArg("--show-includes"),
+                                HasArg("-sys-header-deps"));
+    P1689Consumer Consumer;
+    auto DiagOpts = CreateAndPopulateDiagOpts(JobArgs);
+    TextDiagnosticPrinter DiagPrinter(llvm::errs(), *DiagOpts);
+    const auto CC1CommandLine = buildCommandLine(*Job);
+    if (!Worker.computeDependencies(CWD, {CC1CommandLine}, Consumer, Controller,
+                                    DiagPrinter)) {
+      C.setContainsError();
+      continue;
+    }
+
+    StringRef Source = Job->getInputInfos().front().getFilename();
+    std::vector<std::string> Outputs = {OutputFile.str()};
+    if (Consumer.Provided)
+      Outputs.push_back(
+          getCLIfcOutput(C.getArgs(), Consumer.Provided->ModuleName));
+    writeP1689Rule(OS, Job->getOutputFilenames().front(), Outputs, Consumer,
+                   getCLSourcePath(Source, CWD));
+  }
 }

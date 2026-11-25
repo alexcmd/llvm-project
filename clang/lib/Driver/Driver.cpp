@@ -338,12 +338,24 @@ phases::ID Driver::getFinalPhase(const DerivedArgList &DAL,
   Arg *PhaseArg = nullptr;
   phases::ID FinalPhase;
 
-  // -{E,EP,P,M,MM} only run the preprocessor.
-  if (CCCIsCPP() || (PhaseArg = DAL.getLastArg(options::OPT_E)) ||
+  // CL-SCAN-DEPENDENCIES: cl /scanDependencies only scans, whatever else is
+  // asked for. The compile job is still built: it is what gets scanned and it
+  // names the object the P1689 rule is about (ModulesDriver.cpp).
+  if (IsCLMode() &&
+      (PhaseArg = DAL.getLastArg(options::OPT__SLASH_scanDependencies)) &&
+      PhaseArg->getValue()[0] != '\0') {
+    FinalPhase = phases::Assemble;
+    for (const Arg *A :
+         DAL.filtered(options::OPT_c, options::OPT_E, options::OPT__SLASH_EP,
+                      options::OPT__SLASH_P, options::OPT_fsyntax_only))
+      A->claim();
+
+    // -{E,EP,P,M,MM} only run the preprocessor.
+  } else if (CCCIsCPP() || (PhaseArg = DAL.getLastArg(options::OPT_E)) ||
       (PhaseArg = DAL.getLastArg(options::OPT__SLASH_EP)) ||
-      (PhaseArg = DAL.getLastArg(options::OPT_M, options::OPT_MM)) ||
-      (PhaseArg = DAL.getLastArg(options::OPT__SLASH_P)) ||
-      CCGenDiagnostics) {
+             (PhaseArg = DAL.getLastArg(options::OPT_M, options::OPT_MM)) ||
+             (PhaseArg = DAL.getLastArg(options::OPT__SLASH_P)) ||
+             CCGenDiagnostics) {
     FinalPhase = phases::Preprocess;
 
     // --precompile only runs up to precompilation.
@@ -1896,6 +1908,14 @@ Compilation *Driver::BuildCompilation(ArrayRef<const char *> ArgList) {
 
   if (UseModulesDriver)
     modules::runModulesDriver(*C, ModulesManifest.Modules);
+
+  // CL-SCAN-DEPENDENCIES: with -### the compile that would be scanned prints.
+  if (IsCLMode() && !Diags.hasErrorOccurred() &&
+      !C->getArgs().hasArg(options::OPT__HASH_HASH_HASH))
+    if (const Arg *A =
+            C->getArgs().getLastArg(options::OPT__SLASH_scanDependencies);
+        A && A->getValue()[0] != '\0')
+      modules::runCLScanDependencies(*C, A->getValue());
 
   return C;
 }

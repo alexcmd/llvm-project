@@ -80,6 +80,11 @@ void buildStdModuleManifestInputs(
 void runModulesDriver(Compilation &C,
                       ArrayRef<StdModuleManifest::Module> ManifestEntries);
 
+/// cl.exe /scanDependencies: scans each translation unit of the compilation
+/// instead of compiling it and writes its P1689 rule to \p OutputFile ("-" is
+/// stdout). The jobs of \p C are consumed.
+void runCLScanDependencies(Compilation &C, StringRef OutputFile);
+
 } // namespace clang::driver::modules
 
 #endif // LLVM_CLANG_DRIVER_MODULESDRIVER_H

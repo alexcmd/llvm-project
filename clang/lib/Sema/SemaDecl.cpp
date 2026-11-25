@@ -12832,10 +12832,33 @@ void Sema::CheckMain(FunctionDecl *FD, const DeclSpec &DS) {
     // set the flag which tells us that.
     // This is C++ [basic.start.main]p5 and C99 5.1.2.2.3.
 
+    // CL-DX-VOID-MAIN: cl 19.44 accepts a 'main' returning void or an
+    // arithmetic type of at most 32 bits (bool, char, short, long, float;
+    // silent without /permissive-, C4326 with it) and silently unsigned int or
+    // const int; double, long long, pointers and enums stay C3874 errors.
+    QualType MSRT = FT->getReturnType();
+    bool MSSilent = Context.hasSameUnqualifiedType(MSRT, Context.IntTy) ||
+                    Context.hasSameUnqualifiedType(MSRT, Context.UnsignedIntTy);
+    bool MSAccepted =
+        getLangOpts().MSVCCompat &&
+        (MSSilent || MSRT->isVoidType() ||
+         ((MSRT->isIntegerType() || MSRT->isRealFloatingType()) &&
+          !MSRT->isEnumeralType() && Context.getTypeSize(MSRT) <= 32));
+
     // All the standards say that main() should return 'int'.
     if (Context.hasSameType(FT->getReturnType(), Context.IntTy))
       FD->setHasImplicitReturnZero(true);
-    else {
+    else if (MSAccepted) {
+      if (!MSRT->isVoidType())
+        FD->setHasImplicitReturnZero(true);
+      if (!MSSilent) {
+        Diag(FD->getTypeSpecStartLoc(), diag::ext_main_returns_nonint);
+        SourceRange RTRange = FD->getReturnTypeSourceRange();
+        if (RTRange.isValid())
+          Diag(RTRange.getBegin(), diag::note_main_change_return_type)
+              << FixItHint::CreateReplacement(RTRange, "int");
+      }
+    } else {
       // Otherwise, this is just a flat-out error.
       SourceRange RTRange = FD->getReturnTypeSourceRange();
       Diag(FD->getTypeSpecStartLoc(), diag::err_main_returns_nonint)

@@ -76,6 +76,8 @@ clang::diagGroupFromCLWarningID(unsigned CLWarningID) {
   case 4263: Name = "overloaded-virtual"; break;
   case 4264: Name = "overloaded-virtual"; break;
   case 4305: Name = "constant-conversion"; break;
+  // CL-DX-VOID-MAIN: main returning a type other than int (/permissive-).
+  case 4326: Name = "main-return-type"; break;
   case 4307: Name = "integer-overflow"; break;
   case 4309: Name = "constant-conversion"; break;
   case 4390: Name = "empty-body"; break;
@@ -227,6 +229,7 @@ static const CLWarningLevel CLLevels[] = {
     {"deprecated-enum-compare-conditional", 0, nullptr, nullptr},
     // CL-DX-*: cl 19.44 is silent on these Microsoft extensions at /W4
     // (main-return-type: without /permissive-, see Clang.cpp).
+    {"main-return-type", 0, nullptr, nullptr},
     {"microsoft-typedef-access", 0, nullptr, nullptr},
     {"microsoft-explicit-instantiation-undefined", 0, nullptr, nullptr},
     // Off: the cl.exe counterpart is off by default (enable via /w<l><n>).

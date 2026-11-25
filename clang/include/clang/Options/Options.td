@@ -9922,7 +9922,10 @@ def _SLASH_Za : CLFlag<"Za">;
 def _SLASH_Zc : CLJoined<"Zc:">;
 def _SLASH_Ze : CLFlag<"Ze">;
 def _SLASH_Zg : CLFlag<"Zg">;
-def _SLASH_ZI : CLFlag<"ZI">;
+// CL-ZI: cl writes debug information for /ZI as for /Zi (edit and continue
+// itself is not implemented).
+def _SLASH_ZI : CLFlag<"ZI">, Alias<g_Flag>,
+  HelpText<"Like /Zi (edit and continue is not supported)">;
 def _SLASH_ZW : CLJoined<"ZW">;
 // C1083 on a missing compiler-generated .obj.enc, exit 1 (Clang.cpp).
 def _SLASH_ZX : CLFlag<"ZX">;

@@ -1726,11 +1726,14 @@ public:
 };
 
 /// The scanner drops every dependency output of the scanned command; cl still
-/// lists the headers for /showIncludes, on stderr as when it preprocesses.
+/// lists the headers for /showIncludes, on stderr as when it preprocesses, and
+/// writes the /sourceDependencies file.
 class CLScanController : public deps::DependencyActionController {
 public:
-  CLScanController(bool ShowIncludes, bool SystemHeaders)
-      : ShowIncludes(ShowIncludes), SystemHeaders(SystemHeaders) {}
+  CLScanController(bool ShowIncludes, bool SystemHeaders,
+                   StringRef SourceDependenciesFile)
+      : ShowIncludes(ShowIncludes), SystemHeaders(SystemHeaders),
+        SourceDependenciesFile(SourceDependenciesFile) {}
 
   std::unique_ptr<deps::DependencyActionController> clone() const override {
     return std::make_unique<CLScanController>(*this);
@@ -1743,9 +1746,10 @@ public:
   }
 
   void initializeScanInvocation(CompilerInvocation &ScanInvocation) override {
+    auto &DepOpts = ScanInvocation.getDependencyOutputOpts();
+    DepOpts.SourceDependenciesFile = SourceDependenciesFile;
     if (!ShowIncludes)
       return;
-    auto &DepOpts = ScanInvocation.getDependencyOutputOpts();
     DepOpts.ShowIncludesDest = ShowIncludesDestination::Stderr;
     DepOpts.IncludeSystemHeaders = SystemHeaders;
   }
@@ -1753,6 +1757,7 @@ public:
 private:
   bool ShowIncludes;
   bool SystemHeaders;
+  std::string SourceDependenciesFile;
 };
 } // anonymous namespace
 
@@ -1834,6 +1839,14 @@ void driver::modules::runCLScanDependencies(Compilation &C,
     if (!isDependencyScannableJob(*Job) || Job->getOutputFilenames().empty())
       continue;
 
+    // cl scans C++ only: its C front end does not know the option.
+    if (!types::isCXX(Job->getInputInfos().front().getType())) {
+      Diags.Report(diag::err_drv_cl_c1_unknown_flag)
+          << ("scanDependencies" + OutputFile).str();
+      C.setContainsError();
+      continue;
+    }
+
     // As cl: the file is created first and stays empty when the scan fails;
     // with several sources the last one is what is left in it.
     std::error_code EC;
@@ -1848,8 +1861,13 @@ void driver::modules::runCLScanDependencies(Compilation &C,
       return llvm::any_of(JobArgs,
                           [&](const char *Arg) { return Name == Arg; });
     };
+    StringRef SourceDependenciesFile;
+    for (size_t I = 0, E = JobArgs.size(); I + 1 < E; ++I)
+      if (StringRef(JobArgs[I]) == "-sourceDependencies-json")
+        SourceDependenciesFile = JobArgs[I + 1];
     CLScanController Controller(HasArg("--show-includes"),
-                                HasArg("-sys-header-deps"));
+                                HasArg("-sys-header-deps"),
+                                SourceDependenciesFile);
     P1689Consumer Consumer;
     auto DiagOpts = CreateAndPopulateDiagOpts(JobArgs);
     TextDiagnosticPrinter DiagPrinter(llvm::errs(), *DiagOpts);
@@ -1862,6 +1880,8 @@ void driver::modules::runCLScanDependencies(Compilation &C,
 
     StringRef Source = Job->getInputInfos().front().getFilename();
     std::vector<std::string> Outputs = {OutputFile.str()};
+    if (!SourceDependenciesFile.empty())
+      Outputs.push_back(SourceDependenciesFile.str());
     if (Consumer.Provided)
       Outputs.push_back(
           getCLIfcOutput(C.getArgs(), Consumer.Provided->ModuleName));

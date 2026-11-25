@@ -630,8 +630,10 @@ void ModuleDepCollector::run(DependencyConsumer &Consumer) {
     // Don't put implementation (non partition) unit as Provide.
     // Put the module as required instead. Since the implementation
     // unit will import the primary module implicitly.
+    // It goes first, as in the rule cl writes for such a unit.
     if (PP.isInImplementationUnit())
-      MDC.RequiredStdCXXModules.push_back(ProvidedModule);
+      MDC.RequiredStdCXXModules.insert(MDC.RequiredStdCXXModules.begin(),
+                                       ProvidedModule);
     else
       MDC.ProvidedStdCXXModule = ProvidedModule;
   }

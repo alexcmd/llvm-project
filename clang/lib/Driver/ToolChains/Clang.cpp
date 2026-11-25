@@ -4320,7 +4320,20 @@ static bool RenderModulesOptions(Compilation &C, const Driver &D,
 
     if (Args.hasArg(options::OPT_fmodule_output_EQ))
       Args.AddLastArg(CmdArgs, options::OPT_fmodule_output_EQ);
-    else if (!(Args.hasArg(options::OPT__precompile) ||
+    else if (D.IsCLMode()) {
+      // CL-MODULE-OPTIONS: cl writes the interface to /ifcOutput <file>, or
+      // names it after the module (<module>.ifc, '-' before a partition) in
+      // the /ifcOutput directory or the current one. The frontend adds that
+      // name to a value that ends in a separator (GeneratePCH.cpp).
+      SmallString<256> Ifc(
+          Args.getLastArgValue(options::OPT__SLASH_ifcOutput, "."));
+      if (Ifc.empty())
+        Ifc = ".";
+      if (!llvm::sys::path::is_separator(Ifc.back()) &&
+          llvm::sys::fs::is_directory(Ifc))
+        Ifc += llvm::sys::path::get_separator();
+      CmdArgs.push_back(Args.MakeArgString("-fmodule-output=" + Ifc));
+    } else if (!(Args.hasArg(options::OPT__precompile) ||
                Args.hasArg(options::OPT__precompile_reduced_bmi)) ||
              Args.hasArg(options::OPT_fmodule_output))
       // If --precompile is specified, we will always generate a module file if
@@ -6748,6 +6761,26 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   claimNoWarnArgs(Args);
 
   Args.AddAllArgs(CmdArgs, options::OPT_R_Group);
+
+  // CL-MODULE-OPTIONS: /reference <name>=<file> names the built interface of
+  // a module. For /reference <file> cl reads the name from the file; here it
+  // is taken from the file name as cl chooses it (<module>.ifc, '-' before a
+  // partition).
+  for (const Arg *A : Args.filtered(options::OPT__SLASH_reference)) {
+    A->claim();
+    if (!types::isCXX(InputType))
+      continue;
+    StringRef Value = A->getValue();
+    std::string Name;
+    if (!Value.contains('=')) {
+      Name = llvm::sys::path::stem(Value).str();
+      llvm::replace(Name, '-', ':');
+      Name += '=';
+    }
+    CmdArgs.push_back(Args.MakeArgString("-fmodule-file=" + Name + Value));
+  }
+  Args.ClaimAllArgs(options::OPT__SLASH_interface);
+  Args.ClaimAllArgs(options::OPT__SLASH_internalPartition);
 
   // cl.exe: these take an argument; without one it is D8004 (exit 2).
   for (const Arg *A : Args.filtered(options::OPT__SLASH_fileMapping,

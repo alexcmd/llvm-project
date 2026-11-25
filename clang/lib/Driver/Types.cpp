@@ -362,6 +362,7 @@ types::ID types::lookupTypeForExtension(llvm::StringRef Ext) {
       .Case("asm", TY_PP_Asm)
       .Case("ast", TY_AST)
       .Case("ccm", TY_CXXModule)
+      .Case("ixx", TY_CXXModule)
       .Case("cpp", TY_CXX)
       .Case("CPP", TY_CXX)
       .Case("c++", TY_CXX)

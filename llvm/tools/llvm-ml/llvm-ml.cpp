@@ -206,12 +206,46 @@ int llvm_ml_main(int Argc, char **Argv, const llvm::ToolContext &) {
   opt::InputArgList InputArgs =
       T.ParseArgs(ArgsArr, MissingArgIndex, MissingArgCount);
 
+  // ML-UNKNOWN-OPTION: ML64.EXE warns about an option it does not know
+  // (A4018, on stdout) and goes on; under /WX the warning fails the run; /W0
+  // and /w silence it, also under /WX. A run left without a source file ends
+  // with A1017.
+  bool NoWarnings = false;
+  if (const opt::Arg *A =
+          InputArgs.getLastArg(OPT_warning_level, OPT_no_warnings))
+    NoWarnings = A->getOption().matches(OPT_no_warnings) ||
+                 StringRef(A->getValue()) == "0";
+  bool SawUnknownOption = false, WarnedUnknownOption = false;
+  auto WarnUnknownOption = [&](StringRef Spelling) {
+    SawUnknownOption = true;
+    if (NoWarnings)
+      return;
+    outs() << "MASM : warning A4018:invalid command-line option : " << Spelling
+           << '\n';
+    WarnedUnknownOption = true;
+  };
+  for (auto *Arg : InputArgs.filtered(OPT_error_report)) {
+    StringRef V = Arg->getValue();
+    if (V != "prompt" && V != "queue" && V != "send" && V != "none")
+      WarnUnknownOption(Arg->getAsString(InputArgs));
+  }
+  for (auto *Arg : InputArgs.filtered(OPT_UNKNOWN))
+    WarnUnknownOption(Arg->getAsString(InputArgs));
+
   std::string InputFilename;
   for (auto *Arg : InputArgs.filtered(OPT_INPUT)) {
     std::string ArgString = Arg->getAsString(InputArgs);
     bool IsFile = false;
     std::error_code IsFileEC =
         llvm::sys::fs::is_regular_file(ArgString, IsFile);
+    // A '/name' that is not a file is an option ML64.EXE does not know.
+    // (ML64.EXE reads every '/name' as an option; an existing file is kept as
+    // input here so that absolute paths work on hosts where they start with
+    // '/'.)
+    if (!IsFile && ArgString.size() > 1 && ArgString[0] == '/') {
+      WarnUnknownOption(ArgString);
+      continue;
+    }
     if (ArgString == "-" || IsFile) {
       if (!InputFilename.empty()) {
         WithColor::warning()
@@ -241,6 +275,9 @@ int llvm_ml_main(int Argc, char **Argv, const llvm::ToolContext &) {
     InputFilename = Arg->getValue();
   }
 
+  if (WarnedUnknownOption && InputArgs.hasArg(OPT_fatal_warnings))
+    return 1;
+
   for (auto *Arg : InputArgs.filtered(OPT_unsupported_Group)) {
     WithColor::warning(errs(), ProgName)
         << "ignoring unsupported '" << Arg->getOption().getName()
@@ -265,6 +302,9 @@ int llvm_ml_main(int Argc, char **Argv, const llvm::ToolContext &) {
     T.printHelp(outs(), Usage.c_str(), "LLVM MASM Assembler",
                 /*ShowHidden=*/false);
     return 0;
+  } else if (InputFilename.empty() && SawUnknownOption) {
+    outs() << "MASM : fatal error A1017:missing source filename\n";
+    return 1;
   } else if (InputFilename.empty()) {
     outs() << "USAGE: " << ProgName << " [ /options ] file\n"
            << "Run \"" << ProgName << " /?\" or \"" << ProgName

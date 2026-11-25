@@ -1787,7 +1787,8 @@ static std::string getCLIfcOutput(const ArgList &Args, StringRef ModuleName) {
 
 static void writeP1689Rule(raw_ostream &OS, StringRef PrimaryOutput,
                            ArrayRef<std::string> Outputs,
-                           const P1689Consumer &Deps, StringRef SourcePath) {
+                           const P1689Consumer &Deps, StringRef SourcePath,
+                           StringRef CWD) {
   llvm::json::OStream J(OS, /*IndentSize=*/4);
   J.object([&] {
     J.attribute("version", 1);
@@ -1811,7 +1812,20 @@ static void writeP1689Rule(raw_ostream &OS, StringRef PrimaryOutput,
         }
         J.attributeArray("requires", [&] {
           for (const deps::P1689ModuleInfo &Required : Deps.Requires)
-            J.object([&] { J.attribute("logical-name", Required.ModuleName); });
+            J.object([&] {
+              using ModuleType = deps::P1689ModuleInfo::ModuleType;
+              J.attribute("logical-name", Required.ModuleName);
+              if (Required.Type == ModuleType::NamedCXXModule)
+                return;
+              // A header unit, as cl describes it.
+              J.attribute("source-path",
+                          getCLSourcePath(Required.SourcePath, CWD));
+              J.attribute("lookup-method",
+                          Required.Type == ModuleType::AngleHeaderUnit
+                              ? "include-angle"
+                              : "include-quote");
+              J.attribute("unique-on-source-path", true);
+            });
         });
       });
     });
@@ -1886,6 +1900,6 @@ void driver::modules::runCLScanDependencies(Compilation &C,
       Outputs.push_back(
           getCLIfcOutput(C.getArgs(), Consumer.Provided->ModuleName));
     writeP1689Rule(OS, Job->getOutputFilenames().front(), Outputs, Consumer,
-                   getCLSourcePath(Source, CWD));
+                   getCLSourcePath(Source, CWD), CWD);
   }
 }

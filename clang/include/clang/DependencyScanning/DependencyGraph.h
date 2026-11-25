@@ -66,12 +66,9 @@ struct P1689ModuleInfo {
   /// If this module is a standard c++ interface unit.
   bool IsStdCXXModuleInterface = true;
 
-  enum class ModuleType {
-    NamedCXXModule
-    // To be supported
-    // AngleHeaderUnit,
-    // QuoteHeaderUnit
-  };
+  /// For the header unit types ModuleName is the header as written and
+  /// SourcePath the file it was found at.
+  enum class ModuleType { NamedCXXModule, AngleHeaderUnit, QuoteHeaderUnit };
   ModuleType Type = ModuleType::NamedCXXModule;
 };
 

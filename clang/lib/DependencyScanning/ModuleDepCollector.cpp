@@ -574,6 +574,18 @@ public:
       // here as `FileChanged` will never see it.
       MDC.addFileDep(FileName);
     }
+    // An import of a header that no module provides: a header unit that is
+    // still to be built (the preprocessor reports it like this to a scan).
+    if (ModuleImported && !SuggestedModule && File) {
+      P1689ModuleInfo RequiredHeaderUnit;
+      RequiredHeaderUnit.ModuleName = FileName.str();
+      RequiredHeaderUnit.SourcePath = File->getName().str();
+      RequiredHeaderUnit.Type =
+          IsAngled ? P1689ModuleInfo::ModuleType::AngleHeaderUnit
+                   : P1689ModuleInfo::ModuleType::QuoteHeaderUnit;
+      MDC.RequiredStdCXXModules.push_back(std::move(RequiredHeaderUnit));
+      return;
+    }
     MDC.handleImport(SuggestedModule);
   }
 

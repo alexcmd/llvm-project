@@ -2645,6 +2645,16 @@ Preprocessor::ImportAction Preprocessor::HandleHeaderIncludeOrImport(
   // If this is a C++20 pp-import declaration, diagnose if we didn't find any
   // module corresponding to the named header.
   if (IsImportDecl && !ModuleToImport) {
+    // A dependency scan runs before any header unit is built: the import is
+    // reported to it as an imported inclusion without a module (P1689 has a
+    // "requires" entry for it), not diagnosed.
+    if (GetDependencyDirectives && Callbacks) {
+      Callbacks->InclusionDirective(HashLoc, IncludeTok, LookupFilename,
+                                    isAngled, FilenameRange, File, SearchPath,
+                                    RelativePath, /*SuggestedModule=*/nullptr,
+                                    /*ModuleImported=*/true, FileCharacter);
+      return {ImportAction::None};
+    }
     Diag(FilenameTok, diag::err_header_import_not_header_unit)
       << OriginalFilename << File->getName();
     return {ImportAction::None};

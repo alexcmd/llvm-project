@@ -157,6 +157,29 @@
 // SRCDEP-FILE: "Includes": [
 // SRCDEP-FILE-NEXT: "{{.*}}h1.h"
 
+// Header unit imports: the header as written, where it was found and how it
+// was looked up. Nothing has to be built for the scan.
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc /nologo /TP /std:c++latest \
+// RUN:   /scanDependencies hu.json /c hu.cpp /Iinc 2>&1 | count 0
+// RUN: FileCheck %s --check-prefix=HU --input-file=hu.json
+// HU:      "requires": [
+// HU-NEXT:   {
+// HU-NEXT:     "logical-name": "h1.h",
+// HU-NEXT:     "source-path": "{{.*}}h1.h",
+// HU-NEXT:     "lookup-method": "include-quote",
+// HU-NEXT:     "unique-on-source-path": true
+// HU-NEXT:   },
+// HU-NEXT:   {
+// HU-NEXT:     "logical-name": "sys.h",
+// HU-NEXT:     "source-path": "{{.*}}inc{{.*}}sys.h",
+// HU-NEXT:     "lookup-method": "include-angle",
+// HU-NEXT:     "unique-on-source-path": true
+// HU-NEXT:   },
+// HU-NEXT:   {
+// HU-NEXT:     "logical-name": "greet"
+// HU-NEXT:   }
+// HU-NEXT: ]
+
 // cl scans C++ only: for a C source it is C1007 from the C front end and no
 // file.
 // RUN: not %clang_cl --target=x86_64-pc-windows-msvc /nologo /TC \
@@ -191,6 +214,15 @@
 
 //--- h1.h
 inline int f() { return 0; }
+
+//--- inc/sys.h
+inline int s() { return 0; }
+
+//--- hu.cpp
+import "h1.h";
+import <sys.h>;
+import greet;
+int main() { return f() + s(); }
 
 //--- plain.cpp
 #include "h1.h"

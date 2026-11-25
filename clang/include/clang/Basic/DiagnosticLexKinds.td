@@ -644,6 +644,10 @@ def err_pp_expr_bad_token_binop : Error<
   "token is not a valid binary operator in a preprocessor subexpression">;
 def err_pp_expr_bad_token_lparen : Error<
   "function-like macro %0 is not defined">;
+def ext_pp_ms_undefined_function_like : ExtWarn<
+  "function-like macro %0 is not defined; it evaluates to 0 and the rest of "
+  "the directive is ignored; Microsoft extension">,
+  InGroup<DiagGroup<"microsoft-pp-undefined-call">>;
 def err_pp_expr_bad_token_start_expr : Error<
   "invalid token at start of a preprocessor expression">;
 def err_pp_invalid_poison : Error<"can only poison identifier tokens">;

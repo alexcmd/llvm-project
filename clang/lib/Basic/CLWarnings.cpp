@@ -59,6 +59,8 @@ clang::diagGroupFromCLWarningID(unsigned CLWarningID) {
   switch (CLWarningID) {
   case 4010: Name = "comment"; break;
   case 4057: Name = "pointer-sign"; break;
+  // CL-DX-PP-UNDEF-CALL: #if name(...) with name not a macro.
+  case 4067: Name = "microsoft-pp-undefined-call"; break;
   // UE-DECLSPEC-LEFT: __declspec(x) class C ... (no declarator).
   case 4091: Name = "declspec-attribute-ignored"; break;
   case 4062: Name = "switch"; break;

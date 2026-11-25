@@ -16,6 +16,7 @@
 #include "clang/AST/DynamicRecursiveASTVisitor.h"
 #include "clang/Lex/HeaderSearch.h"
 #include "clang/Lex/Preprocessor.h"
+#include "clang/Lex/PreprocessorOptions.h"
 #include "clang/Sema/ParsedAttr.h"
 #include "clang/Sema/SemaInternal.h"
 #include "llvm/ADT/ScopeExit.h"
@@ -279,6 +280,17 @@ Sema::ActOnModuleDecl(SourceLocation StartLoc, SourceLocation ModuleLoc,
   // A module interface unit requires that we are not compiling a module map.
   switch (getLangOpts().getCompilingModule()) {
   case LangOptions::CMK_None:
+    // CL-DX-EXPORT-MODULE: cl 19.44 compiles a .cpp as a module interface only
+    // with /interface (an .ixx always is one): "export module m;" in a plain
+    // .cpp is C3378 (observed). In cl mode (clang identity hidden) the driver
+    // gives such a source as c++, not c++-module.
+    if (getLangOpts().MSVCCompat &&
+        !PP.getPreprocessorOpts().MSClangIdentity &&
+        (MDK == ModuleDeclKind::Interface ||
+         MDK == ModuleDeclKind::PartitionInterface)) {
+      Diag(ModuleLoc, diag::err_ms_module_interface_without_interface);
+      return nullptr;
+    }
     // It's OK to compile a module interface as a normal translation unit.
     break;
 

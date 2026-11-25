@@ -12918,6 +12918,9 @@ def err_module_decl_in_module_map_module : Error<
   "'module' declaration found while building module from module map">;
 def err_module_decl_in_header_unit : Error<
   "'module' declaration found while building header unit">;
+def err_ms_module_interface_without_interface : Error<
+  "a module interface unit needs /interface or an .ixx source; a declaration "
+  "can be exported only from a module interface unit">;
 def err_module_interface_implementation_mismatch : Error<
   "missing 'export' specifier in module declaration while "
   "building module interface">;

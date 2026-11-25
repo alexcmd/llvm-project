@@ -126,6 +126,8 @@ clang::diagGroupsFromCLWarningID(unsigned CLWarningID) {
     Extra[0] = "deprecated-anon-enum-enum-conversion";
     Extra[1] = "deprecated-enum-compare";
   }
+  if (CLWarningID == 4238)
+    Extra[0] = "microsoft-rvalue-cast-to-reference";
   for (const char *Name : Extra)
     if (Name)
       if (auto G = DiagnosticIDs::getGroupForWarningOption(Name))
@@ -268,6 +270,7 @@ static const CLWarningLevel CLLevels[] = {
     {"unused-variable", 3, nullptr, nullptr},
     // CL-DX-PERMISSIVE / CL-DX-CAST-RVALUE-REF: C4238, level 4.
     {"address-of-temporary", 4, nullptr, nullptr},
+    {"microsoft-rvalue-cast-to-reference", 4, nullptr, nullptr},
     {"bitfield-constant-conversion", 4, nullptr, nullptr},
     {"compare-distinct-pointer-types", 4, nullptr, nullptr},
     {"delete-abstract-non-virtual-dtor", 4, nullptr, nullptr},

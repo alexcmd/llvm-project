@@ -2844,6 +2844,25 @@ void CastOperation::CheckCXXCStyleCast(bool FunctionalStyle,
     return;
   }
 
+  // CL-DX-CAST-RVALUE-REF: cl 19.44 takes a class prvalue cast to a non-const
+  // lvalue reference ((Box&)f(), also with /permissive-) as an lvalue of the
+  // temporary, which lives to the end of the full-expression (C4238, level
+  // 4). Standard C++ has no reading for it: none of const_cast, static_cast
+  // or reinterpret_cast binds T& to a prvalue except through a conversion
+  // function. The temporary is materialized as an lvalue and the cast goes on.
+  if (Self.getLangOpts().MSVCCompat && SrcExpr.get()->isPRValue() &&
+      SrcType->isRecordType()) {
+    if (const auto *Ref = DestType->getAs<LValueReferenceType>()) {
+      QualType Pointee = Ref->getPointeeType();
+      if (!Pointee.isConstQualified() || Pointee.isVolatileQualified()) {
+        Self.Diag(OpRange.getBegin(), diag::ext_ms_cast_rvalue_to_reference)
+            << FunctionalStyle << SrcType << DestType << OpRange;
+        SrcExpr = Self.CreateMaterializeTemporaryExpr(
+            SrcType, SrcExpr.get(), /*BoundToLvalueReference=*/true);
+      }
+    }
+  }
+
   // C++ [expr.cast]p5: The conversions performed by
   //   - a const_cast,
   //   - a static_cast,

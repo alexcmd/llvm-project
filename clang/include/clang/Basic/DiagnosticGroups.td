@@ -1701,6 +1701,9 @@ def MicrosoftStringLiteralFromPredefined : DiagGroup<
 def MicrosoftInlineOnNonFunction : DiagGroup<
     "microsoft-inline-on-non-function">;
 def MicrosoftLambdaAttribute : DiagGroup<"microsoft-lambda-attribute">;
+// CL-DX-CAST-RVALUE-REF: (T&)prvalue, cl C4238.
+def MicrosoftRvalueCastToReference :
+    DiagGroup<"microsoft-rvalue-cast-to-reference">;
 
 // Aliases.
 def : DiagGroup<"msvc-include", [MicrosoftInclude]>;
@@ -1720,7 +1723,8 @@ def Microsoft : DiagGroup<"microsoft",
      MicrosoftCommentPaste, MicrosoftEndOfFile,
      MicrosoftInitFromPredefined, MicrosoftStringLiteralFromPredefined,
      MicrosoftInconsistentDllImport, MicrosoftInlineOnNonFunction,
-     MicrosoftEmptyEnum, MicrosoftLambdaAttribute]>;
+     MicrosoftEmptyEnum, MicrosoftLambdaAttribute,
+     MicrosoftRvalueCastToReference]>;
 
 def ClangClPch : DiagGroup<"clang-cl-pch">;
 

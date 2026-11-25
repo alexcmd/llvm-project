@@ -266,6 +266,26 @@ void preprocess(StringRef Src, StringRef Dst, const RcOptions &Opts,
       }
     }
   }
+  // openrt LLVM-RC-NO-VC-AUTODETECT: rc mode follows rc.exe (windres mode
+  // targets mingw, whose driver does not look for Visual Studio).
+  if (!Opts.Preprocessor && !Opts.IsWindres) {
+    // rc.exe predefines RC_INVOKED and _WIN32 only: no _MSC_VER/_MSC_FULL_VER
+    // (which the clang MSVC driver takes from an autodetected cl.exe, so it
+    // varied with the host's Visual Studio), no _WIN64, _M_X64/_M_AMD64,
+    // _MSC_EXTENSIONS or __clang__.
+    Args.push_back("-undef");
+    Args.push_back("-D_WIN32");
+    // rc.exe searches only the .rc file's directory, /I and %INCLUDE%. With
+    // no %INCLUDE% directory (unset, empty, only separators, or /X), stop the
+    // clang MSVC driver from autodetecting a Visual Studio / Windows SDK
+    // install: -nostdlibinc keeps clang's builtin headers and -I.
+    std::optional<std::string> Inc = sys::Process::GetEnv("INCLUDE");
+    SmallVector<StringRef, 8> IncDirs;
+    if (Inc)
+      StringRef(*Inc).split(IncDirs, ";", /*MaxSplit=*/-1, /*KeepEmpty=*/false);
+    if (IncDirs.empty())
+      Args.push_back("-nostdlibinc");
+  }
   llvm::append_range(Args, Opts.PreprocessArgs);
   Args.push_back(Src);
   Args.push_back("-o");

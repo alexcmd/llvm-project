@@ -19,6 +19,7 @@ def warn_drv_cl_pd_requires_zc : Warning<
 // Exit codes differ from cl (GAP).
 // CL-MSG-WORDING: cl 14.51 texts.
 def err_drv_cl_requires_argument : Error<"D8004 : '%0' requires an argument">;
+def err_drv_cl_missing_source : Error<"D8003 : missing source filename">;
 // CLANG-CL-GAP(Qspectre): accepted, no mitigation yet (tasks/compat/25). A
 // remark shown by default, so /WX does not turn it into an error.
 def remark_drv_cl_spectre_not_implemented : Remark<

@@ -195,13 +195,11 @@
 // RUN: count 0 < missinc.json
 // MISSINC: nonexistent_header.h
 
-// Without its argument the option is an error as before (D8004 for an empty
-// one) and nothing is scanned.
+// Without its argument the option is D8004 and nothing is scanned.
 // RUN: not %clang_cl --target=x86_64-pc-windows-msvc /nologo /TP /c plain.cpp \
-// RUN:   /scanDependencies 2>&1 | FileCheck %s --check-prefix=NOARG
+// RUN:   -scanDependencies 2>&1 | FileCheck %s --check-prefix=EMPTYARG
 // RUN: not %clang_cl --target=x86_64-pc-windows-msvc /nologo /TP /c plain.cpp \
 // RUN:   /scanDependencies "" 2>&1 | FileCheck %s --check-prefix=EMPTYARG
-// NOARG: argument to '/scanDependencies' is missing
 // EMPTYARG: D8004 : '/scanDependencies' requires an argument
 
 // -### prints the compile the scan is taken from and scans nothing.

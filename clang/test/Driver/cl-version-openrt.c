@@ -15,7 +15,7 @@
 // RUN: not %clang_cl /nologo --version 2>&1 | FileCheck %s --check-prefix=UNK
 // UNK-NOT: clang version
 // UNK: warning: unknown argument ignored in clang-cl: '--version'
-// UNK: error: no input files
+// UNK: error: D8003 : missing source filename
 // UNK-NOT: clang version
 
 // With a source file it still compiles, as cl does.

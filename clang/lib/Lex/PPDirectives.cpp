@@ -2388,6 +2388,33 @@ Preprocessor::ImportAction Preprocessor::HandleHeaderIncludeOrImport(
   // error.
   if (Filename.empty())
     return {ImportAction::None};
+
+  // CL-DX-YU-BY-NAME: skipping to the through header by its spelled name;
+  // other headers are not entered (Preprocessor::EnterMainSourceFile).
+  if (PCHThroughHeaderByName && SkippingUntilPCHThroughHeader) {
+    StringRef Want = PPOpts.PCHThroughHeader;
+    bool Match = Want.size() == Filename.size();
+    for (size_t I = 0; Match && I != Want.size(); ++I) {
+      char A = Want[I], B = Filename[I];
+      bool Sep = (A == '/' || A == '\\') && (B == '/' || B == '\\');
+      Match = Sep || llvm::toLower(A) == llvm::toLower(B);
+    }
+    // Beyond cl: another spelling of the through header found when the PCH
+    // was opened still matches (the clang rule), looked up without a
+    // diagnostic so that unreachable headers before it stay skipped.
+    if (!Match && PCHThroughHeaderFileID.isValid()) {
+      OptionalFileEntryRef F = LookupFile(
+          FilenameTok.getLocation(), Filename, isAngled, LookupFrom,
+          LookupFromFile, /*CurDir=*/nullptr, /*SearchPath=*/nullptr,
+          /*RelativePath=*/nullptr, /*SuggestedModule=*/nullptr,
+          /*IsMapped=*/nullptr, /*IsFrameworkFound=*/nullptr);
+      Match = F && isPCHThroughHeader(&F->getFileEntry());
+    }
+    if (Match)
+      SkippingUntilPCHThroughHeader = false;
+    return {ImportAction::None};
+  }
+
   if (Filename.ends_with(' ') || Filename.ends_with('.')) {
     unsigned Selection = Filename.ends_with('.') ? 1 : 0;
     Diag(FilenameTok, diag::pp_nonportable_path_trailing)

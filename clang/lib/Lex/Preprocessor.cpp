@@ -641,7 +641,24 @@ void Preprocessor::EnterMainSourceFile() {
   // Start parsing the predefines.
   EnterSourceFile(FID, nullptr, SourceLocation());
 
-  if (!PPOpts.PCHThroughHeader.empty()) {
+  // CL-DX-YU-BY-NAME: cl 19.44 /Yu<h> does not open <h>. It skips the source
+  // up to the first #include whose name equals <h> (case-insensitive, quotes
+  // or angle brackets; "../h" and "sub/h" do not match), without opening the
+  // headers included before it, and loads the .pch; the header need not
+  // exist or be reachable from the source directory. C1010 if none matches.
+  // A through header that is found is still remembered (PPDirectives).
+  if (!PPOpts.PCHThroughHeader.empty() && TUKind != TU_Prefix &&
+      LangOpts.MSVCCompat && SkippingUntilPCHThroughHeader) {
+    PCHThroughHeaderByName = true;
+    if (OptionalFileEntryRef File = LookupFile(
+            SourceLocation(), PPOpts.PCHThroughHeader,
+            /*isAngled=*/false, /*FromDir=*/nullptr, /*FromFile=*/nullptr,
+            /*CurDir=*/nullptr, /*SearchPath=*/nullptr,
+            /*RelativePath=*/nullptr, /*SuggestedModule=*/nullptr,
+            /*IsMapped=*/nullptr, /*IsFrameworkFound=*/nullptr))
+      setPCHThroughHeaderFileID(
+          SourceMgr.createFileID(*File, SourceLocation(), SrcMgr::C_User));
+  } else if (!PPOpts.PCHThroughHeader.empty()) {
     // Lookup and save the FileID for the through header. If it isn't found
     // in the search path, it's a fatal error.
     OptionalFileEntryRef File = LookupFile(
@@ -684,7 +701,7 @@ bool Preprocessor::creatingPCHWithThroughHeader() {
 
 bool Preprocessor::usingPCHWithThroughHeader() {
   return TUKind != TU_Prefix && !PPOpts.PCHThroughHeader.empty() &&
-         PCHThroughHeaderFileID.isValid();
+         (PCHThroughHeaderFileID.isValid() || PCHThroughHeaderByName);
 }
 
 bool Preprocessor::creatingPCHWithPragmaHdrStop() {

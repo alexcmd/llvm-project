@@ -1150,6 +1150,11 @@ private:
   /// The file ID for the PCH through header.
   FileID PCHThroughHeaderFileID;
 
+  /// CL-DX-YU-BY-NAME: using a PCH in Microsoft compatibility, the through
+  /// header is the first #include whose spelled name matches; the header
+  /// file need not exist (a found one also matches by identity).
+  bool PCHThroughHeaderByName = false;
+
   /// Whether tokens are being skipped until a #pragma hdrstop is seen.
   bool SkippingUntilPragmaHdrStop = false;
 

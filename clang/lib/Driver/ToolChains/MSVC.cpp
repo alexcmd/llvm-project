@@ -360,20 +360,12 @@ void visualstudio::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   const Arg *A = Args.getLastArg(options::OPT_fuse_ld_EQ);
   StringRef Linker = A ? A->getValue() : TC.getDriver().getPreferredLinker();
 
-  if (Linker.empty()) {
-    // If DWARF is requested, use LLD, because MSVC's link.exe will silently
-    // truncate the .debug_* sections to eight characters. PE/COFF doesn't allow
-    // section names longer than eight bytes in executables - LLD uses the same
-    // name length extension as in object files (where long names are allowed).
-    // Also 'lld-link' for hybrid object files if -marm64x is requested.
-    if (Args.hasArg(options::OPT_gdwarf, options::OPT_gdwarf_2,
-                    options::OPT_gdwarf_3, options::OPT_gdwarf_4,
-                    options::OPT_gdwarf_5, options::OPT_gdwarf_6,
-                    options::OPT_marm64x))
-      Linker = "lld-link";
-    else
-      Linker = "link";
-  }
+  // CL-LINK-DEFAULT-LLD: with no linker named the driver starts lld-link (the
+  // usual program lookup: next to the driver first, then PATH), as cl.exe
+  // starts its own link.exe; -fuse-ld=link asks for the Microsoft linker.
+  // (Upstream: link.exe, and lld-link only for DWARF or -marm64x.)
+  if (Linker.empty())
+    Linker = "lld-link";
 
   // We need to translate 'lld' into 'lld-link'.
   if (Linker.equals_insensitive("lld"))

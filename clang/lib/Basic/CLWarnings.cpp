@@ -70,6 +70,9 @@ clang::diagGroupFromCLWarningID(unsigned CLWarningID) {
   case 4150: Name = "delete-incomplete"; break;
   case 4191: Name = "cast-function-type-mismatch"; break;
   case 4201: Name = "microsoft-anon-tag"; break;
+  // CL-DX-PERMISSIVE / CL-DX-CAST-RVALUE-REF: class rvalue used as lvalue,
+  // both for &T() and for (T&)T().
+  case 4238: Name = "address-of-temporary"; break;
   case 4263: Name = "overloaded-virtual"; break;
   case 4264: Name = "overloaded-virtual"; break;
   case 4305: Name = "constant-conversion"; break;
@@ -263,6 +266,8 @@ static const CLWarningLevel CLLevels[] = {
     {"unknown-attributes", 3, nullptr, nullptr},
     {"unused-label", 3, nullptr, nullptr},
     {"unused-variable", 3, nullptr, nullptr},
+    // CL-DX-PERMISSIVE / CL-DX-CAST-RVALUE-REF: C4238, level 4.
+    {"address-of-temporary", 4, nullptr, nullptr},
     {"bitfield-constant-conversion", 4, nullptr, nullptr},
     {"compare-distinct-pointer-types", 4, nullptr, nullptr},
     {"delete-abstract-non-virtual-dtor", 4, nullptr, nullptr},

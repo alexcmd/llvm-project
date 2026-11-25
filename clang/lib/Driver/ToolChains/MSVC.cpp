@@ -1252,6 +1252,9 @@ static void TranslatePermissive(Arg *A, llvm::opt::DerivedArgList &DAL,
   DAL.AddFlagArg(A, Opts.getOption(options::OPT__SLASH_Zc_twoPhase_));
   DAL.AddFlagArg(A, Opts.getOption(options::OPT_fno_operator_names));
   DAL.AddFlagArg(A, Opts.getOption(options::OPT__SLASH_Zc_strictStrings_));
+
+  // CL-DX-PERMISSIVE: kept for the warning rules in Clang.cpp, claimed there.
+  DAL.append(A);
 }
 
 static void TranslatePermissiveMinus(Arg *A, llvm::opt::DerivedArgList &DAL,
@@ -1259,6 +1262,9 @@ static void TranslatePermissiveMinus(Arg *A, llvm::opt::DerivedArgList &DAL,
   DAL.AddFlagArg(A, Opts.getOption(options::OPT__SLASH_Zc_twoPhase));
   DAL.AddFlagArg(A, Opts.getOption(options::OPT_foperator_names));
   DAL.AddFlagArg(A, Opts.getOption(options::OPT__SLASH_Zc_strictStrings));
+
+  // CL-DX-PERMISSIVE: kept for the warning rules in Clang.cpp, claimed there.
+  DAL.append(A);
 }
 
 llvm::opt::DerivedArgList *

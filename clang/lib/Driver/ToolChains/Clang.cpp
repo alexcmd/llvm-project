@@ -6906,6 +6906,33 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
         A->getOption().matches(options::OPT__SLASH_Zc_strictStrings);
   if (CLStrictStrings)
     CLNamed.insert("writable-strings");
+  // CL-DX-PERMISSIVE: cl 19.44 without /permissive- (the default) takes the
+  // address of a class prvalue (&T(), &f()) with C4238 at /W4, and accepts a
+  // 'main' returning void, bool, char, short, long or float silently; with
+  // /permissive- the first is C2102 and the second C4326 (level 1). clang's
+  // address-of-temporary is an error by default: in cl mode it is a level-4
+  // warning (CLLevels) unless the last of /permissive and /permissive- is
+  // /permissive-, which keeps the error and turns main-return-type on. Under
+  // /WX the error stays, as cl's /W4 /WX would report C4238 as an error.
+  bool CLPermissiveMinus = false;
+  for (Arg *A : Args.filtered(options::OPT__SLASH_permissive,
+                              options::OPT__SLASH_permissive_)) {
+    A->claim();
+    CLPermissiveMinus = A->getOption().matches(options::OPT__SLASH_permissive_);
+  }
+  if (D.IsCLMode() && CLPermissiveMinus) {
+    CLNamed.insert("address-of-temporary");
+    CLNamed.insert("main-return-type");
+  } else if (D.IsCLMode()) {
+    bool WX = false;
+    for (const Arg *A : Args.filtered(options::OPT_W_Joined))
+      if (StringRef(A->getValue()) == "error")
+        WX = true;
+      else if (StringRef(A->getValue()) == "no-error")
+        WX = false;
+    if (!WX)
+      CmdArgs.push_back("-Wno-error=address-of-temporary");
+  }
   if (!CLLevelsOff) {
     for (const Arg *A : Args.filtered(options::OPT_W_Group, options::OPT__SLASH_wd,
                                       options::OPT__SLASH_we,

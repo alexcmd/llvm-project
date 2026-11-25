@@ -20,6 +20,7 @@
 #include "clang/Basic/TokenKinds.h"
 #include "clang/Lex/ModuleLoader.h"
 #include "clang/Lex/Preprocessor.h"
+#include "clang/Lex/PreprocessorOptions.h"
 #include "clang/Parse/RAIIObjectsForParser.h"
 #include "clang/Sema/DeclSpec.h"
 #include "clang/Sema/EnterExpressionEvaluationContext.h"
@@ -708,13 +709,28 @@ bool Parser::ParseTopLevelDecl(DeclGroupPtrTy &Result,
          MaybeParseGNUAttributes(DeclSpecAttrs))
     ;
 
+  // MS-PREDECLARE-MODULE: the EH/RTTI types and runtime names the Microsoft
+  // compiler declares by itself (-fms-predeclare-eh-types) come from the
+  // predefines buffer. They are not source text, so a module-declaration
+  // that follows them is still the first declaration of the translation unit.
+  // The test is the file the token is written in (its file location, not its
+  // presumed name), so neither a line marker nor a -D macro body (also kept in
+  // the predefines buffer) expanded in the source can claim it.
+  const bool IsMSPredeclared =
+      ImportState == Sema::ModuleImportState::FirstDecl &&
+      PP.getPreprocessorOpts().MSPredeclareEHTypes &&
+      PP.getSourceManager().getFileID(PP.getSourceManager().getFileLoc(
+          Tok.getLocation())) == PP.getPredefinesFileID();
+
   Result = ParseExternalDeclaration(DeclAttrs, DeclSpecAttrs);
   // An empty Result might mean a line with ';' or some parsing error, ignore
   // it.
   if (Result) {
-    if (ImportState == Sema::ModuleImportState::FirstDecl)
+    if (ImportState == Sema::ModuleImportState::FirstDecl) {
       // First decl was not modular.
-      ImportState = Sema::ModuleImportState::NotACXX20Module;
+      if (!IsMSPredeclared)
+        ImportState = Sema::ModuleImportState::NotACXX20Module;
+    }
     else if (ImportState == Sema::ModuleImportState::ImportAllowed)
       // Non-imports disallow further imports.
       ImportState = Sema::ModuleImportState::ImportFinished;

@@ -5,8 +5,8 @@
 
 // cl's default level (no /W flag): silent, as cl is. Silent runs pipe through
 // `count 0` (FileCheck rejects empty input).
-// RUN: %clang_cl --target=x86_64-pc-windows-msvc -fsyntax-only -- %s 2>&1 | count 0
-// RUN: %clang_cl --target=x86_64-pc-windows-msvc /W1 -fsyntax-only -- %s 2>&1 | count 0
+// RUN: %clang_cl /nologo --target=x86_64-pc-windows-msvc -fsyntax-only -- %s 2>&1 >/dev/null | count 0
+// RUN: %clang_cl /nologo --target=x86_64-pc-windows-msvc /W1 -fsyntax-only -- %s 2>&1 >/dev/null | count 0
 
 // From /W2, as cl reports the C5046.
 // RUN: %clang_cl --target=x86_64-pc-windows-msvc /W2 -fsyntax-only -- %s 2>&1 | FileCheck --check-prefix=ON %s
@@ -23,7 +23,7 @@
 // WAL-COUNT-2: warning: {{.*}}has internal linkage but is not defined
 
 // /wd5046 silences it, as cl's /wd does.
-// RUN: %clang_cl --target=x86_64-pc-windows-msvc /W4 /wd5046 -fsyntax-only -- %s 2>&1 | count 0
+// RUN: %clang_cl /nologo --target=x86_64-pc-windows-msvc /W4 /wd5046 -fsyntax-only -- %s 2>&1 >/dev/null | count 0
 
 namespace {
 struct Used {

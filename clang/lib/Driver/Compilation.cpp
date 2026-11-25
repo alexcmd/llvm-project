@@ -20,6 +20,7 @@
 #include "llvm/Option/OptSpecifier.h"
 #include "llvm/Option/Option.h"
 #include "llvm/Support/FileSystem.h"
+#include "llvm/Support/Path.h"
 #include "llvm/Support/ThreadPool.h"
 #include "llvm/Support/Threading.h"
 #include "llvm/Support/raw_ostream.h"
@@ -375,12 +376,47 @@ void Compilation::ExecuteJobs(const JobList &Jobs,
       !getDriver().IsCLMode() && !getArgs().hasArg(options::OPT_v) &&
       Redirects.empty() && !PostCallback;
 
+  // CL-DX-ECHO: cl 19.44 prints the file name (no directory) of each source it
+  // compiles before that source's diagnostics, also with /nologo: on stdout,
+  // on stderr for /E, /EP and /P; and "Generating Code..." on stdout once
+  // more than one source was compiled (not with /MP). The clang frontend
+  // jobs stand for the cl compiles; the PCH job of /Yc is not echoed.
+  // clang-cl's own /showFilenames already prints the names (on stderr).
+  bool CLEcho = getDriver().IsCLMode() && !LogOnly &&
+                !getArgs().hasFlag(options::OPT__SLASH_showFilenames,
+                                   options::OPT__SLASH_showFilenames_, false);
+  unsigned CLCompiled = 0;
+  auto CLGeneratingCode = [&]() {
+    if (CLCompiled > 1 && !getArgs().hasArg(options::OPT__SLASH_MP))
+      llvm::outs() << "Generating Code...\n";
+    CLCompiled = 0;
+  };
   const auto &JobStorage = Jobs.getJobs();
   for (size_t I = 0; I < JobStorage.size();) {
     const auto &Job = *JobStorage[I];
     if (ActionFailed(&Job.getSource(), FailingCommands)) {
       ++I;
       continue;
+    }
+    if (CLEcho) {
+      const Action &Src = Job.getSource();
+      bool IsFrontend = StringRef(Job.getCreator().getName()) == "clang" &&
+                        !isa<PrecompileJobAction>(Src) &&
+                        !Job.getInputInfos().empty() &&
+                        Job.getInputInfos()[0].isFilename();
+      if (IsFrontend) {
+        StringRef Name =
+            llvm::sys::path::filename(Job.getInputInfos()[0].getFilename());
+        if (isa<PreprocessJobAction>(Src)) {
+          llvm::errs() << Name << "\n";
+        } else {
+          llvm::outs() << Name << "\n";
+          ++CLCompiled;
+        }
+        llvm::outs().flush();
+      } else {
+        CLGeneratingCode();
+      }
     }
 
     if (CanRunJobsInParallel) {
@@ -402,6 +438,8 @@ void Compilation::ExecuteJobs(const JobList &Jobs,
     }
     ++I;
   }
+  if (CLEcho)
+    CLGeneratingCode();
 }
 
 void Compilation::initCompilationForDiagnostics() {

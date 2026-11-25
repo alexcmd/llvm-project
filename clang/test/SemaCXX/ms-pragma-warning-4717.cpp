@@ -11,9 +11,9 @@
 
 // Explicit disables win, as in cl. Silent runs pipe through `count 0`
 // (FileCheck rejects empty input).
-// RUN: %clang_cl --target=x86_64-pc-windows-msvc /W0 -fsyntax-only -- %s 2>&1 | count 0
-// RUN: %clang_cl --target=x86_64-pc-windows-msvc /W4 /wd4717 -fsyntax-only -- %s 2>&1 | count 0
-// RUN: %clang_cl --target=x86_64-pc-windows-msvc -Wno-infinite-recursion -fsyntax-only -- %s 2>&1 | count 0
+// RUN: %clang_cl /nologo --target=x86_64-pc-windows-msvc /W0 -fsyntax-only -- %s 2>&1 >/dev/null | count 0
+// RUN: %clang_cl /nologo --target=x86_64-pc-windows-msvc /W4 /wd4717 -fsyntax-only -- %s 2>&1 >/dev/null | count 0
+// RUN: %clang_cl /nologo --target=x86_64-pc-windows-msvc -Wno-infinite-recursion -fsyntax-only -- %s 2>&1 >/dev/null | count 0
 
 // RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -Winfinite-recursion -Werror -verify %s
 

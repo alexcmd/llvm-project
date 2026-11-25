@@ -45,8 +45,8 @@
 // RUN:   -LD -- %s 2>&1 | FileCheck %s --check-prefix=CL-WARNING
 
 // Test clang-cl ignoring the warning with --start-no-unused-arguments.
-// RUN: %clang_cl -fsyntax-only /WX \
-// RUN:   --start-no-unused-arguments /LD --end-no-unused-arguments -- %s 2>&1 | count 0
+// RUN: %clang_cl /nologo -fsyntax-only /WX \
+// RUN:   --start-no-unused-arguments /LD --end-no-unused-arguments -- %s 2>&1 >/dev/null | count 0
 
 // CHECK: -lfoo: 'linker' input unused
 

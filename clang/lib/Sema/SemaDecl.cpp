@@ -12841,6 +12841,7 @@ void Sema::CheckMain(FunctionDecl *FD, const DeclSpec &DS) {
                     Context.hasSameUnqualifiedType(MSRT, Context.UnsignedIntTy);
     bool MSAccepted =
         getLangOpts().MSVCCompat &&
+        !PP.getPreprocessorOpts().MSClangIdentity &&
         (MSSilent || MSRT->isVoidType() ||
          ((MSRT->isIntegerType() || MSRT->isRealFloatingType()) &&
           !MSRT->isEnumeralType() && Context.getTypeSize(MSRT) <= 32));

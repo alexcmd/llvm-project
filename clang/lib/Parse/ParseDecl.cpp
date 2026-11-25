@@ -22,6 +22,7 @@
 #include "clang/Basic/TokenKinds.h"
 #include "clang/Parse/Parser.h"
 #include "clang/Parse/RAIIObjectsForParser.h"
+#include "clang/Lex/PreprocessorOptions.h"
 #include "clang/Sema/EnterExpressionEvaluationContext.h"
 #include "clang/Sema/Lookup.h"
 #include "clang/Sema/ParsedAttr.h"
@@ -4101,6 +4102,7 @@ void Parser::ParseDeclarationSpecifiers(
     case tok::kw_protected:
     MSTypedefAccess:
       if (!getLangOpts().MSVCCompat ||
+          PP.getPreprocessorOpts().MSClangIdentity ||
           DS.getStorageClassSpec() != DeclSpec::SCS_typedef ||
           DS.hasTypeSpecifier())
         goto DoneWithDeclSpec;

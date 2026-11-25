@@ -28,6 +28,7 @@
 #include "clang/Basic/PartialDiagnostic.h"
 #include "clang/Basic/SourceLocation.h"
 #include "clang/Basic/TargetInfo.h"
+#include "clang/Lex/PreprocessorOptions.h"
 #include "clang/Sema/DeclSpec.h"
 #include "clang/Sema/EnterExpressionEvaluationContext.h"
 #include "clang/Sema/Initialization.h"
@@ -839,7 +840,8 @@ Sema::BuildSubstNonTypeTemplateParmExpr(Decl *AssociatedDecl, unsigned Index,
 bool Sema::isMSUndefinedExplicitInstantiation(
     const NamedDecl *Instantiation, const NamedDecl *PatternDef,
     TemplateSpecializationKind TSK) const {
-  if (!getLangOpts().MSVCCompat || PatternDef ||
+  if (!getLangOpts().MSVCCompat ||
+      PP.getPreprocessorOpts().MSClangIdentity || PatternDef ||
       TSK != TSK_ExplicitInstantiationDefinition)
     return false;
   return isa<FunctionDecl>(Instantiation) ||

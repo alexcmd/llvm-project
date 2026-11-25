@@ -6,7 +6,7 @@
 
 // RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -std=c++17 -DVERIFY -fsyntax-only -verify %s
 // RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -std=c++17 -emit-llvm -o - %s | FileCheck %s
-// RUN: %clang_cl --target=x86_64-pc-windows-msvc /W4 /std:c++17 -fsyntax-only -- %s 2>&1 | count 0
+// RUN: %clang_cl /nologo --target=x86_64-pc-windows-msvc /W4 /std:c++17 -fsyntax-only -- %s 2>&1 >/dev/null | count 0
 
 struct U { U(); U(const U &) = delete; explicit operator bool() const; };
 struct H {

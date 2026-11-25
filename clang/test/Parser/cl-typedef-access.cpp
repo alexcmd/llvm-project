@@ -3,10 +3,10 @@
 // std::unique_ptr<void, handle_closer> ScopedHandle;), at namespace and class
 // scope, silent at /W4 and with /permissive-; after the type it is C2059.
 
-// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fsyntax-only -verify=ms %s
+// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fno-ms-clang-identity -fsyntax-only -verify=ms %s
 // RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fsyntax-only -verify=std %s
-// RUN: %clang_cl --target=x86_64-pc-windows-msvc /W4 -DONLY_VALID -fsyntax-only -- %s 2>&1 | count 0
-// RUN: %clang_cl --target=x86_64-pc-windows-msvc /W4 /permissive- -DONLY_VALID -fsyntax-only -- %s 2>&1 | count 0
+// RUN: %clang_cl /nologo --target=x86_64-pc-windows-msvc /W4 -DONLY_VALID -fsyntax-only -- %s 2>&1 >/dev/null | count 0
+// RUN: %clang_cl /nologo --target=x86_64-pc-windows-msvc /W4 /permissive- -DONLY_VALID -fsyntax-only -- %s 2>&1 >/dev/null | count 0
 
 template <class T> struct Ptr { T *p; };
 

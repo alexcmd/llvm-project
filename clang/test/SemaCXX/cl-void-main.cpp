@@ -4,24 +4,24 @@
 // stay errors (C3874). Microsoft compatibility matches; standard mode keeps
 // the error.
 
-// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fsyntax-only -verify=ms -DRT=void %s
-// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fsyntax-only -verify=ms -DRT=char %s
-// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fsyntax-only -verify=ms -DRT=bool %s
-// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fsyntax-only -verify=ms -DRT=long %s
-// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fsyntax-only -verify=ms -DRT=float %s
-// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fsyntax-only -verify=silent -DRT=unsigned %s
-// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fsyntax-only -verify=silent "-DRT=const int" %s
-// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fsyntax-only -verify=err -DRT=double %s
-// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fsyntax-only -verify=err "-DRT=long long" %s
-// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fsyntax-only -verify=err "-DRT=int*" %s
+// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fno-ms-clang-identity -fsyntax-only -verify=ms -DRT=void %s
+// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fno-ms-clang-identity -fsyntax-only -verify=ms -DRT=char %s
+// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fno-ms-clang-identity -fsyntax-only -verify=ms -DRT=bool %s
+// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fno-ms-clang-identity -fsyntax-only -verify=ms -DRT=long %s
+// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fno-ms-clang-identity -fsyntax-only -verify=ms -DRT=float %s
+// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fno-ms-clang-identity -fsyntax-only -verify=silent -DRT=unsigned %s
+// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fno-ms-clang-identity -fsyntax-only -verify=silent "-DRT=const int" %s
+// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fno-ms-clang-identity -fsyntax-only -verify=err -DRT=double %s
+// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fno-ms-clang-identity -fsyntax-only -verify=err "-DRT=long long" %s
+// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fno-ms-clang-identity -fsyntax-only -verify=err "-DRT=int*" %s
 // RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fsyntax-only -verify=err -DRT=void %s
 
-// RUN: %clang_cl --target=x86_64-pc-windows-msvc /W4 -DRT=void -fsyntax-only -- %s 2>&1 | count 0
+// RUN: %clang_cl /nologo --target=x86_64-pc-windows-msvc /W4 -DRT=void -fsyntax-only -- %s 2>&1 >/dev/null | count 0
 // RUN: %clang_cl --target=x86_64-pc-windows-msvc /W4 /permissive- -DRT=void -fsyntax-only -- %s 2>&1 | FileCheck --check-prefix=PERM %s
 // PERM: warning: return type of 'main' is not 'int' [-Wmain-return-type]
-// RUN: %clang_cl --target=x86_64-pc-windows-msvc /W4 /permissive- /wd4326 -DRT=void -fsyntax-only -- %s 2>&1 | count 0
+// RUN: %clang_cl /nologo --target=x86_64-pc-windows-msvc /W4 /permissive- /wd4326 -DRT=void -fsyntax-only -- %s 2>&1 >/dev/null | count 0
 
-// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -emit-llvm -o - -DRT=char %s | FileCheck --check-prefix=IR %s
+// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fno-ms-clang-identity -emit-llvm -o - -DRT=char %s | FileCheck --check-prefix=IR %s
 // IR: define dso_local noundef i8 @main(
 // IR: ret i8 0
 

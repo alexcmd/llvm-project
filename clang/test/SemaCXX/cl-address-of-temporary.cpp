@@ -9,9 +9,9 @@
 // W4: (27,7): warning: taking the address of a temporary object of type 'S' [-Waddress-of-temporary]
 // W4-NOT: error
 
-// RUN: %clang_cl --target=x86_64-pc-windows-msvc /W3 -fsyntax-only -- %s 2>&1 | count 0
-// RUN: %clang_cl --target=x86_64-pc-windows-msvc -fsyntax-only -- %s 2>&1 | count 0
-// RUN: %clang_cl --target=x86_64-pc-windows-msvc /W4 /wd4238 -fsyntax-only -- %s 2>&1 | count 0
+// RUN: %clang_cl /nologo --target=x86_64-pc-windows-msvc /W3 -fsyntax-only -- %s 2>&1 >/dev/null | count 0
+// RUN: %clang_cl /nologo --target=x86_64-pc-windows-msvc -fsyntax-only -- %s 2>&1 >/dev/null | count 0
+// RUN: %clang_cl /nologo --target=x86_64-pc-windows-msvc /W4 /wd4238 -fsyntax-only -- %s 2>&1 >/dev/null | count 0
 // RUN: %clang_cl --target=x86_64-pc-windows-msvc /permissive- /permissive /W4 -fsyntax-only -- %s 2>&1 | FileCheck --check-prefix=W4 %s
 
 // RUN: not %clang_cl --target=x86_64-pc-windows-msvc /permissive- -fsyntax-only -- %s 2>&1 | FileCheck --check-prefix=ERR %s

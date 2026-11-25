@@ -648,7 +648,8 @@ void Preprocessor::EnterMainSourceFile() {
   // exist or be reachable from the source directory. C1010 if none matches.
   // A through header that is found is still remembered (PPDirectives).
   if (!PPOpts.PCHThroughHeader.empty() && TUKind != TU_Prefix &&
-      LangOpts.MSVCCompat && SkippingUntilPCHThroughHeader) {
+      LangOpts.MSVCCompat && !PPOpts.MSClangIdentity &&
+      SkippingUntilPCHThroughHeader) {
     PCHThroughHeaderByName = true;
     if (OptionalFileEntryRef File = LookupFile(
             SourceLocation(), PPOpts.PCHThroughHeader,

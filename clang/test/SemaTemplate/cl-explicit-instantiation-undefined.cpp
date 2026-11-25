@@ -7,11 +7,11 @@
 // instantiated; a later definition is still instantiated at the end of the
 // translation unit.
 
-// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fsyntax-only -verify=ms %s
+// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fno-ms-clang-identity -fsyntax-only -verify=ms %s
 // RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fsyntax-only -verify=std %s
-// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -emit-llvm -o - %s | FileCheck --check-prefix=IR %s
+// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fno-ms-clang-identity -emit-llvm -o - %s | FileCheck --check-prefix=IR %s
 // RUN: %clang_cl --target=x86_64-pc-windows-msvc /W4 -fsyntax-only -- %s 2>&1 | FileCheck --check-prefix=CL %s
-// RUN: %clang_cl --target=x86_64-pc-windows-msvc /W4 /wd4661 -fsyntax-only -- %s 2>&1 | count 0
+// RUN: %clang_cl /nologo --target=x86_64-pc-windows-msvc /W4 /wd4661 -fsyntax-only -- %s 2>&1 >/dev/null | count 0
 // CL: warning: explicit instantiation of undefined member function 'f' of class template 'X<int>' instantiates nothing; Microsoft extension [-Wmicrosoft-explicit-instantiation-undefined-member]
 // CL: warning: explicit instantiation of undefined static data member 's' of class template 'X<int>' instantiates nothing; Microsoft extension [-Wmicrosoft-explicit-instantiation-undefined-member]
 // CL-NOT: ): warning:

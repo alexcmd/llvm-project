@@ -4,13 +4,13 @@
 // Microsoft compatibility materializes the temporary; standard mode keeps the
 // error.
 
-// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fsyntax-only -verify=ms %s
+// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fno-ms-clang-identity -fsyntax-only -verify=ms %s
 // RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fsyntax-only -verify=std %s
-// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -DONLY_VALID -emit-llvm -o - %s | FileCheck --check-prefix=IR %s
+// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fno-ms-clang-identity -DONLY_VALID -emit-llvm -o - %s | FileCheck --check-prefix=IR %s
 // RUN: %clang_cl --target=x86_64-pc-windows-msvc /W4 -DONLY_VALID -fsyntax-only -- %s 2>&1 | FileCheck --check-prefix=W4 %s
 // RUN: %clang_cl --target=x86_64-pc-windows-msvc /W4 /permissive- -DONLY_VALID -fsyntax-only -- %s 2>&1 | FileCheck --check-prefix=W4 %s
-// RUN: %clang_cl --target=x86_64-pc-windows-msvc /W3 -DONLY_VALID -fsyntax-only -- %s 2>&1 | count 0
-// RUN: %clang_cl --target=x86_64-pc-windows-msvc /W4 /wd4238 -DONLY_VALID -fsyntax-only -- %s 2>&1 | count 0
+// RUN: %clang_cl /nologo --target=x86_64-pc-windows-msvc /W3 -DONLY_VALID -fsyntax-only -- %s 2>&1 >/dev/null | count 0
+// RUN: %clang_cl /nologo --target=x86_64-pc-windows-msvc /W4 /wd4238 -DONLY_VALID -fsyntax-only -- %s 2>&1 >/dev/null | count 0
 // W4: warning: C-style cast from rvalue of type 'M' to reference type 'Box &' binds a temporary; Microsoft extension [-Wmicrosoft-rvalue-cast-to-reference]
 // W4: warning: C-style cast from rvalue of type 'Box' to reference type 'Box &' binds a temporary; Microsoft extension [-Wmicrosoft-rvalue-cast-to-reference]
 // W4-NOT: ): warning:

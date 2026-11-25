@@ -27,6 +27,7 @@
 #include "clang/Sema/SemaHLSL.h"
 #include "clang/Sema/SemaObjC.h"
 #include "clang/Sema/SemaRISCV.h"
+#include "clang/Lex/PreprocessorOptions.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringExtras.h"
 #include <set>
@@ -2850,8 +2851,9 @@ void CastOperation::CheckCXXCStyleCast(bool FunctionalStyle,
   // 4). Standard C++ has no reading for it: none of const_cast, static_cast
   // or reinterpret_cast binds T& to a prvalue except through a conversion
   // function. The temporary is materialized as an lvalue and the cast goes on.
-  if (Self.getLangOpts().MSVCCompat && SrcExpr.get()->isPRValue() &&
-      SrcType->isRecordType()) {
+  if (Self.getLangOpts().MSVCCompat &&
+      !Self.getPreprocessor().getPreprocessorOpts().MSClangIdentity &&
+      SrcExpr.get()->isPRValue() && SrcType->isRecordType()) {
     if (const auto *Ref = DestType->getAs<LValueReferenceType>()) {
       QualType Pointee = Ref->getPointeeType();
       if (!Pointee.isConstQualified() || Pointee.isVolatileQualified()) {

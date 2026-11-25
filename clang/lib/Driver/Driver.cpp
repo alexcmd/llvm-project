@@ -1511,6 +1511,13 @@ Compilation *Driver::BuildCompilation(ArrayRef<const char *> ArgList) {
   if (IsCLMode() && !ContainsError)
     for (Arg *A : Args.filtered(options::OPT__version))
       CLBareVersion.push_back(A);
+  // CL-DX-V: cl 19.44 has no -v either: D9002 "ignoring unknown option '-v'",
+  // then a normal compile (rc 0) or D8003 without a source (rc 2). A bare -v
+  // is dropped the same way; /clang:-v, -### and -fms-clang-identity keep it.
+  SmallVector<Arg *, 2> CLBareV;
+  if (IsCLMode() && !ContainsError)
+    for (Arg *A : Args.filtered(options::OPT_v))
+      CLBareV.push_back(A);
 
   // In CL mode, look for any pass-through arguments
   if (IsCLMode() && !ContainsError) {
@@ -1546,6 +1553,21 @@ Compilation *Driver::BuildCompilation(ArrayRef<const char *> ArgList) {
         Diag(diag::warn_drv_unknown_argument_clang_cl) << A->getAsString(Args);
       }
       Args.eraseArg(options::OPT__version);
+    }
+  }
+  if (!CLBareV.empty() &&
+      !Args.hasFlag(options::OPT_fms_clang_identity,
+                    options::OPT_fno_ms_clang_identity, false)) {
+    bool PassThroughV = false;
+    for (const Arg *A : Args.filtered(options::OPT_v))
+      if (!llvm::is_contained(CLBareV, A))
+        PassThroughV = true;
+    if (!PassThroughV) {
+      for (Arg *A : CLBareV) {
+        A->claim();
+        Diag(diag::warn_drv_ignoring_unknown_option) << A->getAsString(Args);
+      }
+      Args.eraseArg(options::OPT_v);
     }
   }
 

@@ -7885,9 +7885,11 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
           options::OPT_fcs_profile_generate,
           options::OPT_fcs_profile_generate_EQ, options::OPT_fprofile_use,
           options::OPT_fprofile_use_EQ);
+      // CLANG-DIAG-SAMPLEUSE-ARGS: the diagnostic takes two arguments; one
+      // printed garbage and an assertions build stopped (index out of range).
       if (PGOArg)
         D.Diag(diag::err_drv_argument_not_allowed_with)
-            << "SampleUse with PGO options";
+            << A->getAsString(Args) << PGOArg->getAsString(Args);
 
       StringRef fname = A->getValue();
       if (!llvm::sys::fs::exists(fname))

@@ -25,6 +25,7 @@
 #include "clang/Lex/PreprocessorOptions.h"
 #include "clang/Serialization/ASTReader.h"
 #include "llvm/ADT/APFloat.h"
+#include "llvm/ADT/StringSet.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DerivedTypes.h"
 using namespace clang;
@@ -1811,6 +1812,111 @@ struct __s_GUID {
 
 /// InitializePreprocessor - Initialize the preprocessor getting it and the
 /// environment ready to process a single file.
+// CL-DX-GNU-PREDEFS: GNU-style predefined macros that cl 19.44 does not define
+// (compared with its /Zc:preprocessor /PD list) and that nothing in the
+// resource headers (lib/clang/<v>/include) tests. Without the clang identity
+// (the cl mode default) they are left out; the ones the resource headers
+// read (__x86_64__, __SSE2__, __SIZE_TYPE__, the <float.h>, <stdint.h> and
+// <stdatomic.h> ones, ...) stay.
+static const char *const CLDroppedPredefines[] = {
+    "__BIGGEST_ALIGNMENT__", "__CHAR16_TYPE__", "__CHAR32_TYPE__",
+    "__CONSTANT_CFSTRINGS__", "__DBL_HAS_INFINITY__", "__DBL_HAS_QUIET_NAN__",
+    "__FINITE_MATH_ONLY__", "__FLT16_DENORM_MIN__", "__FLT16_HAS_DENORM__",
+    "__FLT16_HAS_INFINITY__", "__FLT16_HAS_QUIET_NAN__", "__FLT16_NORM_MAX__",
+    "__FLT_HAS_INFINITY__", "__FLT_HAS_QUIET_NAN__", "__FPCLASS_NEGINF",
+    "__FPCLASS_NEGNORMAL", "__FPCLASS_NEGSUBNORMAL", "__FPCLASS_NEGZERO",
+    "__FPCLASS_POSINF", "__FPCLASS_POSNORMAL", "__FPCLASS_POSSUBNORMAL",
+    "__FPCLASS_POSZERO", "__FPCLASS_QNAN", "__FPCLASS_SNAN", "__FXSR__",
+    "__GCC_ASM_FLAG_OUTPUTS__", "__GCC_CONSTRUCTIVE_SIZE",
+    "__GCC_DESTRUCTIVE_SIZE", "__GCC_HAVE_SYNC_COMPARE_AND_SWAP_1",
+    "__GCC_HAVE_SYNC_COMPARE_AND_SWAP_16",
+    "__GCC_HAVE_SYNC_COMPARE_AND_SWAP_2", "__GCC_HAVE_SYNC_COMPARE_AND_SWAP_4",
+    "__GCC_HAVE_SYNC_COMPARE_AND_SWAP_8", "__INT16_C_SUFFIX__",
+    "__INT16_FMTd__", "__INT16_FMTi__", "__INT16_MAX__", "__INT32_C_SUFFIX__",
+    "__INT32_FMTd__", "__INT32_FMTi__", "__INT32_MAX__", "__INT64_C_SUFFIX__",
+    "__INT64_FMTd__", "__INT64_FMTi__", "__INT64_MAX__", "__INT8_C_SUFFIX__",
+    "__INT8_FMTd__", "__INT8_FMTi__", "__INT8_MAX__", "__INTMAX_C_SUFFIX__",
+    "__INTMAX_FMTd__", "__INTMAX_FMTi__", "__INTPTR_FMTd__", "__INTPTR_FMTi__",
+    "__INT_FAST16_FMTd__", "__INT_FAST16_FMTi__", "__INT_FAST16_MAX__",
+    "__INT_FAST16_TYPE__", "__INT_FAST16_WIDTH__", "__INT_FAST32_FMTd__",
+    "__INT_FAST32_FMTi__", "__INT_FAST32_MAX__", "__INT_FAST32_TYPE__",
+    "__INT_FAST32_WIDTH__", "__INT_FAST64_FMTd__", "__INT_FAST64_FMTi__",
+    "__INT_FAST64_MAX__", "__INT_FAST64_TYPE__", "__INT_FAST64_WIDTH__",
+    "__INT_FAST8_FMTd__", "__INT_FAST8_FMTi__", "__INT_FAST8_MAX__",
+    "__INT_FAST8_TYPE__", "__INT_FAST8_WIDTH__", "__INT_LEAST16_FMTd__",
+    "__INT_LEAST16_FMTi__", "__INT_LEAST16_MAX__", "__INT_LEAST16_TYPE__",
+    "__INT_LEAST16_WIDTH__", "__INT_LEAST32_FMTd__", "__INT_LEAST32_FMTi__",
+    "__INT_LEAST32_MAX__", "__INT_LEAST32_TYPE__", "__INT_LEAST32_WIDTH__",
+    "__INT_LEAST64_FMTd__", "__INT_LEAST64_FMTi__", "__INT_LEAST64_MAX__",
+    "__INT_LEAST64_TYPE__", "__INT_LEAST64_WIDTH__", "__INT_LEAST8_FMTd__",
+    "__INT_LEAST8_FMTi__", "__INT_LEAST8_MAX__", "__INT_LEAST8_TYPE__",
+    "__INT_LEAST8_WIDTH__", "__LDBL_HAS_INFINITY__", "__LDBL_HAS_QUIET_NAN__",
+    "__MEMORY_SCOPE_CLUSTR", "__MEMORY_SCOPE_SINGLE", "__NO_INLINE__",
+    "__NO_MATH_INLINES", "__OBJC_BOOL_IS_BOOL", "__PIC__", "__POINTER_WIDTH__",
+    "__PRAGMA_REDEFINE_EXTNAME", "__PTRDIFF_FMTd__", "__PTRDIFF_FMTi__",
+    "__REGISTER_PREFIX__", "__SEG_FS", "__SEG_GS", "__SIG_ATOMIC_TYPE__",
+    "__SIZEOF_DOUBLE__", "__SIZEOF_FLOAT__", "__SIZEOF_INT__",
+    "__SIZEOF_LONG_DOUBLE__", "__SIZEOF_POINTER__", "__SIZEOF_PTRDIFF_T__",
+    "__SIZEOF_SHORT__", "__SIZEOF_SIZE_T__", "__SIZEOF_WCHAR_T__",
+    "__SIZEOF_WINT_T__", "__SIZE_FMTX__", "__SIZE_FMTo__", "__SIZE_FMTu__",
+    "__SIZE_FMTx__", "__SSE2_MATH__", "__SSE_MATH__", "__SSE__",
+    "__SSP_STRONG__", "__UINT16_C_SUFFIX__", "__UINT16_FMTX__",
+    "__UINT16_FMTo__", "__UINT16_FMTu__", "__UINT16_FMTx__", "__UINT16_MAX__",
+    "__UINT32_C_SUFFIX__", "__UINT32_FMTX__", "__UINT32_FMTo__",
+    "__UINT32_FMTu__", "__UINT32_FMTx__", "__UINT32_MAX__",
+    "__UINT64_C_SUFFIX__", "__UINT64_FMTX__", "__UINT64_FMTo__",
+    "__UINT64_FMTu__", "__UINT64_FMTx__", "__UINT64_MAX__",
+    "__UINT8_C_SUFFIX__", "__UINT8_FMTX__", "__UINT8_FMTo__", "__UINT8_FMTu__",
+    "__UINT8_FMTx__", "__UINT8_MAX__", "__UINTMAX_C_SUFFIX__",
+    "__UINTMAX_FMTX__", "__UINTMAX_FMTo__", "__UINTMAX_FMTu__",
+    "__UINTMAX_FMTx__", "__UINTPTR_FMTX__", "__UINTPTR_FMTo__",
+    "__UINTPTR_FMTu__", "__UINTPTR_FMTx__", "__UINT_FAST16_FMTX__",
+    "__UINT_FAST16_FMTo__", "__UINT_FAST16_FMTu__", "__UINT_FAST16_FMTx__",
+    "__UINT_FAST16_MAX__", "__UINT_FAST16_TYPE__", "__UINT_FAST32_FMTX__",
+    "__UINT_FAST32_FMTo__", "__UINT_FAST32_FMTu__", "__UINT_FAST32_FMTx__",
+    "__UINT_FAST32_MAX__", "__UINT_FAST32_TYPE__", "__UINT_FAST64_FMTX__",
+    "__UINT_FAST64_FMTo__", "__UINT_FAST64_FMTu__", "__UINT_FAST64_FMTx__",
+    "__UINT_FAST64_MAX__", "__UINT_FAST64_TYPE__", "__UINT_FAST8_FMTX__",
+    "__UINT_FAST8_FMTo__", "__UINT_FAST8_FMTu__", "__UINT_FAST8_FMTx__",
+    "__UINT_FAST8_MAX__", "__UINT_FAST8_TYPE__", "__UINT_LEAST16_FMTX__",
+    "__UINT_LEAST16_FMTo__", "__UINT_LEAST16_FMTu__", "__UINT_LEAST16_FMTx__",
+    "__UINT_LEAST16_MAX__", "__UINT_LEAST16_TYPE__", "__UINT_LEAST32_FMTX__",
+    "__UINT_LEAST32_FMTo__", "__UINT_LEAST32_FMTu__", "__UINT_LEAST32_FMTx__",
+    "__UINT_LEAST32_MAX__", "__UINT_LEAST32_TYPE__", "__UINT_LEAST64_FMTX__",
+    "__UINT_LEAST64_FMTo__", "__UINT_LEAST64_FMTu__", "__UINT_LEAST64_FMTx__",
+    "__UINT_LEAST64_MAX__", "__UINT_LEAST64_TYPE__", "__UINT_LEAST8_FMTX__",
+    "__UINT_LEAST8_FMTo__", "__UINT_LEAST8_FMTu__", "__UINT_LEAST8_FMTx__",
+    "__UINT_LEAST8_MAX__", "__UINT_LEAST8_TYPE__", "__USER_LABEL_PREFIX__",
+    "__WINT_UNSIGNED__", "__amd64", "__amd64__", "__code_model_small__",
+    "__k8", "__k8__", "__pic__", "__seg_fs", "__seg_gs", "__tune_k8__",
+    "__x86_64",
+};
+
+/// Removes the "#define <name>..." lines of CLDroppedPredefines.
+static void dropCLPredefines(std::string &Buf, size_t From) {
+  static const llvm::StringSet<> Drop = [] {
+    llvm::StringSet<> S;
+    for (const char *N : CLDroppedPredefines)
+      S.insert(N);
+    return S;
+  }();
+  std::string Out = Buf.substr(0, From);
+  StringRef Rest = StringRef(Buf).substr(From);
+  while (!Rest.empty()) {
+    auto [Line, Tail] = Rest.split('\n');
+    Rest = Tail;
+    StringRef Name = Line;
+    if (Name.consume_front("#define ")) {
+      Name = Name.take_until([](char C) { return C == ' ' || C == '('; });
+      if (Drop.contains(Name))
+        continue;
+    }
+    Out += Line;
+    Out += '\n';
+  }
+  Buf = std::move(Out);
+}
+
 void clang::InitializePreprocessor(Preprocessor &PP,
                                    const PreprocessorOptions &InitOpts,
                                    const PCHContainerReader &PCHContainerRdr,
@@ -1868,6 +1974,10 @@ void clang::InitializePreprocessor(Preprocessor &PP,
   // -fprofile[-instr]-generate/-fcs-profile-generate/-fprofile[-instr]-use,
   // hence they are not guarded by InitOpts.UsePredefines.
   InitializePGOProfileMacros(CodeGenOpts, Builder);
+
+  if (InitOpts.UsePredefines && LangOpts.MSVCCompat &&
+      !InitOpts.MSClangIdentity)
+    dropCLPredefines(PredefineBuffer, 0);
 
   // Add on the predefines from the driver.  Wrap in a #line directive to report
   // that they come from the command line.

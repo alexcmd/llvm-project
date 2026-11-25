@@ -3317,6 +3317,21 @@ void Driver::BuildInputs(const ToolChain &TC, DerivedArgList &Args,
         }
       }
 
+      // CL-MODULE-OPTIONS: cl compiles an .ixx file, and every source given
+      // with /interface or /internalPartition, as a C++ module unit, /TP or
+      // not. /scanDependencies scans it as any other C++ source: the one
+      // compile job it reads must be the one that gives the object.
+      if (IsCLMode() && (Ty == types::TY_CXX || Ty == types::TY_CXXModule)) {
+        const Arg *Scan =
+            Args.getLastArgNoClaim(options::OPT__SLASH_scanDependencies);
+        if (Scan && Scan->getValue()[0] != '\0')
+          Ty = types::TY_CXX;
+        else if (llvm::sys::path::extension(Value).equals_insensitive(".ixx") ||
+                 Args.hasArgNoClaim(options::OPT__SLASH_interface,
+                                    options::OPT__SLASH_internalPartition))
+          Ty = types::TY_CXXModule;
+      }
+
       if ((Ty == types::TY_C || Ty == types::TY_CXX) &&
           Args.hasArgNoClaim(options::OPT_hipstdpar))
         Ty = types::TY_HIP;

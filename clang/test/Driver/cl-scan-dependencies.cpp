@@ -127,8 +127,65 @@
 // RUN: FileCheck %s --check-prefix=IMPLUNIT --input-file=implunit.json
 // IMPLUNIT-NOT:  provides
 // IMPLUNIT:      "requires": [
-// IMPLUNIT-DAG:      "logical-name": "greet"
-// IMPLUNIT-DAG:      "logical-name": "greet:impl"
+// IMPLUNIT-NEXT:   {
+// IMPLUNIT-NEXT:     "logical-name": "greet"
+// IMPLUNIT-NEXT:   },
+// IMPLUNIT-NEXT:   {
+// IMPLUNIT-NEXT:     "logical-name": "greet:impl"
+// IMPLUNIT-NEXT:   }
+// IMPLUNIT-NEXT: ]
+
+// An .ixx file is scanned as C++ without /TP, also with the module options
+// of the compile beside it.
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc /nologo /std:c++latest \
+// RUN:   /scanDependencies ixx.json /c greet.ixx /interface 2>&1 | count 0
+// RUN: FileCheck %s --check-prefix=IXX --input-file=ixx.json
+// IXX:      "primary-output": "greet.obj",
+// IXX:      "logical-name": "greet",
+// IXX-NEXT: "source-path": "{{.*}}greet.ixx",
+// IXX-NEXT: "is-interface": true
+
+// /sourceDependencies beside the scan is written and is an output.
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc /nologo /TP /std:c++latest \
+// RUN:   /scanDependencies sd.json /sourceDependencies sd.deps.json /c plain.cpp
+// RUN: FileCheck %s --check-prefix=SRCDEP --input-file=sd.json
+// RUN: FileCheck %s --check-prefix=SRCDEP-FILE --input-file=sd.deps.json
+// SRCDEP:      "outputs": [
+// SRCDEP-NEXT:   "sd.json",
+// SRCDEP-NEXT:   "sd.deps.json"
+// SRCDEP-NEXT: ],
+// SRCDEP-FILE: "Includes": [
+// SRCDEP-FILE-NEXT: "{{.*}}h1.h"
+
+// Header unit imports: the header as written, where it was found and how it
+// was looked up. Nothing has to be built for the scan.
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc /nologo /TP /std:c++latest \
+// RUN:   /scanDependencies hu.json /c hu.cpp /Iinc 2>&1 | count 0
+// RUN: FileCheck %s --check-prefix=HU --input-file=hu.json
+// HU:      "requires": [
+// HU-NEXT:   {
+// HU-NEXT:     "logical-name": "h1.h",
+// HU-NEXT:     "source-path": "{{.*}}h1.h",
+// HU-NEXT:     "lookup-method": "include-quote",
+// HU-NEXT:     "unique-on-source-path": true
+// HU-NEXT:   },
+// HU-NEXT:   {
+// HU-NEXT:     "logical-name": "sys.h",
+// HU-NEXT:     "source-path": "{{.*}}inc{{.*}}sys.h",
+// HU-NEXT:     "lookup-method": "include-angle",
+// HU-NEXT:     "unique-on-source-path": true
+// HU-NEXT:   },
+// HU-NEXT:   {
+// HU-NEXT:     "logical-name": "greet"
+// HU-NEXT:   }
+// HU-NEXT: ]
+
+// cl scans C++ only: for a C source it is C1007 from the C front end and no
+// file.
+// RUN: not %clang_cl --target=x86_64-pc-windows-msvc /nologo /TC \
+// RUN:   /scanDependencies c.json /c plain.cpp 2>&1 | FileCheck %s --check-prefix=TC
+// RUN: not ls c.json
+// TC: c1: fatal error C1007: unrecognized flag '-scanDependenciesc.json' in 'c1'
 
 // A header that is not found fails the scan (exit 2, as every cl error) and
 // leaves the file empty.
@@ -157,6 +214,15 @@
 
 //--- h1.h
 inline int f() { return 0; }
+
+//--- inc/sys.h
+inline int s() { return 0; }
+
+//--- hu.cpp
+import "h1.h";
+import <sys.h>;
+import greet;
+int main() { return f() + s(); }
 
 //--- plain.cpp
 #include "h1.h"

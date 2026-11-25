@@ -9907,6 +9907,12 @@ def _SLASH_sourceDependencies : CLJoinedOrSeparate<"sourceDependencies">;
 // cl.exe takes an argument for these and gives D8004 without one (Clang.cpp).
 def _SLASH_fileMapping : CLJoinedOrSeparate<"fileMapping">;
 def _SLASH_ifcOutput : CLJoinedOrSeparate<"ifcOutput">;
+// CL-MODULE-OPTIONS: the sources are C++ module units, whatever their
+// extension and also with /TP (Driver.cpp); as .ixx is without them.
+def _SLASH_interface : CLFlag<"interface">,
+  HelpText<"Treat the source files as module interface units">;
+def _SLASH_internalPartition : CLFlag<"internalPartition">,
+  HelpText<"Treat the source files as module partition implementation units">;
 def _SLASH_scanDependencies : CLJoinedOrSeparate<"scanDependencies">;
 def _SLASH_dA : CLJoinedOrSeparate<"dA">;
 def _SLASH_sourceDependenciesDirectives : CLJoinedOrSeparate<"sourceDependencies:directives">;

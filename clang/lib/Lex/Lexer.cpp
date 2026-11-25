@@ -3300,6 +3300,10 @@ std::optional<Token> Lexer::peekNextPPToken() {
     Token Result;
     (void)convertDependencyDirectiveToken(
         DepDirectives.front().Tokens[NextDepDirectiveTokenIndex], Result);
+    // The header of 'import "header";' was scanned as a string literal; it
+    // is a header-name where one is expected, as it is for a normal lexer.
+    if (ParsingFilename && Result.is(tok::string_literal))
+      Result.setKind(tok::header_name);
     return Result;
   }
 

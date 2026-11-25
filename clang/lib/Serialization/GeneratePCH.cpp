@@ -19,6 +19,7 @@
 #include "clang/Sema/SemaConsumer.h"
 #include "clang/Serialization/ASTWriter.h"
 #include "llvm/Bitstream/BitstreamWriter.h"
+#include "llvm/Support/Path.h"
 
 using namespace clang;
 
@@ -123,11 +124,21 @@ void CXX20ModulesGenerator::HandleTranslationUnit(ASTContext &Ctx) {
   if (!isComplete())
     return;
 
+  // CL-MODULE-OPTIONS: an output that ends in a path separator is a directory
+  // (cl /ifcOutput <dir>, or no /ifcOutput): the file is named after the
+  // module as cl names it, <module>.ifc with '-' before the partition.
+  std::string OutputFile = getOutputFile().str();
+  if (!OutputFile.empty() && llvm::sys::path::is_separator(OutputFile.back())) {
+    std::string Name = getEmittingModule(Ctx)->getFullModuleName();
+    llvm::replace(Name, ':', '-');
+    OutputFile += Name + ".ifc";
+  }
+
   std::error_code EC;
-  auto OS = std::make_unique<llvm::raw_fd_ostream>(getOutputFile(), EC);
+  auto OS = std::make_unique<llvm::raw_fd_ostream>(OutputFile, EC);
   if (EC) {
     getDiagnostics().Report(diag::err_fe_unable_to_open_output)
-        << getOutputFile() << EC.message() << "\n";
+        << OutputFile << EC.message() << "\n";
     return;
   }
 

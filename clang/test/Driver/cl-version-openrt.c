@@ -16,8 +16,19 @@
 // UNK-NOT: clang version
 // UNK: warning: unknown argument ignored in clang-cl: '--version'
 // UNK: error: no input files
+// UNK-NOT: clang version
 
 // With a source file it still compiles, as cl does.
-// RUN: %clang_cl --version /Zs -- %s 2>&1 | FileCheck %s --check-prefix=SRC
+// RUN: %clang_cl --version /DCL_VERSION_COMPILED /Zs -- %s 2>&1 | FileCheck %s --check-prefix=SRC
 // SRC-NOT: clang version
 // SRC: warning: unknown argument ignored in clang-cl: '--version'
+// SRC: warning: cl-version-openrt compiled
+// SRC-NOT: clang version
+
+// A /clang:--version alongside keeps the clang output (and a bare one is not
+// diagnosed then); a --version from a config file counts as bare.
+// RUN: %clang_cl --version /clang:--version | FileCheck %s
+
+#ifdef CL_VERSION_COMPILED
+#pragma message("cl-version-openrt compiled")
+#endif

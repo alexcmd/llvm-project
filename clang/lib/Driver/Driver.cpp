@@ -1481,8 +1481,11 @@ Compilation *Driver::BuildCompilation(ArrayRef<const char *> ArgList) {
   // probes the generic ASM compiler with --version and takes "clang version"
   // as Clang, which mixes its Clang and MSVC rules (C/C++ are MSVC here).
   // With the clang identity hidden (cl mode default), a bare --version is an
-  // unknown option; /clang:--version and -fms-clang-identity keep it.
-  // Collected before the /clang: pass-through args are appended.
+  // unknown option; /clang:--version and -fms-clang-identity keep it (with a
+  // /clang:--version present a bare one is left alone). A --version from a
+  // config file counts as bare. Collected before the /clang: pass-through
+  // args are appended. The identity default here (false) must follow
+  // CLModeIdentity in ToolChains/Clang.cpp (msClangIdentity).
   SmallVector<Arg *, 2> CLBareVersion;
   if (IsCLMode() && !ContainsError)
     for (Arg *A : Args.filtered(options::OPT__version))

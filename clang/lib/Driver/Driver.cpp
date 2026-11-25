@@ -1476,6 +1476,18 @@ Compilation *Driver::BuildCompilation(ArrayRef<const char *> ArgList) {
       if (!Opt->getOption().matches(options::OPT_config))
         appendOneArg(Args, Opt);
 
+  // CL-IDENTITY: cl.exe has no --version (D9002 "ignoring unknown option",
+  // then D8003 without a source file; with one it still compiles). CMake
+  // probes the generic ASM compiler with --version and takes "clang version"
+  // as Clang, which mixes its Clang and MSVC rules (C/C++ are MSVC here).
+  // With the clang identity hidden (cl mode default), a bare --version is an
+  // unknown option; /clang:--version and -fms-clang-identity keep it.
+  // Collected before the /clang: pass-through args are appended.
+  SmallVector<Arg *, 2> CLBareVersion;
+  if (IsCLMode() && !ContainsError)
+    for (Arg *A : Args.filtered(options::OPT__version))
+      CLBareVersion.push_back(A);
+
   // In CL mode, look for any pass-through arguments
   if (IsCLMode() && !ContainsError) {
     SmallVector<const char *, 16> CLModePassThroughArgList;
@@ -1494,6 +1506,22 @@ Compilation *Driver::BuildCompilation(ArrayRef<const char *> ArgList) {
       if (!ContainsError)
         for (auto *Opt : *CLModePassThroughOptions)
           appendOneArg(Args, Opt);
+    }
+  }
+
+  if (!CLBareVersion.empty() &&
+      !Args.hasFlag(options::OPT_fms_clang_identity,
+                    options::OPT_fno_ms_clang_identity, false)) {
+    bool PassThroughVersion = false;
+    for (const Arg *A : Args.filtered(options::OPT__version))
+      if (!llvm::is_contained(CLBareVersion, A))
+        PassThroughVersion = true;
+    if (!PassThroughVersion) {
+      for (Arg *A : CLBareVersion) {
+        A->claim();
+        Diag(diag::warn_drv_unknown_argument_clang_cl) << A->getAsString(Args);
+      }
+      Args.eraseArg(options::OPT__version);
     }
   }
 

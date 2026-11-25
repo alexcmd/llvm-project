@@ -785,7 +785,7 @@
 // RUN:     -fno-wrapv \
 // RUN:     -fwrapv-pointer \
 // RUN:     -fno-wrapv-pointer \
-// RUN:     --version \
+// RUN:     /clang:--version \
 // RUN:     --warning-suppression-mappings=foo \
 // RUN:     -Werror /Zs -- %s 2>&1
 

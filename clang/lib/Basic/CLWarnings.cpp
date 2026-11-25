@@ -87,6 +87,8 @@ clang::diagGroupFromCLWarningID(unsigned CLWarningID) {
   case 4548: Name = "unused-comma-left-operand"; break;
   case 4554: Name = "shift-op-parentheses"; break;
   case 4595: Name = "inline-new-delete"; break;
+  // CL-DX-EXPLICIT-INST-UNDEFINED: undefined member explicitly instantiated.
+  case 4661: Name = "microsoft-explicit-instantiation-undefined-member"; break;
   case 4596: Name = "microsoft-extra-qualification"; break;
   case 4625: Name = "defaulted-function-deleted"; break;
   case 4701: Name = "sometimes-uninitialized"; break;
@@ -226,6 +228,7 @@ static const CLWarningLevel CLLevels[] = {
     // CL-DX-*: cl 19.44 is silent on these Microsoft extensions at /W4
     // (main-return-type: without /permissive-, see Clang.cpp).
     {"microsoft-typedef-access", 0, nullptr, nullptr},
+    {"microsoft-explicit-instantiation-undefined", 0, nullptr, nullptr},
     // Off: the cl.exe counterpart is off by default (enable via /w<l><n>).
     {"cast-function-type-mismatch", 0, nullptr, nullptr},
     {"comment", 0, nullptr, nullptr},
@@ -271,6 +274,8 @@ static const CLWarningLevel CLLevels[] = {
     {"unknown-attributes", 3, nullptr, nullptr},
     {"unused-label", 3, nullptr, nullptr},
     {"unused-variable", 3, nullptr, nullptr},
+    // CL-DX-EXPLICIT-INST-UNDEFINED: C4661, level 1.
+    {"microsoft-explicit-instantiation-undefined-member", 1, nullptr, nullptr},
     // CL-DX-PERMISSIVE / CL-DX-CAST-RVALUE-REF: C4238, level 4.
     {"address-of-temporary", 4, nullptr, nullptr},
     {"microsoft-rvalue-cast-to-reference", 4, nullptr, nullptr},

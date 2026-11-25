@@ -5650,10 +5650,11 @@ void Sema::InstantiateFunctionDefinition(SourceLocation PointOfInstantiation,
           Function->getInstantiatedFromMemberFunction(), PatternDecl,
           PatternDef, TSK,
           /*Complain*/ DefinitionRequired, &Unreachable)) {
-    if (DefinitionRequired)
-      Function->setInvalidDecl();
-    else if (TSK == TSK_ExplicitInstantiationDefinition ||
-             (Function->isConstexpr() && !Recursive)) {
+    if (DefinitionRequired) {
+      if (!isMSUndefinedExplicitInstantiation(Function, PatternDef, TSK))
+        Function->setInvalidDecl();
+    } else if (TSK == TSK_ExplicitInstantiationDefinition ||
+               (Function->isConstexpr() && !Recursive)) {
       // Try again at the end of the translation unit (at which point a
       // definition will be required).
       assert(!Recursive);

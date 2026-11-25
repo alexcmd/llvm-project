@@ -1706,6 +1706,12 @@ def MicrosoftRvalueCastToReference :
     DiagGroup<"microsoft-rvalue-cast-to-reference">;
 // CL-DX-TYPEDEF-ACCESS: typedef public T Name;
 def MicrosoftTypedefAccess : DiagGroup<"microsoft-typedef-access">;
+// CL-DX-EXPLICIT-INST-UNDEFINED: explicit instantiation without a definition;
+// cl is silent for a function template and reports C4661 for a member.
+def MicrosoftExplicitInstantiationUndefined :
+    DiagGroup<"microsoft-explicit-instantiation-undefined">;
+def MicrosoftExplicitInstantiationUndefinedMember :
+    DiagGroup<"microsoft-explicit-instantiation-undefined-member">;
 
 // Aliases.
 def : DiagGroup<"msvc-include", [MicrosoftInclude]>;
@@ -1726,7 +1732,9 @@ def Microsoft : DiagGroup<"microsoft",
      MicrosoftInitFromPredefined, MicrosoftStringLiteralFromPredefined,
      MicrosoftInconsistentDllImport, MicrosoftInlineOnNonFunction,
      MicrosoftEmptyEnum, MicrosoftLambdaAttribute,
-     MicrosoftRvalueCastToReference, MicrosoftTypedefAccess]>;
+     MicrosoftRvalueCastToReference, MicrosoftTypedefAccess,
+     MicrosoftExplicitInstantiationUndefined,
+     MicrosoftExplicitInstantiationUndefinedMember]>;
 
 def ClangClPch : DiagGroup<"clang-cl-pch">;
 

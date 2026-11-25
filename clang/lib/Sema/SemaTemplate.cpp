@@ -836,6 +836,17 @@ Sema::BuildSubstNonTypeTemplateParmExpr(Decl *AssociatedDecl, unsigned Index,
       AssociatedDecl, ParamType, Index, PackIndex, Final);
 }
 
+bool Sema::isMSUndefinedExplicitInstantiation(
+    const NamedDecl *Instantiation, const NamedDecl *PatternDef,
+    TemplateSpecializationKind TSK) const {
+  if (!getLangOpts().MSVCCompat || PatternDef ||
+      TSK != TSK_ExplicitInstantiationDefinition)
+    return false;
+  return isa<FunctionDecl>(Instantiation) ||
+         (isa<VarDecl>(Instantiation) &&
+          !isa<VarTemplateSpecializationDecl>(Instantiation));
+}
+
 bool Sema::DiagnoseUninstantiableTemplate(SourceLocation PointOfInstantiation,
                                           NamedDecl *Instantiation,
                                           bool InstantiatedFromMember,
@@ -869,6 +880,26 @@ bool Sema::DiagnoseUninstantiableTemplate(SourceLocation PointOfInstantiation,
 
   if (!Complain || (PatternDef && PatternDef->isInvalidDecl()))
     return true;
+
+  // CL-DX-EXPLICIT-INST-UNDEFINED: cl 19.44 accepts an explicit instantiation
+  // definition whose function template has no definition in the translation
+  // unit (silent at /Wall and with /permissive-), and reports C4661 (level 1)
+  // for an undefined member function or static data member of a class
+  // template. Nothing is instantiated; the callers leave the declaration
+  // valid (isMSUndefinedExplicitInstantiation).
+  if (isMSUndefinedExplicitInstantiation(Instantiation, PatternDef, TSK)) {
+    if (!InstantiatedFromMember && isa<FunctionDecl>(Instantiation))
+      Diag(PointOfInstantiation,
+           diag::ext_ms_explicit_instantiation_undefined_func_template)
+          << Pattern;
+    else
+      Diag(PointOfInstantiation,
+           diag::ext_ms_explicit_instantiation_undefined_member)
+          << (isa<FunctionDecl>(Instantiation) ? 0 : 1)
+          << Instantiation->getDeclName() << Instantiation->getDeclContext();
+    Diag(Pattern->getLocation(), diag::note_explicit_instantiation_here);
+    return true;
+  }
 
   CanQualType InstantiationTy;
   if (TagDecl *TD = dyn_cast<TagDecl>(Instantiation))

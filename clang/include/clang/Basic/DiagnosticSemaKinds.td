@@ -6193,6 +6193,15 @@ def err_explicit_instantiation_undefined_member : Error<
   "static data member}0 %1 of class template %2">;
 def err_explicit_instantiation_undefined_func_template : Error<
   "explicit instantiation of undefined function template %0">;
+def ext_ms_explicit_instantiation_undefined_func_template : ExtWarn<
+  "explicit instantiation of undefined function template %0 instantiates "
+  "nothing; Microsoft extension">,
+  InGroup<MicrosoftExplicitInstantiationUndefined>;
+def ext_ms_explicit_instantiation_undefined_member : ExtWarn<
+  "explicit instantiation of undefined %select{member function|"
+  "static data member}0 %1 of class template %2 instantiates nothing; "
+  "Microsoft extension">,
+  InGroup<MicrosoftExplicitInstantiationUndefinedMember>;
 def err_explicit_instantiation_undefined_var_template : Error<
   "explicit instantiation of undefined variable template %q0">;
 def err_explicit_instantiation_declaration_after_definition : Error<

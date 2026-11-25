@@ -11668,6 +11668,13 @@ public:
       const NamedDecl *PatternDef, TemplateSpecializationKind TSK,
       bool Complain = true, bool *Unreachable = nullptr);
 
+  /// CL-DX-EXPLICIT-INST-UNDEFINED: an explicit instantiation definition of a
+  /// function or static data member without a definition, which Microsoft
+  /// compatibility accepts with a warning (no instantiation, decl stays valid).
+  bool isMSUndefinedExplicitInstantiation(const NamedDecl *Instantiation,
+                                          const NamedDecl *PatternDef,
+                                          TemplateSpecializationKind TSK) const;
+
   /// DiagnoseTemplateParameterShadow - Produce a diagnostic complaining
   /// that the template parameter 'PrevDecl' is being shadowed by a new
   /// declaration at location Loc. Returns true to indicate that this is

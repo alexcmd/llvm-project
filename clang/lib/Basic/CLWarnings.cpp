@@ -223,6 +223,9 @@ static const CLWarningLevel CLLevels[] = {
     {"typename-missing", 0, nullptr, nullptr},
     // UE-WD5054: cl has no counterpart of the ?: enum mismatch.
     {"deprecated-enum-compare-conditional", 0, nullptr, nullptr},
+    // CL-DX-*: cl 19.44 is silent on these Microsoft extensions at /W4
+    // (main-return-type: without /permissive-, see Clang.cpp).
+    {"microsoft-typedef-access", 0, nullptr, nullptr},
     // Off: the cl.exe counterpart is off by default (enable via /w<l><n>).
     {"cast-function-type-mismatch", 0, nullptr, nullptr},
     {"comment", 0, nullptr, nullptr},

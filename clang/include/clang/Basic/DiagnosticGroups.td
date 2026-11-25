@@ -1704,6 +1704,8 @@ def MicrosoftLambdaAttribute : DiagGroup<"microsoft-lambda-attribute">;
 // CL-DX-CAST-RVALUE-REF: (T&)prvalue, cl C4238.
 def MicrosoftRvalueCastToReference :
     DiagGroup<"microsoft-rvalue-cast-to-reference">;
+// CL-DX-TYPEDEF-ACCESS: typedef public T Name;
+def MicrosoftTypedefAccess : DiagGroup<"microsoft-typedef-access">;
 
 // Aliases.
 def : DiagGroup<"msvc-include", [MicrosoftInclude]>;
@@ -1724,7 +1726,7 @@ def Microsoft : DiagGroup<"microsoft",
      MicrosoftInitFromPredefined, MicrosoftStringLiteralFromPredefined,
      MicrosoftInconsistentDllImport, MicrosoftInlineOnNonFunction,
      MicrosoftEmptyEnum, MicrosoftLambdaAttribute,
-     MicrosoftRvalueCastToReference]>;
+     MicrosoftRvalueCastToReference, MicrosoftTypedefAccess]>;
 
 def ClangClPch : DiagGroup<"clang-cl-pch">;
 

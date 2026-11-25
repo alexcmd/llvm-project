@@ -4092,6 +4092,23 @@ void Parser::ParseDeclarationSpecifiers(
       (void)ConsumeToken();
       continue;
 
+    // CL-DX-TYPEDEF-ACCESS: cl 19.44 accepts and ignores an access specifier
+    // between 'typedef' and the type, at namespace and class scope
+    // ("typedef public std::unique_ptr<...> Name;"), silent at /W4 and with
+    // /permissive-; after the type ("int typedef public R;") it is C2059.
+    // (kw_private comes here from its OpenCL case below.)
+    case tok::kw_public:
+    case tok::kw_protected:
+    MSTypedefAccess:
+      if (!getLangOpts().MSVCCompat ||
+          DS.getStorageClassSpec() != DeclSpec::SCS_typedef ||
+          DS.hasTypeSpecifier())
+        goto DoneWithDeclSpec;
+      Diag(Tok, diag::ext_ms_typedef_access_specifier)
+          << Tok.getIdentifierInfo();
+      ConsumeToken();
+      continue;
+
     // storage-class-specifier
     case tok::kw_typedef:
       isInvalid = DS.SetStorageClassSpec(Actions, DeclSpec::SCS_typedef, Loc,
@@ -4648,7 +4665,7 @@ void Parser::ParseDeclarationSpecifiers(
       // It's fine (but redundant) to check this for __generic on the
       // fallthrough path; we only form the __generic token in OpenCL mode.
       if (!getLangOpts().OpenCL)
-        goto DoneWithDeclSpec;
+        goto MSTypedefAccess;
       [[fallthrough]];
     case tok::kw___private:
     case tok::kw___global:

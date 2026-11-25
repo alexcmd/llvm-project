@@ -1091,6 +1091,9 @@ def ext_ms_sealed_keyword : ExtWarn<
 def ext_ms_abstract_keyword : ExtWarn<
   "'abstract' keyword is a Microsoft extension">,
   InGroup<MicrosoftAbstract>;
+def ext_ms_typedef_access_specifier : ExtWarn<
+  "access specifier %0 after 'typedef' is ignored; Microsoft extension">,
+  InGroup<MicrosoftTypedefAccess>;
 
 def err_access_specifier_interface : Error<
   "interface types cannot specify '%select{private|protected}0' access">;

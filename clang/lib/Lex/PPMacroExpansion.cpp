@@ -344,8 +344,15 @@ void Preprocessor::RegisterBuiltinMacros() {
     Ident__has_cpp_attribute = nullptr;
 
   // GCC Extensions.
-  Ident__BASE_FILE__ = RegisterBuiltinMacro("__BASE_FILE__");
-  Ident__INCLUDE_LEVEL__ = RegisterBuiltinMacro("__INCLUDE_LEVEL__");
+  // CL-DX-FILE-NAME: cl 19.44 has none of __BASE_FILE__, __INCLUDE_LEVEL__
+  // and __FILE_NAME__ (they stay identifiers, observed); without the clang
+  // identity (cl mode default) they are not registered. Nothing in the
+  // resource headers uses them.
+  bool GNUFileMacros = getPreprocessorOpts().MSClangIdentity;
+  Ident__BASE_FILE__ =
+      GNUFileMacros ? RegisterBuiltinMacro("__BASE_FILE__") : nullptr;
+  Ident__INCLUDE_LEVEL__ =
+      GNUFileMacros ? RegisterBuiltinMacro("__INCLUDE_LEVEL__") : nullptr;
   if (getPreprocessorOpts().InitDateTimeMacros != DateTimeInitKind::Undefined)
     Ident__TIMESTAMP__ = RegisterBuiltinMacro("__TIMESTAMP__");
   else
@@ -361,7 +368,8 @@ void Preprocessor::RegisterBuiltinMacros() {
   }
 
   // Clang Extensions.
-  Ident__FILE_NAME__ = RegisterBuiltinMacro("__FILE_NAME__");
+  Ident__FILE_NAME__ =
+      GNUFileMacros ? RegisterBuiltinMacro("__FILE_NAME__") : nullptr;
   Ident__has_feature = RegisterBuiltinMacro("__has_feature");
   Ident__has_extension = RegisterBuiltinMacro("__has_extension");
   Ident__has_builtin = RegisterBuiltinMacro("__has_builtin");

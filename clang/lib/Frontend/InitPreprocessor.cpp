@@ -1301,7 +1301,10 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
   if (!LangOpts.CharIsSigned)
     Builder.defineMacro("__CHAR_UNSIGNED__");
 
-  if (!TargetInfo::isTypeSigned(TI.getWCharType()))
+  // CL-PREDEF-WCHAR: cl has no such macro and nothing of ours tests it, so
+  // without the clang identity it is left out (a probe that prints the
+  // compiler's macros reports it otherwise).
+  if (ClangIdentity && !TargetInfo::isTypeSigned(TI.getWCharType()))
     Builder.defineMacro("__WCHAR_UNSIGNED__");
 
   if (!TargetInfo::isTypeSigned(TI.getWIntType()))

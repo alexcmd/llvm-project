@@ -3591,6 +3591,14 @@ dll version.}]>;
 def fms_omit_default_lib : Joined<["-"], "fms-omit-default-lib">,
   Group<f_Group>, Flags<[]>,
   Visibility<[ClangOption, CLOption]>;
+// CL-DX-REF-BINDING: cl permissive mode (no /permissive-, no
+// /Zc:referenceBinding) binds non-const lvalue references to class rvalues.
+defm ms_rvalue_ref_binding : BoolFOption<"ms-rvalue-ref-binding",
+  LangOpts<"MSRvalueRefBinding">, DefaultFalse,
+  PosFlag<SetTrue, [], [ClangOption, CLOption, CC1Option],
+          "Let a non-const lvalue reference bind a class rvalue, as cl does "
+          "without /permissive- or /Zc:referenceBinding (default in cl mode)">,
+  NegFlag<SetFalse, [], [ClangOption, CLOption]>>;
 defm ms_predeclare_eh_types : BoolFOption<"ms-predeclare-eh-types",
   PreprocessorOpts<"MSPredeclareEHTypes">, DefaultFalse,
   PosFlag<SetTrue, [], [ClangOption, CLOption, CC1Option],
@@ -9476,6 +9484,11 @@ def _SLASH_Zc_char8_t_ : CLFlag<"Zc:char8_t-">,
   Alias<fno_char8__t>;
 // UE-ZC-STRICTSTRINGS-OFF: last of /Zc:strictStrings[-] and /permissive[-]
 // (which imply it on and off) wins, as in cl (Clang.cpp).
+// CL-DX-REF-BINDING: last of /Zc:referenceBinding[-] and /permissive[-] wins.
+def _SLASH_Zc_referenceBinding : CLFlag<"Zc:referenceBinding">,
+  HelpText<"A non-const lvalue reference does not bind a temporary">;
+def _SLASH_Zc_referenceBinding_ : CLFlag<"Zc:referenceBinding-">,
+  HelpText<"A non-const lvalue reference may bind a class temporary (default)">;
 def _SLASH_Zc_strictStrings : CLFlag<"Zc:strictStrings">,
   HelpText<"Treat string literals as const (error on conversion to char *)">;
 def _SLASH_Zc_strictStrings_ : CLFlag<"Zc:strictStrings-">,

@@ -8568,6 +8568,10 @@ def note_type_incomplete : Note<"%0 is incomplete">;
 def err_bad_cxx_cast_rvalue : Error<
   "%select{const_cast|static_cast|reinterpret_cast|dynamic_cast|C-style cast|"
   "functional-style cast|addrspace_cast}0 from rvalue to reference type %2">;
+def ext_ms_rvalue_to_nonconst_lref : ExtWarn<
+  "non-const lvalue reference %1 binds a temporary of type %0; "
+  "Microsoft extension">,
+  InGroup<DiagGroup<"microsoft-reference-binding">>;
 def ext_ms_cast_rvalue_to_reference : ExtWarn<
   "%select{C-style|functional-style}0 cast from rvalue of type %1 to "
   "reference type %2 binds a temporary; Microsoft extension">,

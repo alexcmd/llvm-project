@@ -5707,12 +5707,29 @@ static void TryReferenceInitializationCore(Sema &S,
     }
   }
 
+  // CL-DX-REF-BINDING: cl 19.44 without /permissive- or /Zc:referenceBinding
+  // binds a non-const, non-volatile lvalue reference to a class rvalue of the
+  // same or a derived type, with C4239 at /W4 (observed for A& a = A(),
+  // auto& f = [&]{...}, and arguments); not to a non-class rvalue or through a
+  // conversion. Not in a SFINAE context (type traits are unchanged). The
+  // reference binds to the materialized temporary below, as for const T&.
+  bool MSRvalueBinding =
+      isLValueRef && S.getLangOpts().MSRvalueRefBinding &&
+      !T1Quals.hasConst() && !T1Quals.hasVolatile() &&
+      InitCategory.isRValue() && T2->isRecordType() &&
+      RefRelationship == Sema::Ref_Compatible &&
+      !isNonReferenceableGLValue(Initializer) && !S.isSFINAEContext();
+  if (MSRvalueBinding)
+    S.Diag(Initializer->getBeginLoc(), diag::ext_ms_rvalue_to_nonconst_lref)
+        << T2 << S.Context.getLValueReferenceType(cv1T1)
+        << Initializer->getSourceRange();
+
   //     - Otherwise, the reference shall be an lvalue reference to a
   //       non-volatile const type (i.e., cv1 shall be const), or the reference
   //       shall be an rvalue reference.
   //       For address spaces, we interpret this to mean that an addr space
   //       of a reference "cv1 T1" is a superset of addr space of "cv2 T2".
-  if (isLValueRef &&
+  if (isLValueRef && !MSRvalueBinding &&
       !(T1Quals.hasConst() && !T1Quals.hasVolatile() &&
         T1Quals.isAddressSpaceSupersetOf(T2Quals, S.getASTContext()))) {
     if (S.Context.getCanonicalType(T2) == S.Context.OverloadTy)

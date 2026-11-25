@@ -256,6 +256,7 @@ void StandardConversionSequence::setAsIdentityConversion() {
   IsLvalueReference = true;
   BindsToFunctionLvalue = false;
   BindsToRvalue = false;
+  MSRvalueToNonConstLRef = false;
   BindsImplicitObjectArgumentWithoutRefQualifier = false;
   ObjCLifetimeConversionBinding = false;
   FromBracedInitList = false;
@@ -5530,6 +5531,7 @@ TryReferenceInit(Sema &S, Expr *Init, QualType DeclType,
     ICS.Standard.IsLvalueReference = !isRValRef;
     ICS.Standard.BindsToFunctionLvalue = T2->isFunctionType();
     ICS.Standard.BindsToRvalue = InitCategory.isRValue();
+    ICS.Standard.MSRvalueToNonConstLRef = false;
     ICS.Standard.BindsImplicitObjectArgumentWithoutRefQualifier = false;
     ICS.Standard.ObjCLifetimeConversionBinding =
         (RefConv & Sema::ReferenceConversions::ObjCLifetime) != 0;
@@ -5585,6 +5587,22 @@ TryReferenceInit(Sema &S, Expr *Init, QualType DeclType,
   //     -- Otherwise, the reference shall be an lvalue reference to a
   //        non-volatile const type (i.e., cv1 shall be const), or the reference
   //        shall be an rvalue reference.
+  // CL-DX-REF-BINDING: cl 19.44 without /permissive- or /Zc:referenceBinding
+  // binds a non-const, non-volatile lvalue reference to a class rvalue of the
+  // same or a derived type (C4239, level 4); not to a non-class rvalue or
+  // through a conversion (observed). Not in a SFINAE context, so type traits
+  // and substitution are unchanged; BestViableFunction keeps such candidates
+  // only when nothing else is viable (cl: f(A&) vs f(const A&), f(A&&) or
+  // f(...) picks the other one).
+  if (!isRValRef && S.getLangOpts().MSRvalueRefBinding &&
+      !T1.isConstQualified() && !T1.isVolatileQualified() &&
+      InitCategory.isRValue() && T2->isRecordType() &&
+      RefRelationship == Sema::Ref_Compatible && !S.isSFINAEContext()) {
+    SetAsReferenceBinding(/*BindsDirectly=*/true);
+    ICS.Standard.MSRvalueToNonConstLRef = true;
+    return ICS;
+  }
+
   if (!isRValRef && (!T1.isConstQualified() || T1.isVolatileQualified())) {
     if (InitCategory.isRValue() && RefRelationship != Sema::Ref_Incompatible)
       ICS.setBad(BadConversionSequence::lvalue_ref_to_rvalue, Init, DeclType);
@@ -11654,6 +11672,26 @@ OverloadingResult OverloadCandidateSet::BestViableFunctionImpl(
 
   if (S.getLangOpts().CUDA)
     CudaExcludeWrongSideCandidates(S, Candidates);
+
+  // CL-DX-REF-BINDING: a candidate that needs a non-const lvalue reference
+  // bound to an rvalue is a last resort: it stays viable only when no other
+  // candidate is.
+  if (S.getLangOpts().MSRvalueRefBinding) {
+    auto UsesMSBinding = [](const OverloadCandidate *C) {
+      return llvm::any_of(C->Conversions, [](const ImplicitConversionSequence &I) {
+        return I.isInitialized() && I.isStandard() &&
+               I.Standard.MSRvalueToNonConstLRef;
+      });
+    };
+    if (llvm::any_of(Candidates, [&](const OverloadCandidate *C) {
+          return C->Viable && !UsesMSBinding(C);
+        }))
+      for (OverloadCandidate *C : Candidates)
+        if (C->Viable && UsesMSBinding(C)) {
+          C->Viable = false;
+          C->FailureKind = ovl_fail_bad_conversion;
+        }
+  }
 
   Best = end();
   for (auto *Cand : Candidates) {

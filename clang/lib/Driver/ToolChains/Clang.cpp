@@ -6915,11 +6915,33 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   // /permissive-, which keeps the error and turns main-return-type on. Under
   // /WX the error stays, as cl's /W4 /WX would report C4238 as an error.
   bool CLPermissiveMinus = false;
+  // CL-DX-REF-BINDING: cl binds a non-const lvalue reference to a class
+  // rvalue (C4239) unless the last of /permissive-, /permissive,
+  // /Zc:referenceBinding and /Zc:referenceBinding- turns it off (observed:
+  // /permissive- /Zc:referenceBinding- and /Zc:referenceBinding /permissive
+  // both have it on).
+  bool CLRefBinding = true;
   for (Arg *A : Args.filtered(options::OPT__SLASH_permissive,
-                              options::OPT__SLASH_permissive_)) {
+                              options::OPT__SLASH_permissive_,
+                              options::OPT__SLASH_Zc_referenceBinding,
+                              options::OPT__SLASH_Zc_referenceBinding_)) {
     A->claim();
-    CLPermissiveMinus = A->getOption().matches(options::OPT__SLASH_permissive_);
+    if (A->getOption().matches(options::OPT__SLASH_permissive_) ||
+        A->getOption().matches(options::OPT__SLASH_permissive))
+      CLPermissiveMinus =
+          A->getOption().matches(options::OPT__SLASH_permissive_);
+    CLRefBinding =
+        A->getOption().matches(options::OPT__SLASH_permissive) ||
+        A->getOption().matches(options::OPT__SLASH_Zc_referenceBinding_);
   }
+  if (D.IsCLMode() && types::isCXX(Input.getType()) &&
+      Args.hasFlag(options::OPT_fms_rvalue_ref_binding,
+                   options::OPT_fno_ms_rvalue_ref_binding, CLRefBinding))
+    CmdArgs.push_back("-fms-rvalue-ref-binding");
+  else if (!D.IsCLMode() && Args.hasFlag(options::OPT_fms_rvalue_ref_binding,
+                                         options::OPT_fno_ms_rvalue_ref_binding,
+                                         false))
+    CmdArgs.push_back("-fms-rvalue-ref-binding");
   if (D.IsCLMode() && CLPermissiveMinus) {
     CLNamed.insert("address-of-temporary");
     CLNamed.insert("main-return-type");

@@ -366,6 +366,12 @@ class Sema;
     LLVM_PREFERRED_TYPE(bool)
     unsigned ObjCLifetimeConversionBinding : 1;
 
+    /// CL-DX-REF-BINDING: a non-const lvalue reference bound to a class
+    /// rvalue (Microsoft extension, C4239). Such a candidate is viable only
+    /// when no candidate is viable without it.
+    LLVM_PREFERRED_TYPE(bool)
+    unsigned MSRvalueToNonConstLRef : 1;
+
     /// Whether the source expression was originally a single element
     /// braced-init-list. Such a conversion is not a perfect match,
     /// as we prefer a std::initializer_list constructor over an exact match
@@ -423,7 +429,7 @@ class Sema;
     /// A conversion sequence is perfect if it is an identity conversion and
     /// the type of the source is the same as the type of the target.
     bool isPerfect(const ASTContext &C) const {
-      if (!isIdentityConversion())
+      if (!isIdentityConversion() || MSRvalueToNonConstLRef)
         return false;
 
       // We might prefer a std::initializer_list constructor,

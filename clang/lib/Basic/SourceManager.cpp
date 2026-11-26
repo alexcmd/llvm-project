@@ -19,6 +19,7 @@
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/MapVector.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/StringRef.h"
@@ -30,6 +31,7 @@
 #include "llvm/Support/Endian.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MemoryBuffer.h"
+#include "llvm/Support/TextEncoding.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
@@ -190,6 +192,19 @@ ContentCache::getBufferOrNone(DiagnosticsEngine &Diag, FileManager &FM,
     Diag.Report(Loc, diag::err_unsupported_bom)
       << InvalidBOM << ContentsEntry->getName();
     return std::nullopt;
+  }
+
+  // CL-EXEC-CHARSET: cl 19.44 reads a source without a UTF-8 byte order mark
+  // in the source character set (the ANSI code page by default, observed:
+  // L"\xC2\xA9" from such a file is L"\u00C2\u00A9"); it is converted to
+  // UTF-8 here, so the lexer and the execution character set see what cl
+  // sees.
+  if (SourceCharsetConverter && !BufStr.starts_with("\xEF\xBB\xBF") &&
+      llvm::any_of(BufStr, [](char C) { return (unsigned char)C >= 0x80; })) {
+    SmallString<0> Converted;
+    if (!SourceCharsetConverter->convert(BufStr, Converted))
+      Buffer = llvm::MemoryBuffer::getMemBufferCopy(
+          Converted, Buffer->getBufferIdentifier());
   }
 
   // Buffer has been validated.
@@ -405,6 +420,11 @@ void SourceManager::initializeForReplay(const SourceManager &Old) {
   }
 }
 
+void SourceManager::setSourceCharsetConverter(
+    std::unique_ptr<llvm::TextEncodingConverter> Converter) {
+  SourceCharsetConverter = std::move(Converter);
+}
+
 ContentCache &SourceManager::getOrCreateContentCache(FileEntryRef FileEnt,
                                                      bool isSystemFile) {
   // Do we already have information about this file?
@@ -431,6 +451,7 @@ ContentCache &SourceManager::getOrCreateContentCache(FileEntryRef FileEnt,
 
   Entry->IsFileVolatile = UserFilesAreVolatile && !isSystemFile;
   Entry->IsTransient = FilesAreTransient;
+  Entry->SourceCharsetConverter = SourceCharsetConverter.get();
   Entry->BufferOverridden |= FileEnt.isNamedPipe();
 
   return *Entry;

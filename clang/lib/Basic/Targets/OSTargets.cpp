@@ -13,6 +13,7 @@
 #include "AArch64.h"
 #include "clang/Basic/MacroBuilder.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/Support/TextEncoding.h"
 
 using namespace clang;
 using namespace clang::targets;
@@ -278,8 +279,14 @@ static void addVisualCDefines(const LangOptions &Opts, MacroBuilder &Builder) {
   // The value given is the Windows Code Page Identifier:
   // https://docs.microsoft.com/en-us/windows/win32/intl/code-page-identifiers
   //
-  // Clang currently only supports UTF-8, so we'll use 65001
-  Builder.defineMacro("_MSVC_EXECUTION_CHARACTER_SET", "65001");
+  // CL-EXEC-CHARSET: the code page of -fexec-charset (cl mode: windows-1252
+  // unless /utf-8 or /execution-charset:), 65001 for UTF-8.
+  std::optional<unsigned> ExecCP =
+      Opts.LiteralEncoding.empty()
+          ? std::optional<unsigned>(65001)
+          : llvm::getWindowsCodePage(Opts.LiteralEncoding);
+  Builder.defineMacro("_MSVC_EXECUTION_CHARACTER_SET",
+                      Twine(ExecCP ? *ExecCP : 65001));
 
   // As of version 19.15 (VS 2017 15.8), MSVC predefines this macro to indicate
   // whether the traditional or standards-conforming preprocessor is in use.

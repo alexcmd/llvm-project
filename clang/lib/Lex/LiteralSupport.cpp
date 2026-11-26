@@ -899,6 +899,12 @@ static void EncodeUCNEscape(const char *ThisTokBegin, const char *&ThisTokBuf,
     SmallString<4> CpConv;
     char *Cp = ResultBuf - bytesToWrite;
     auto EC = Converter->convert(StringRef(Cp, bytesToWrite), CpConv);
+    // CL-EXEC-CHARSET: a character the code page lacks is '?' (C4566).
+    if (EC == std::errc::result_out_of_range) {
+      if (Diags)
+        Diags->Report(Loc, diag::warn_exec_charset_unrepresentable);
+      EC = std::error_code();
+    }
     if (!EC) {
       memcpy(Cp, CpConv.data(), CpConv.size());
       ResultBuf = Cp + CpConv.size();
@@ -1945,6 +1951,11 @@ CharLiteralParser::CharLiteralParser(const char *begin, const char *end,
           assert(isOrdinary() && "Only ordinary characters are supported");
           SmallString<4> Converted;
           auto ErrorOrChar = Converter->convert(UTF8String, Converted);
+          // CL-EXEC-CHARSET: a character the code page lacks is '?' (C4566).
+          if (ErrorOrChar == std::errc::result_out_of_range) {
+            PP.Diag(Loc, diag::warn_exec_charset_unrepresentable);
+            ErrorOrChar = std::error_code();
+          }
           if (!ErrorOrChar) {
             for (int i = 0; tmp_out_start < buffer_begin;
                  ++tmp_out_start, ++i) {
@@ -2462,6 +2473,13 @@ bool StringLiteralParser::CopyStringFragment(
       SmallString<64> CpConv;
       char *Cp = ResultPtr - Fragment.size();
       auto EC = Converter->convert(Fragment, CpConv);
+      // CL-EXEC-CHARSET: a character the code page lacks is '?' (C4566).
+      if (EC == std::errc::result_out_of_range) {
+        if (Diags)
+          Diags->Report(Tok.getLocation(),
+                        diag::warn_exec_charset_unrepresentable);
+        EC = std::error_code();
+      }
       if (!EC) {
         memcpy(Cp, CpConv.data(), CpConv.size());
         ResultPtr = Cp + CpConv.size();

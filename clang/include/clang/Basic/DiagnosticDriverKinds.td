@@ -25,6 +25,9 @@ def warn_drv_cl_option_requires : Warning<
 def warn_drv_cl_options_global : Warning<
   "D9026 : options apply to entire command line">,
   InGroup<CLOverridingOption>, DefaultWarnNoWerror;
+// CL-EXEC-CHARSET: cl C3435.
+def err_drv_cl_charset_not_supported : Error<
+  "C3435 : character set '%0' is not supported">;
 def err_drv_cl_incompatible_options : Error<
   "D8016 : '%0' and '%1' command-line options are incompatible">;
 def warn_drv_cl_pd_requires_zc : Warning<

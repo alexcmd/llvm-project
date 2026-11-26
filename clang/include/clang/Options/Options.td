@@ -3572,6 +3572,12 @@ defm ms_volatile : BoolFOption<"ms-volatile",
 def fmsc_version : Joined<["-"], "fmsc-version=">, Group<f_Group>,
   Visibility<[ClangOption, CLOption]>,
   HelpText<"Microsoft compiler version number to report in _MSC_VER (0 = don't define it (default))">;
+// CL-EXEC-CHARSET: cl's source character set for files without a UTF-8 BOM.
+def fms_source_charset_EQ : Joined<["-"], "fms-source-charset=">,
+  Visibility<[CC1Option]>,
+  HelpText<"Read sources without a UTF-8 byte order mark in <encoding> "
+           "(cl mode: windows-1252 unless /utf-8 or /source-charset:utf-8)">,
+  MarshallingInfoString<FrontendOpts<"MSSourceCharset">>;
 def fms_compatibility_version
     : Joined<["-"], "fms-compatibility-version=">,
       Group<f_Group>,

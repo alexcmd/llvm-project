@@ -249,13 +249,13 @@
 // RUN: %clang_cl /EP /P /showIncludes -### -- %s 2>&1 | FileCheck -check-prefix=showIncludes_E %s
 // showIncludes_E-NOT: warning: argument unused during compilation: '--show-includes'
 
-// /source-charset: should warn on everything except UTF-8.
+// CL-EXEC-CHARSET: a character set cl does not support is C3435 (cl: utf-16).
 // RUN: not %clang_cl /source-charset:utf-16 -### -- %s 2>&1 | FileCheck -check-prefix=source-charset-utf-16 %s
-// source-charset-utf-16: invalid value 'utf-16' in '/source-charset:utf-16'
+// source-charset-utf-16: error: C3435 : character set 'utf-16' is not supported
 
-// /execution-charset: should warn on everything except UTF-8.
+// CL-EXEC-CHARSET: the same for /execution-charset:.
 // RUN: not %clang_cl /execution-charset:utf-16 -### -- %s 2>&1 | FileCheck -check-prefix=execution-charset-utf-16 %s
-// execution-charset-utf-16: invalid value 'utf-16' in '/execution-charset:utf-16'
+// execution-charset-utf-16: error: C3435 : character set 'utf-16' is not supported
 //
 // RUN: %clang_cl /Umymacro -### -- %s 2>&1 | FileCheck -check-prefix=U %s
 // RUN: %clang_cl /U mymacro -### -- %s 2>&1 | FileCheck -check-prefix=U %s

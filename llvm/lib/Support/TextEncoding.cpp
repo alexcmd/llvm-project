@@ -18,7 +18,12 @@
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Config/config.h"
 #include "llvm/Support/ConvertEBCDIC.h"
+#include "llvm/Support/ConvertUTF.h"
 #include <system_error>
+
+#ifdef _WIN32
+#include "llvm/Support/Windows/WindowsSupport.h"
+#endif
 
 #if HAVE_ICU
 #if HAVE_WINDOWS_ICU
@@ -58,6 +63,175 @@ static std::optional<TextEncoding> getKnownEncoding(StringRef Name) {
     return TextEncoding::IBM1047;
   return std::nullopt;
 }
+
+std::optional<unsigned> llvm::getWindowsCodePage(StringRef Name) {
+  std::string N = Name.lower();
+  StringRef S(N);
+  unsigned CP = 0;
+  if (S.consume_front(".") || S.consume_front("windows-")) {
+    if (S.empty() || S.getAsInteger(10, CP) || CP == 0)
+      return std::nullopt;
+    return CP;
+  }
+  if (S.consume_front("iso-8859-")) {
+    unsigned Part = 0;
+    if (S.getAsInteger(10, Part) || Part == 0 || Part > 16)
+      return std::nullopt;
+    return 28590 + Part;
+  }
+  static const struct {
+    const char *Name;
+    unsigned CP;
+  } Names[] = {{"utf-8", 65001},     {"utf8", 65001},
+               {"us-ascii", 20127},  {"ascii", 20127},
+               {"latin1", 28591},    {"shift_jis", 932},
+               {"shift-jis", 932},   {"gb2312", 936},
+               {"gbk", 936},         {"big5", 950},
+               {"ks_c_5601-1987", 949}, {"euc-kr", 51949},
+               {"euc-jp", 20932},    {"koi8-r", 20866},
+               {"ibm437", 437},      {"ibm850", 850}};
+  for (const auto &E : Names)
+    if (S == E.Name)
+      return E.CP;
+  return std::nullopt;
+}
+
+namespace {
+// openrt CL-EXEC-CHARSET: windows-1252, built in so that the cl default does
+// not depend on the host. 0x80-0x9F; 0x81, 0x8D, 0x8F, 0x90 and 0x9D map to
+// the C1 controls of the same value, as the Windows conversion does.
+const uint16_t Win1252High[32] = {
+    0x20AC, 0x0081, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021,
+    0x02C6, 0x2030, 0x0160, 0x2039, 0x0152, 0x008D, 0x017D, 0x008F,
+    0x0090, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014,
+    0x02DC, 0x2122, 0x0161, 0x203A, 0x0153, 0x009D, 0x017E, 0x0178};
+
+unsigned decode1252(unsigned char B) {
+  return B >= 0x80 && B < 0xA0 ? Win1252High[B - 0x80] : B;
+}
+
+int encode1252(UTF32 C) {
+  if (C < 0x80 || (C >= 0xA0 && C <= 0xFF))
+    return (int)C;
+  for (unsigned I = 0; I != 32; ++I)
+    if (Win1252High[I] == C)
+      return (int)(0x80 + I);
+  return -1;
+}
+
+void appendUTF8(UTF32 C, SmallVectorImpl<char> &Result) {
+  char Buf[UNI_MAX_UTF8_BYTES_PER_CODE_POINT];
+  char *P = Buf;
+  ConvertCodePointToUTF8(C, P);
+  Result.append(Buf, P);
+}
+
+class TextEncodingConverterWindowsCP final
+    : public details::TextEncodingConverterImplBase {
+  unsigned CodePage;
+  bool FromUTF8;
+
+public:
+  TextEncodingConverterWindowsCP(unsigned CodePage, bool FromUTF8)
+      : CodePage(CodePage), FromUTF8(FromUTF8) {}
+
+  std::error_code convertString(StringRef Source,
+                                SmallVectorImpl<char> &Result) override {
+    Result.clear();
+    if (CodePage == 1252)
+      return FromUTF8 ? toTable(Source, Result) : fromTable(Source, Result);
+#ifdef _WIN32
+    return FromUTF8 ? toWindows(Source, Result) : fromWindows(Source, Result);
+#else
+    return std::make_error_code(std::errc::invalid_argument);
+#endif
+  }
+
+  void reset() override {}
+
+private:
+  std::error_code toTable(StringRef Source, SmallVectorImpl<char> &Result) {
+    bool Substituted = false;
+    const UTF8 *P = reinterpret_cast<const UTF8 *>(Source.begin());
+    const UTF8 *E = reinterpret_cast<const UTF8 *>(Source.end());
+    while (P < E) {
+      UTF32 C = 0;
+      if (convertUTF8Sequence(&P, E, &C, strictConversion) != conversionOK)
+        return std::make_error_code(std::errc::illegal_byte_sequence);
+      int B = encode1252(C);
+      if (B < 0) {
+        B = '?';
+        Substituted = true;
+      }
+      Result.push_back((char)B);
+    }
+    return Substituted ? std::make_error_code(std::errc::result_out_of_range)
+                       : std::error_code();
+  }
+
+  std::error_code fromTable(StringRef Source, SmallVectorImpl<char> &Result) {
+    for (unsigned char B : Source)
+      appendUTF8(decode1252(B), Result);
+    return std::error_code();
+  }
+
+#ifdef _WIN32
+  std::error_code toWindows(StringRef Source, SmallVectorImpl<char> &Result) {
+    if (Source.empty())
+      return std::error_code();
+    int WN = ::MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, Source.data(),
+                                   (int)Source.size(), nullptr, 0);
+    if (WN <= 0)
+      return std::make_error_code(std::errc::illegal_byte_sequence);
+    SmallVector<wchar_t, 64> W(WN);
+    ::MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, Source.data(),
+                          (int)Source.size(), W.data(), WN);
+    BOOL UsedDefault = FALSE;
+    DWORD Flags = WC_NO_BEST_FIT_CHARS;
+    int N = ::WideCharToMultiByte(CodePage, Flags, W.data(), WN, nullptr, 0,
+                                  "?", &UsedDefault);
+    if (N <= 0)
+      return std::make_error_code(std::errc::invalid_argument);
+    Result.resize(N);
+    UsedDefault = FALSE;
+    ::WideCharToMultiByte(CodePage, Flags, W.data(), WN, Result.data(), N, "?",
+                          &UsedDefault);
+    return UsedDefault ? std::make_error_code(std::errc::result_out_of_range)
+                       : std::error_code();
+  }
+
+  std::error_code fromWindows(StringRef Source,
+                              SmallVectorImpl<char> &Result) {
+    if (Source.empty())
+      return std::error_code();
+    int WN = ::MultiByteToWideChar(CodePage, 0, Source.data(),
+                                   (int)Source.size(), nullptr, 0);
+    if (WN <= 0)
+      return std::make_error_code(std::errc::illegal_byte_sequence);
+    SmallVector<wchar_t, 64> W(WN);
+    ::MultiByteToWideChar(CodePage, 0, Source.data(), (int)Source.size(),
+                          W.data(), WN);
+    int N = ::WideCharToMultiByte(CP_UTF8, 0, W.data(), WN, nullptr, 0,
+                                  nullptr, nullptr);
+    Result.resize(N);
+    ::WideCharToMultiByte(CP_UTF8, 0, W.data(), WN, Result.data(), N, nullptr,
+                          nullptr);
+    return std::error_code();
+  }
+#endif
+};
+
+bool isUsableWindowsCodePage(unsigned CP) {
+  if (CP == 1252)
+    return true;
+#ifdef _WIN32
+  CPINFO Info;
+  return CP != 65001 && ::GetCPInfo(CP, &Info);
+#else
+  return false;
+#endif
+}
+} // namespace
 
 [[maybe_unused]] static void HandleOverflow(size_t &Capacity, char *&Output,
                                             size_t &OutputLength,
@@ -328,6 +502,15 @@ ErrorOr<TextEncodingConverter> TextEncodingConverter::create(StringRef From,
                                                              StringRef To) {
   std::optional<TextEncoding> FromEncoding = getKnownEncoding(From);
   std::optional<TextEncoding> ToEncoding = getKnownEncoding(To);
+  // openrt CL-EXEC-CHARSET: UTF-8 to or from a Windows code page.
+  if (FromEncoding == TextEncoding::UTF8 || ToEncoding == TextEncoding::UTF8) {
+    std::optional<unsigned> CP =
+        getWindowsCodePage(FromEncoding == TextEncoding::UTF8 ? To : From);
+    if (CP && *CP != 65001 && isUsableWindowsCodePage(*CP))
+      return TextEncodingConverter(
+          std::make_unique<TextEncodingConverterWindowsCP>(
+              *CP, FromEncoding == TextEncoding::UTF8));
+  }
   if (FromEncoding && ToEncoding) {
     ErrorOr<TextEncodingConverter> Converter =
         create(*FromEncoding, *ToEncoding);

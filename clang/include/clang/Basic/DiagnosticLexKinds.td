@@ -291,6 +291,11 @@ def err_character_too_large : Error<
   "character too large for enclosing character literal type">;
 def err_exec_charset_conversion_failed
     : Error<"conversion to literal encoding failed: '%0'">;
+// CL-EXEC-CHARSET: cl, C4566 (level 1).
+def warn_exec_charset_unrepresentable : Warning<
+  "a character in this literal cannot be represented in the execution "
+  "character set; it is written as '?'">,
+  InGroup<DiagGroup<"microsoft-unrepresentable-char">>;
 def warn_c99_compat_unicode_literal : Warning<
   "unicode literals are incompatible with C99">,
   InGroup<C99Compat>, DefaultIgnore;

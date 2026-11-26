@@ -103,6 +103,8 @@ clang::diagGroupFromCLWarningID(unsigned CLWarningID) {
   case 4838: Name = "microsoft-init-list-narrowing"; break;
   // CL-DX-NONPOD-VARARG: non-trivial class object passed through '...'.
   case 4840: Name = "microsoft-non-pod-varargs"; break;
+  // CL-EXEC-CHARSET: a character the execution character set lacks.
+  case 4566: Name = "microsoft-unrepresentable-char"; break;
   case 5030: Name = "unknown-attributes"; break;
   case 5038: Name = "reorder-ctor"; break;
   // UE-C5046: a dead inline body uses a member declared here with its

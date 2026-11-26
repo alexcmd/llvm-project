@@ -49,6 +49,7 @@
 #include "llvm/Support/CodeGen.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/Compression.h"
+#include "llvm/Support/TextEncoding.h"
 #include "llvm/Support/Error.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/MathExtras.h"
@@ -8496,6 +8497,39 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     D.Diag(diag::err_drv_clang_unsupported)
         << Args.getLastArg(options::OPT_fno_for_scope)->getAsString(Args);
 
+  // CL-EXEC-CHARSET: cl 19.44 (observed) reads a source without a UTF-8 BOM
+  // in its source character set and writes ordinary literals in its execution
+  // character set, both the ANSI code page by default; /utf-8 makes both
+  // UTF-8; /source-charset: and /execution-charset: (".<cp>", "windows-<cp>",
+  // IANA names; a bare number is C3435) set one; the last one wins. The
+  // default here is windows-1252, fixed, so that a build does not depend on the
+  // host locale (cl on a 1252 host).
+  if (D.IsCLMode()) {
+    std::string Exec = "windows-1252", Src = "windows-1252";
+    for (Arg *A : Args.filtered(options::OPT_finput_charset_EQ,
+                                options::OPT_fexec_charset_EQ,
+                                options::OPT__SLASH_utf8)) {
+      A->claim();
+      if (A->getOption().matches(options::OPT__SLASH_utf8)) {
+        Exec = Src = "utf-8";
+        continue;
+      }
+      StringRef V = A->getValue();
+      std::optional<unsigned> CP = llvm::getWindowsCodePage(V);
+      if (!CP || (*CP != 65001 && !llvm::TextEncodingConverter::create("UTF-8", V))) {
+        D.Diag(diag::err_drv_cl_charset_not_supported) << V;
+        continue;
+      }
+      (A->getOption().matches(options::OPT_fexec_charset_EQ) ? Exec : Src) =
+          *CP == 65001 ? std::string("utf-8") : V.lower();
+    }
+    if (Exec != "utf-8") {
+      CmdArgs.push_back("-fexec-charset");
+      CmdArgs.push_back(Args.MakeArgString(Exec));
+    }
+    if (Src != "utf-8")
+      CmdArgs.push_back(Args.MakeArgString("-fms-source-charset=" + Src));
+  } else
   // -finput_charset=UTF-8 is default. Reject others
   if (Arg *inputCharset = Args.getLastArg(options::OPT_finput_charset_EQ)) {
     StringRef value = inputCharset->getValue();
@@ -8505,7 +8539,9 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   }
 
   // -fexec_charset=UTF-8 is default. Reject others
-  if (Arg *execCharset = Args.getLastArg(options::OPT_fexec_charset_EQ)) {
+  if (Arg *execCharset = D.IsCLMode()
+                             ? nullptr
+                             : Args.getLastArg(options::OPT_fexec_charset_EQ)) {
     StringRef value = execCharset->getValue();
     if (!value.equals_insensitive("utf-8"))
       D.Diag(diag::err_drv_invalid_value) << execCharset->getAsString(Args)

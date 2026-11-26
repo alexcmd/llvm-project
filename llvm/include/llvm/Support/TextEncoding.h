@@ -20,6 +20,7 @@
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/ErrorOr.h"
 
+#include <optional>
 #include <string>
 #include <system_error>
 
@@ -77,7 +78,20 @@ enum class TextEncoding {
   IBM1047
 };
 
+/// openrt CL-EXEC-CHARSET: the Windows code page an encoding name stands for,
+/// as cl's /execution-charset: and /source-charset: take them: ".<number>",
+/// "windows-<number>", "utf-8" (65001), "us-ascii" (20127), "iso-8859-<n>",
+/// "latin1" and a few multi-byte names; case does not matter. A bare number is
+/// not a name (cl: C3435).
+LLVM_ABI std::optional<unsigned> getWindowsCodePage(StringRef Name);
+
 /// Utility class to convert between different character encodings.
+///
+/// openrt CL-EXEC-CHARSET: between UTF-8 and a Windows code page (see
+/// getWindowsCodePage; 1252 built in, the others through the Windows API on a
+/// Windows host), a character without a representation in the code page is
+/// written as '?' and convert() returns std::errc::result_out_of_range with
+/// the whole result in place.
 class TextEncodingConverter {
   std::unique_ptr<details::TextEncodingConverterImplBase> Converter;
 

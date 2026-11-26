@@ -36,6 +36,7 @@
 #include "clang/Lex/Preprocessor.h"
 #include "clang/Lex/PreprocessorOptions.h"
 #include "clang/Lex/TextEncoding.h"
+#include "llvm/Support/TextEncoding.h"
 #include "clang/Sema/CodeCompleteConsumer.h"
 #include "clang/Sema/ParsedAttr.h"
 #include "clang/Sema/Sema.h"
@@ -422,6 +423,17 @@ void CompilerInstance::createSourceManager() {
   assert(FileMgr && "FileManager needed for creating SourceManager");
   SourceMgr = llvm::makeIntrusiveRefCnt<SourceManager>(getDiagnostics(),
                                                        getFileManager());
+  // CL-EXEC-CHARSET: -fms-source-charset (cl's source character set).
+  const std::string &Charset = getFrontendOpts().MSSourceCharset;
+  if (!Charset.empty()) {
+    auto Converter = llvm::TextEncodingConverter::create(Charset, "UTF-8");
+    if (Converter)
+      SourceMgr->setSourceCharsetConverter(
+          std::make_unique<llvm::TextEncodingConverter>(std::move(*Converter)));
+    else
+      getDiagnostics().Report(diag::err_fe_cl_charset_not_supported)
+          << Charset;
+  }
 }
 
 // Initialize the remapping of files to alternative contents, e.g.,

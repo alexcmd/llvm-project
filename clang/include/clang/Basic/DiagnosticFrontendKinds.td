@@ -11,6 +11,9 @@ class BackendInfo : CatBackend, ShowInSystemHeader;
 let Component = "Frontend" in {
 
 def err_fe_error_opening : Error<"error opening '%0': %1">;
+// CL-EXEC-CHARSET: cl C3435.
+def err_fe_cl_charset_not_supported : Error<
+  "C3435 : character set '%0' is not supported">;
 def err_fe_error_reading : Error<"error reading '%0': %1">;
 def err_fe_error_reading_stdin : Error<"error reading stdin: %0">;
 def err_fe_error_backend : Error<"error in backend: %0">, DefaultFatal;

@@ -533,6 +533,10 @@ public:
   /// Filename to write statistics to.
   std::string StatsFile;
 
+  /// CL-EXEC-CHARSET: encoding of sources without a UTF-8 byte order mark
+  /// (-fms-source-charset=; empty: UTF-8).
+  std::string MSSourceCharset;
+
   /// Minimum time granularity (in microseconds) traced by time profiler.
   unsigned TimeTraceGranularity;
 

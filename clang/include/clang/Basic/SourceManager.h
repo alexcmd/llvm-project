@@ -59,6 +59,10 @@
 #include <utility>
 #include <vector>
 
+namespace llvm {
+class TextEncodingConverter;
+} // namespace llvm
+
 namespace clang {
 
 class ASTReader;
@@ -183,6 +187,10 @@ public:
 
   LLVM_PREFERRED_TYPE(bool)
   mutable unsigned IsBufferInvalid : 1;
+
+  /// CL-EXEC-CHARSET: the file is read in this encoding unless it starts with
+  /// a UTF-8 byte order mark (cl's source character set); null for UTF-8.
+  const llvm::TextEncodingConverter *SourceCharsetConverter = nullptr;
 
   ContentCache()
       : OrigEntry(std::nullopt), ContentsEntry(std::nullopt),
@@ -689,6 +697,9 @@ class SourceManager : public RefCountedBase<SourceManager> {
   /// file created from this compilation). Defaults to false.
   bool FilesAreTransient = false;
 
+  /// CL-EXEC-CHARSET: see ContentCache::SourceCharsetConverter.
+  std::unique_ptr<llvm::TextEncodingConverter> SourceCharsetConverter;
+
   struct OverriddenFilesInfoTy {
     /// Files that have been overridden with the contents from another
     /// file.
@@ -1048,6 +1059,11 @@ public:
   void setAllFilesAreTransient(bool Transient) {
     FilesAreTransient = Transient;
   }
+
+  /// CL-EXEC-CHARSET: read files without a UTF-8 byte order mark in this
+  /// encoding (converted to UTF-8 when they are loaded).
+  void setSourceCharsetConverter(
+      std::unique_ptr<llvm::TextEncodingConverter> Converter);
 
   //===--------------------------------------------------------------------===//
   // FileID manipulation methods.

@@ -1031,7 +1031,7 @@ VarArgKind Sema::isValidVarArgType(const QualType &Ty) {
 bool Sema::checkCLBitwiseVarArg(const Expr *E, VariadicCallType CT,
                                 bool Diagnose) {
   if (!getLangOpts().MSVCCompat || !getLangOpts().CPlusPlus ||
-      PP.getPreprocessorOpts().MSClangIdentity)
+      !getLangOpts().MSCLRules)
     return false;
   QualType Ty = E->getType();
   if (Ty->isDependentType() || isValidVarArgType(Ty) != VarArgKind::MSVCUndefined)
@@ -3988,7 +3988,7 @@ ExprResult Sema::BuildPredefinedExpr(SourceLocation Loc,
     std::string Str;
     if ((IK == PredefinedIdentKind::FuncSig ||
          IK == PredefinedIdentKind::LFuncSig) &&
-        getLangOpts().MSVCCompat && !PP.getPreprocessorOpts().MSClangIdentity)
+        getLangOpts().MSVCCompat && getLangOpts().MSCLRules)
       Str = msFuncSigCL(Context, currentDecl);
     if (Str.empty())
       Str = PredefinedExpr::ComputeName(IK, currentDecl, ForceElaboratedPrinting);

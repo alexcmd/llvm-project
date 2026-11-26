@@ -4,9 +4,9 @@
 // Microsoft compatibility materializes the temporary; standard mode keeps the
 // error.
 
-// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fno-ms-clang-identity -fsyntax-only -verify=ms %s
+// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fms-cl-rules -fsyntax-only -verify=ms %s
 // RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fsyntax-only -verify=std %s
-// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fno-ms-clang-identity -DONLY_VALID -emit-llvm -o - %s | FileCheck --check-prefix=IR %s
+// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fms-cl-rules -DONLY_VALID -emit-llvm -o - %s | FileCheck --check-prefix=IR %s
 // RUN: %clang_cl --target=x86_64-pc-windows-msvc /W4 -DONLY_VALID -fsyntax-only -- %s 2>&1 | FileCheck --check-prefix=W4 %s
 // RUN: %clang_cl --target=x86_64-pc-windows-msvc /W4 /permissive- -DONLY_VALID -fsyntax-only -- %s 2>&1 | FileCheck --check-prefix=W4 %s
 // RUN: %clang_cl /nologo --target=x86_64-pc-windows-msvc /W3 -DONLY_VALID -fsyntax-only -- %s 2>&1 >/dev/null | count 0

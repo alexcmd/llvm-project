@@ -1,5 +1,5 @@
 // RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility \
-// RUN:   -std=c++20 -fno-ms-clang-identity -emit-llvm -o - %s | FileCheck %s
+// RUN:   -std=c++20 -fms-cl-rules -emit-llvm -o - %s | FileCheck %s
 // RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility \
 // RUN:   -std=c++20 -emit-llvm -o - %s | FileCheck --check-prefix=ID %s
 

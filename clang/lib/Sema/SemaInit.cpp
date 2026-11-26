@@ -5715,6 +5715,7 @@ static void TryReferenceInitializationCore(Sema &S,
   // reference binds to the materialized temporary below, as for const T&.
   bool MSRvalueBinding =
       isLValueRef && S.getLangOpts().MSRvalueRefBinding &&
+      S.getLangOpts().MSCLRules &&
       !T1Quals.hasConst() && !T1Quals.hasVolatile() &&
       InitCategory.isRValue() && T2->isRecordType() &&
       RefRelationship == Sema::Ref_Compatible &&

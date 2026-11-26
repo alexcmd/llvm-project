@@ -5595,6 +5595,7 @@ TryReferenceInit(Sema &S, Expr *Init, QualType DeclType,
   // only when nothing else is viable (cl: f(A&) vs f(const A&), f(A&&) or
   // f(...) picks the other one).
   if (!isRValRef && S.getLangOpts().MSRvalueRefBinding &&
+      S.getLangOpts().MSCLRules &&
       !T1.isConstQualified() && !T1.isVolatileQualified() &&
       InitCategory.isRValue() && T2->isRecordType() &&
       RefRelationship == Sema::Ref_Compatible && !S.isSFINAEContext() &&
@@ -11691,7 +11692,7 @@ OverloadingResult OverloadCandidateSet::BestViableFunctionImpl(
   // for g(A())), is a last resort: it takes part only when no other candidate
   // is viable. It stays viable in the set, so diagnostics that list the
   // candidates (a deleted best candidate, ambiguity) see it as it is.
-  if (S.getLangOpts().MSRvalueRefBinding) {
+  if (S.getLangOpts().MSRvalueRefBinding && S.getLangOpts().MSCLRules) {
     auto UsesMSBinding = [](const OverloadCandidate *C) {
       return llvm::any_of(C->Conversions, [](const ImplicitConversionSequence &I) {
         if (!I.isInitialized())

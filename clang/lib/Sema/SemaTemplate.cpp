@@ -841,7 +841,7 @@ bool Sema::isMSUndefinedExplicitInstantiation(
     const NamedDecl *Instantiation, const NamedDecl *PatternDef,
     TemplateSpecializationKind TSK) const {
   if (!getLangOpts().MSVCCompat ||
-      PP.getPreprocessorOpts().MSClangIdentity || PatternDef ||
+      !getLangOpts().MSCLRules || PatternDef ||
       TSK != TSK_ExplicitInstantiationDefinition)
     return false;
   return isa<FunctionDecl>(Instantiation) ||

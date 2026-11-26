@@ -6,8 +6,8 @@
 //    does not take the binding, the copy pass binds the lvalue).
 //  - (A&)mk() with an unrelated B::operator A&(): standard cast, silent.
 
-// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fno-ms-clang-identity -fms-rvalue-ref-binding -std=c++17 -Wmicrosoft-reference-binding -Wmicrosoft-rvalue-cast-to-reference -fsyntax-only -verify %s
-// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fno-ms-clang-identity -fms-rvalue-ref-binding -std=c++20 -Wmicrosoft-reference-binding -Wmicrosoft-rvalue-cast-to-reference -fsyntax-only -verify %s
+// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fms-cl-rules -fms-rvalue-ref-binding -std=c++17 -Wmicrosoft-reference-binding -Wmicrosoft-rvalue-cast-to-reference -fsyntax-only -verify %s
+// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fms-cl-rules -fms-rvalue-ref-binding -std=c++20 -Wmicrosoft-reference-binding -Wmicrosoft-rvalue-cast-to-reference -fsyntax-only -verify %s
 
 struct A {};
 

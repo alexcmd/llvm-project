@@ -6,9 +6,9 @@
 // non-class rvalues, user-defined conversions or volatile references.
 // /permissive- and /Zc:referenceBinding turn it off, the last of them wins.
 
-// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fms-rvalue-ref-binding -std=c++17 -fsyntax-only -verify=ms %s
+// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fms-rvalue-ref-binding -fms-cl-rules -std=c++17 -fsyntax-only -verify=ms %s
 // RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -std=c++17 -fsyntax-only -verify=std %s
-// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fms-rvalue-ref-binding -std=c++17 -DONLY_VALID -emit-llvm -o - %s | FileCheck --check-prefix=IR %s
+// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fms-rvalue-ref-binding -fms-cl-rules -std=c++17 -DONLY_VALID -emit-llvm -o - %s | FileCheck --check-prefix=IR %s
 // RUN: %clang_cl --target=x86_64-pc-windows-msvc /nologo /W4 /std:c++17 -DONLY_VALID -fsyntax-only -- %s 2>&1 | FileCheck --check-prefix=W4 %s
 // RUN: %clang_cl --target=x86_64-pc-windows-msvc /nologo /W3 /std:c++17 -DONLY_VALID -fsyntax-only -- %s 2>&1 >/dev/null | count 0
 // RUN: %clang_cl --target=x86_64-pc-windows-msvc /nologo /W4 /wd4239 /std:c++17 -DONLY_VALID -fsyntax-only -- %s 2>&1 >/dev/null | count 0

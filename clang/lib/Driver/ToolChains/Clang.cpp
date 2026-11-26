@@ -1062,6 +1062,10 @@ void Clang::AddPreprocessingOptions(Compilation &C, const JobAction &JA,
   // C translation units get the C subset (the __report_* functions).
   if (!msClangIdentity(D, Args))
     CmdArgs.push_back("-fno-ms-clang-identity");
+  // CL-RULES: the cl language rules, separate from the identity macros.
+  if (Args.hasFlag(options::OPT_fms_cl_rules, options::OPT_fno_ms_cl_rules,
+                   D.IsCLMode()))
+    CmdArgs.push_back("-fms-cl-rules");
 
   if (msPredeclareEHTypes(D, Args) &&
       (types::isCXX(Inputs[0].getType()) ||

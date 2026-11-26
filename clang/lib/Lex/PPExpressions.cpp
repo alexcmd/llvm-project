@@ -609,7 +609,7 @@ static bool EvaluateDirectiveSubExpr(PPValue &LHS, unsigned MinPrec,
   // with foo not a macro as the value so far (the identifier, 0) and ignores
   // the rest of the line with C4067 (level 1), observed.
   if (PeekPrec == ~0U && PP.getLangOpts().MSVCCompat &&
-      !PP.getPreprocessorOpts().MSClangIdentity && PeekTok.is(tok::l_paren) &&
+      PP.getLangOpts().MSCLRules && PeekTok.is(tok::l_paren) &&
       LHS.getIdentifier()) {
     PP.Diag(LHS.getRange().getBegin(), diag::ext_pp_ms_undefined_function_like)
         << LHS.getIdentifier();
@@ -663,7 +663,7 @@ static bool EvaluateDirectiveSubExpr(PPValue &LHS, unsigned MinPrec,
     // CL-DX-PP-UNDEF-CALL: also on the right of an operator ("#if 1 && f(1)");
     // the rest of the line is dropped and the operator applies to 0.
     if (PeekPrec == ~0U && PP.getLangOpts().MSVCCompat &&
-        !PP.getPreprocessorOpts().MSClangIdentity &&
+        PP.getLangOpts().MSCLRules &&
         PeekTok.is(tok::l_paren) && RHS.getIdentifier()) {
       PP.Diag(RHS.getRange().getBegin(),
               diag::ext_pp_ms_undefined_function_like)

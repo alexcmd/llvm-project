@@ -4102,7 +4102,7 @@ void Parser::ParseDeclarationSpecifiers(
     case tok::kw_protected:
     MSTypedefAccess:
       if (!getLangOpts().MSVCCompat ||
-          PP.getPreprocessorOpts().MSClangIdentity ||
+          !getLangOpts().MSCLRules ||
           DS.getStorageClassSpec() != DeclSpec::SCS_typedef ||
           DS.hasTypeSpecifier())
         goto DoneWithDeclSpec;

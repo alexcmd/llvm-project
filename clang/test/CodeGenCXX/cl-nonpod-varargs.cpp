@@ -5,9 +5,9 @@
 // copy or move constructor (observed). clang's -Wnon-pod-varargs error stays
 // outside cl mode.
 
-// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fno-ms-clang-identity -std=c++17 -Wmicrosoft-non-pod-varargs -fsyntax-only -verify=cl %s
+// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fms-cl-rules -std=c++17 -Wmicrosoft-non-pod-varargs -fsyntax-only -verify=cl %s
 // RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -std=c++17 -fsyntax-only -verify=std %s
-// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fno-ms-clang-identity -std=c++17 -DNO_ERRORS -emit-llvm -o - %s | FileCheck %s
+// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fms-cl-rules -std=c++17 -DNO_ERRORS -emit-llvm -o - %s | FileCheck %s
 // RUN: %clang_cl --target=x86_64-pc-windows-msvc /nologo /W4 /std:c++17 -DNO_ERRORS -fsyntax-only -- %s 2>&1 | FileCheck --check-prefix=W4 %s
 // RUN: %clang_cl --target=x86_64-pc-windows-msvc /nologo /W3 /std:c++17 -DNO_ERRORS -fsyntax-only -- %s 2>&1 >/dev/null | count 0
 

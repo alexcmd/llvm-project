@@ -3619,6 +3619,18 @@ defm ms_clang_identity : BoolFOption<"ms-clang-identity",
   NegFlag<SetFalse, [], [ClangOption, CLOption, CC1Option],
           "Do not predefine the clang identity macros, as cl.exe (default "
           "in cl mode)">>;
+// CL-RULES: the cl.exe language rules of this fork (void main, typedef access,
+// explicit instantiation of undefined members, /Yu by name, (T&)rvalue,
+// export module in a .cpp, #if f(1), __FUNCSIG__ text, class objects through
+// '...', the reference binding), on by default in cl mode and independent of
+// the identity macros: /clang:-fms-clang-identity brings back __clang__ & co
+// only, /clang:-fno-ms-cl-rules turns the rules off.
+defm ms_cl_rules : BoolFOption<"ms-cl-rules",
+  LangOpts<"MSCLRules">, DefaultFalse,
+  PosFlag<SetTrue, [], [ClangOption, CLOption, CC1Option],
+          "Apply the cl.exe language rules of clang-cl (default in cl mode)">,
+  NegFlag<SetFalse, [], [ClangOption, CLOption],
+          "Do not apply the cl.exe language rules of clang-cl">>;
 defm openrt_overlay : BoolOptionWithoutMarshalling<"f", "openrt-overlay",
   PosFlag<SetTrue, [], [ClangOption, CLOption],
           "Use the VFS overlay declared by the openrt layout around the "

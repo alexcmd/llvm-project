@@ -285,7 +285,7 @@ Sema::ActOnModuleDecl(SourceLocation StartLoc, SourceLocation ModuleLoc,
     // .cpp is C3378 (observed). In cl mode (clang identity hidden) the driver
     // gives such a source as c++, not c++-module.
     if (getLangOpts().MSVCCompat &&
-        !PP.getPreprocessorOpts().MSClangIdentity &&
+        getLangOpts().MSCLRules &&
         (MDK == ModuleDeclKind::Interface ||
          MDK == ModuleDeclKind::PartitionInterface)) {
       Diag(ModuleLoc, diag::err_ms_module_interface_without_interface);

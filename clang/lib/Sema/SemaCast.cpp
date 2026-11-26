@@ -2852,7 +2852,7 @@ void CastOperation::CheckCXXCStyleCast(bool FunctionalStyle,
   // or reinterpret_cast binds T& to a prvalue except through a conversion
   // function. The temporary is materialized as an lvalue and the cast goes on.
   if (Self.getLangOpts().MSVCCompat &&
-      !Self.getPreprocessor().getPreprocessorOpts().MSClangIdentity &&
+      Self.getLangOpts().MSCLRules &&
       SrcExpr.get()->isPRValue() && SrcType->isRecordType()) {
     if (const auto *Ref = DestType->getAs<LValueReferenceType>()) {
       QualType Pointee = Ref->getPointeeType();

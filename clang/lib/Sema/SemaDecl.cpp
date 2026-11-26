@@ -12840,8 +12840,7 @@ void Sema::CheckMain(FunctionDecl *FD, const DeclSpec &DS) {
     bool MSSilent = Context.hasSameUnqualifiedType(MSRT, Context.IntTy) ||
                     Context.hasSameUnqualifiedType(MSRT, Context.UnsignedIntTy);
     bool MSAccepted =
-        getLangOpts().MSVCCompat &&
-        !PP.getPreprocessorOpts().MSClangIdentity &&
+        getLangOpts().MSVCCompat && getLangOpts().MSCLRules &&
         (MSSilent || MSRT->isVoidType() ||
          ((MSRT->isIntegerType() || MSRT->isRealFloatingType()) &&
           !MSRT->isEnumeralType() && Context.getTypeSize(MSRT) <= 32));

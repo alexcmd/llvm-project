@@ -42,9 +42,11 @@
 // RUN: %clang_cl /external:I path -### -- %s 2>&1 | FileCheck -check-prefix=EXTERNAL_I %s
 // EXTERNAL_I: "-isystem" "path"
 
-// RUN: %clang_cl /fp:fast /fp:except -### -- %s 2>&1 | FileCheck -check-prefix=fpexcept %s
-// fpexcept-NOT: -funsafe-math-optimizations
-// fpexcept: -ffp-exception-behavior=strict
+// CL-OPT-INCOMPATIBLE: /fp:fast with /fp:except is D8016 as in cl 19.44.
+// RUN: not %clang_cl /fp:fast /fp:except -### -- %s 2>&1 | FileCheck -check-prefix=fpexcept %s
+// fpexcept: error: D8016 : '/fp:fast' and '/fp:except' command-line options are incompatible
+// RUN: %clang_cl /fp:except /fp:precise -### -- %s 2>&1 | FileCheck -check-prefix=fpexceptp %s
+// fpexceptp: -ffp-exception-behavior=strict
 
 // RUN: %clang_cl /fp:fast /fp:except /fp:except- -### -- %s 2>&1 | FileCheck -check-prefix=fpexcept_ %s
 // fpexcept_: -funsafe-math-optimizations
@@ -281,10 +283,10 @@
 // VMV: "-fms-memptr-rep=virtual"
 
 // RUN: not %clang_cl /vmg /vmb -### -- %s 2>&1 | FileCheck -check-prefix=VMB %s
-// VMB: '/vmg' not allowed with '/vmb'
+// VMB: D8016 : '/vmg' and '/vmb' command-line options are incompatible
 
 // RUN: not %clang_cl /vmg /vmm /vms -### -- %s 2>&1 | FileCheck -check-prefix=VMX %s
-// VMX: '/vms' not allowed with '/vmm'
+// VMX: D8016 : '/vmm' and '/vms' command-line options are incompatible
 
 // RUN: %clang_cl --target=i686-pc-win32 /volatile:iso -### -- %s 2>&1 | FileCheck -check-prefix=VOLATILE-ISO %s
 // RUN: %clang_cl --target=aarch64-pc-win32 -### -- %s 2>&1 | FileCheck -check-prefix=VOLATILE-ISO %s
@@ -386,6 +388,11 @@
 // Wno-NOT: "-wd
 
 // Ignored options. Check that we don't get "unused during compilation" errors.
+// (/Og and /utf-8 are checked apart: with /RTC1 and the charsets below they are
+// D8016, CL-OPT-INCOMPATIBLE.)
+// RUN: %clang_cl /c /Og /utf-8 -### -- %s 2>&1 | FileCheck -check-prefix=IGNORED2 %s
+// IGNORED2-NOT: unused during compilation
+// IGNORED2-NOT: D8016
 // RUN: %clang_cl /c \
 // RUN:    /analyze- \
 // RUN:    /bigobj \
@@ -405,14 +412,12 @@
 // RUN:    /GS- \
 // RUN:    /kernel- \
 // RUN:    /nologo \
-// RUN:    /Og \
 // RUN:    /openmp- \
 // RUN:    /permissive- \
 // RUN:    /RTC1 \
 // RUN:    /sdl \
 // RUN:    /sdl- \
 // RUN:    /source-charset:utf-8 \
-// RUN:    /utf-8 \
 // RUN:    /vmg \
 // RUN:    /volatile:iso \
 // RUN:    /w12345 \
@@ -439,6 +444,12 @@
 // UNUSED-NOT: argument unused during compilation
 
 // Unsupported but parsed options. Check that we don't error on them.
+// (/ZI, /Gr, /Gv, /Gz and /Ze are checked apart: with /GL, /Gd and /Za of the
+// list below they are D8016, CL-OPT-INCOMPATIBLE, cl-incompatible-options.c.)
+// RUN: %clang_cl /Zs /ZI /Gr /Ze -- %s 2>&1 | FileCheck --allow-empty -check-prefix=PARSED2 %s
+// RUN: %clang_cl /Zs /Gv -- %s 2>&1 | FileCheck --allow-empty -check-prefix=PARSED2 %s
+// RUN: %clang_cl /Zs /Gz -- %s 2>&1 | FileCheck --allow-empty -check-prefix=PARSED2 %s
+// PARSED2-NOT: error
 // (/Zs is for syntax-only)
 // RUN: %clang_cl /Zs \
 // RUN:     /await \
@@ -492,12 +503,9 @@
 // RUN:     /GL- \
 // RUN:     /Gm \
 // RUN:     /Gm- \
-// RUN:     /Gr \
 // RUN:     /GS \
 // RUN:     /GT \
 // RUN:     /GX \
-// RUN:     /Gv \
-// RUN:     /Gz \
 // RUN:     /GZ \
 // RUN:     /H31 \
 // RUN:     /homeparams \
@@ -538,10 +546,8 @@
 // RUN:     /Yustdafx.h \
 // RUN:     /Z7 \
 // RUN:     /Za \
-// RUN:     /Ze \
 // RUN:     /Zg \
 // RUN:     /Zi \
-// RUN:     /ZI \
 // RUN:     /Zl \
 // RUN:     -- %s 2>&1
 

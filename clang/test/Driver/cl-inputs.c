@@ -26,10 +26,14 @@
 // Tp-NOT: note
 
 // RUN: %clang_cl /TP /TC /TP -### -- %s 2>&1 | FileCheck -check-prefix=WARN %s
-// WARN: warning: overriding '/TP' option with '/TC'
-// WARN: warning: overriding '/TC' option with '/TP'
-// WARN: note: the last '/TC' or '/TP' option takes precedence over earlier instances
+// CL-OPT-OVERRIDE: D9025 as cl 19.44, no note; D9026 for /TC after /Tp.
+// WARN: warning: D9025 : overriding '/TP' with '/TC'
+// WARN: warning: D9025 : overriding '/TC' with '/TP'
 // WARN-NOT: note
+// RUN: %clang_cl /TP /TP -### -- %s 2>&1 | FileCheck -check-prefix=SAME %s
+// SAME-NOT: D9025
+// RUN: %clang_cl -### /Tp%s /TC -- %s 2>&1 | FileCheck -check-prefix=D9026 %s
+// D9026: warning: D9026 : options apply to entire command line
 
 // MSYS2_ARG_CONV_EXCL tells MSYS2 to skip conversion of the specified argument.
 // Add a dummy "other" entry to the path as well, to check that it's split

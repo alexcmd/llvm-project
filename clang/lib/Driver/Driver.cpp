@@ -3263,8 +3263,32 @@ void Driver::BuildInputs(const ToolChain &TC, DerivedArgList &Args,
 
     Arg *Previous = nullptr;
     bool ShowNote = false;
+    // CL-OPT-OVERRIDE: cl 19.44 (observed) warns D9025 for /TC /TP that
+    // differ (silent for the same one twice), and D9026 once when a /TC or
+    // /TP comes after a /Tc or /Tp file.
+    if (IsCLMode()) {
+      unsigned FirstTcTp = ~0U;
+      for (const Arg *A : Args.filtered(options::OPT__SLASH_Tc,
+                                        options::OPT__SLASH_Tp))
+        FirstTcTp = std::min(FirstTcTp, A->getIndex());
+      bool Global = false;
+      for (Arg *A :
+           Args.filtered(options::OPT__SLASH_TC, options::OPT__SLASH_TP)) {
+        if (Previous && !Previous->getOption().matches(A->getOption().getID()))
+          Diag(clang::diag::warn_drv_cl_overriding_option)
+              << Previous->getSpelling() << A->getSpelling();
+        if (A->getIndex() > FirstTcTp)
+          Global = true;
+        Previous = A;
+      }
+      if (Global)
+        Diag(clang::diag::warn_drv_cl_options_global);
+      Previous = nullptr;
+    }
     for (Arg *A :
          Args.filtered(options::OPT__SLASH_TC, options::OPT__SLASH_TP)) {
+      if (IsCLMode())
+        break;
       if (Previous) {
         Diag(clang::diag::warn_drv_overriding_option)
             << Previous->getSpelling() << A->getSpelling();
@@ -4529,9 +4553,13 @@ static void collectCLOptTokens(const Arg *A, unsigned Index,
     }
     return;
   }
+  // /GS[-] and /sdl (which implies /GS) replace each other.
+  if (S == "sdl")
+    Add("GS", T, "GS");
   static const char *const Toggles[] = {
       "GR", "Gy", "GF", "Gw", "sdl", "guard:cf", "WX", "GL", "openmp", "Zo",
       "Zc:inline", "Zc:__cplusplus", "Zc:wchar_t", "Zc:forScope",
+      "Zc:preprocessor",
       "fp:except", "permissive"};
   for (const char *B : Toggles)
     if (S == B || (S.size() == strlen(B) + 1 && S.starts_with(B) &&
@@ -4541,6 +4569,9 @@ static void collectCLOptTokens(const Arg *A, unsigned Index,
     }
   if (S == "GX")
     return AddSame("GX");
+  // /GS[-] and /sdl (which implies /GS) replace each other.
+  if (S == "GS" || S == "GS-")
+    return AddSame("GS");
   if (S == "MD" || S == "MDd" || S == "MT" || S == "MTd")
     return AddSame("M");
   if (S == "w" || ((S.size() == 2 && S[0] == 'W' && S[1] >= '0' && S[1] <= '4')))
@@ -4552,6 +4583,145 @@ static void collectCLOptTokens(const Arg *A, unsigned Index,
   for (const char *P : {"std:", "favor:", "Zp", "ZH:", "Qspectre"})
     if (S.starts_with(P))
       return AddSame(P);
+}
+
+// CL-OPT-INCOMPATIBLE: cl 19.44 (observed) stops with D8016 (exit 2) at the
+// first pair of options that cannot go together, one pair only: /RTC* with
+// /O1 /O2 /Ox /Og; /GL with /ZI; two of /Gd /Gr /Gz /Gv; /utf-8 with
+// /source-charset: or /execution-charset:; a C /std: with a C++ one; /vmg
+// with /vmb; two of /vms /vmm /vmv; /kernel with /GR or with an /arch other
+// than the target's base (named first); /fp:fast with /fp:except; /clr with
+// /MT[d] or /EHs; /ZW with /MT[d]; /Za with /Ze. The pair is named in command
+// line order. Returns true when it reported one.
+static bool diagnoseCLIncompatibleOptions(const Driver &D,
+                                          const DerivedArgList &Args,
+                                          llvm::Triple::ArchType Arch) {
+  struct Item {
+    unsigned Index;
+    std::string Text;
+  };
+  SmallVector<Item, 16> Items;
+  unsigned Index = 0;
+  for (const Arg *A : Args) {
+    unsigned I = Index++;
+    if (A->getOption().matches(options::OPT_INPUT))
+      continue;
+    const Arg *Orig = A->getAlias() ? A->getAlias() : A;
+    StringRef Sp = Orig->getSpelling();
+    if (Sp.size() < 2 || (Sp[0] != '/' && Sp[0] != '-'))
+      continue;
+    std::string T = Sp.drop_front().str();
+    if (Orig->getOption().getKind() == Option::JoinedClass)
+      for (const char *V : Orig->getValues())
+        T += V;
+    StringRef S(T);
+    if (S.size() > 1 && S[0] == 'O' && !S.starts_with("Op")) {
+      for (char C : S.drop_front())
+        if (C == '1' || C == '2' || C == 'x' || C == 'g')
+          Items.push_back({I, std::string("O") + C});
+      continue;
+    }
+    if (S.starts_with("EH")) {
+      StringRef V = S.drop_front(2);
+      for (size_t K = 0; K < V.size(); ++K) {
+        bool Minus = K + 1 < V.size() && V[K + 1] == '-';
+        if (V[K] == 's' && !Minus)
+          Items.push_back({I, "EHs"});
+        if (Minus)
+          ++K;
+      }
+      continue;
+    }
+    Items.push_back({I, T});
+  }
+  using Pred = llvm::function_ref<bool(StringRef)>;
+  auto First = [&](Pred P) -> const Item * {
+    for (const Item &It : Items)
+      if (P(It.Text))
+        return &It;
+    return nullptr;
+  };
+  auto Report = [&](const Item &A, const Item &B) {
+    bool AFirst = A.Index <= B.Index;
+    D.Diag(clang::diag::err_drv_cl_incompatible_options)
+        << ("/" + (AFirst ? A : B).Text) << ("/" + (AFirst ? B : A).Text);
+    return true;
+  };
+  auto Pair = [&](Pred PA, Pred PB) {
+    const Item *A = First(PA), *B = First(PB);
+    return A && B && Report(*A, *B);
+  };
+  auto Distinct = [&](std::initializer_list<StringRef> Set) {
+    const Item *A = nullptr;
+    for (const Item &It : Items) {
+      if (!llvm::is_contained(Set, StringRef(It.Text)))
+        continue;
+      if (!A)
+        A = &It;
+      else if (It.Text != A->Text)
+        return Report(*A, It);
+    }
+    return false;
+  };
+  auto IsOpt = [](StringRef T) {
+    return T == "O1" || T == "O2" || T == "Ox" || T == "Og";
+  };
+  auto IsRTC = [](StringRef T) { return T.starts_with("RTC"); };
+  auto IsGL = [](StringRef T) { return T == "GL"; };
+  auto IsZI = [](StringRef T) { return T == "ZI"; };
+  auto IsUtf8 = [](StringRef T) { return T == "utf-8"; };
+  auto IsCharset = [](StringRef T) {
+    return T.starts_with("source-charset:") ||
+           T.starts_with("execution-charset:");
+  };
+  auto IsCStd = [](StringRef T) {
+    return T.starts_with("std:c") && !T.starts_with("std:c++");
+  };
+  auto IsCxxStd = [](StringRef T) { return T.starts_with("std:c++"); };
+  auto IsKernel = [](StringRef T) { return T == "kernel"; };
+  auto IsGR = [](StringRef T) { return T == "GR"; };
+  auto IsClr = [](StringRef T) { return T.starts_with("clr"); };
+  auto IsZW = [](StringRef T) { return T.starts_with("ZW"); };
+  auto IsMT = [](StringRef T) { return T == "MT" || T == "MTd"; };
+  auto IsEHs = [](StringRef T) { return T == "EHs"; };
+  auto IsZa = [](StringRef T) { return T == "Za"; };
+  auto IsZe = [](StringRef T) { return T == "Ze"; };
+  auto KernelArch = [&] {
+    const Item *K = First(IsKernel);
+    if (!K)
+      return false;
+    for (const Item &It : Items) {
+      StringRef T(It.Text);
+      if (!T.consume_front("arch:"))
+        continue;
+      bool Base = Arch == llvm::Triple::x86 ? T == "IA32" : T == "SSE2";
+      if (!Base) {
+        // cl names the /arch first whatever the order.
+        D.Diag(clang::diag::err_drv_cl_incompatible_options)
+            << ("/" + It.Text) << "/kernel";
+        return true;
+      }
+    }
+    return false;
+  };
+  auto FpFastExcept = [&] {
+    const Item *Model = nullptr, *Except = nullptr;
+    for (const Item &It : Items) {
+      StringRef T(It.Text);
+      if (T == "fp:fast" || T == "fp:precise" || T == "fp:strict")
+        Model = &It;
+      else if (T == "fp:except" || T == "fp:except-")
+        Except = &It;
+    }
+    return Model && Except && Model->Text == "fp:fast" &&
+           Except->Text == "fp:except" && Report(*Model, *Except);
+  };
+  return Pair(IsRTC, IsOpt) || Pair(IsGL, IsZI) ||
+         Distinct({"Gd", "Gr", "Gz", "Gv"}) || Pair(IsUtf8, IsCharset) ||
+         Pair(IsCStd, IsCxxStd) || Distinct({"vmg", "vmb"}) ||
+         Distinct({"vms", "vmm", "vmv"}) || Pair(IsKernel, IsGR) ||
+         KernelArch() || FpFastExcept() || Pair(IsClr, IsMT) ||
+         Pair(IsClr, IsEHs) || Pair(IsZW, IsMT) || Pair(IsZa, IsZe);
 }
 
 static void diagnoseCLOverridingOptions(const Driver &D,
@@ -4692,8 +4862,11 @@ void Driver::handleArguments(Compilation &C, DerivedArgList &Args,
     A->claim();
     Diag(clang::diag::warn_drv_cl_deprecated_option) << "Gm";
   }
-  if (IsCLMode())
+  if (IsCLMode()) {
     diagnoseCLOverridingOptions(*this, Args);
+    diagnoseCLIncompatibleOptions(*this, Args,
+                                  C.getDefaultToolChain().getArch());
+  }
   for (const Arg *A : Args.filtered(options::OPT__SLASH_Wv_)) {
     A->claim();
     if (A->getValue()[0] == '\0')

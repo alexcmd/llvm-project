@@ -9451,26 +9451,10 @@ void Clang::AddClangCLArgs(const ArgList &Args, types::ID InputType,
    CmdArgs.push_back("-fno-wchar");
  }
 
- if (Args.hasArg(options::OPT__SLASH_kernel)) {
-   llvm::Triple::ArchType Arch = getToolChain().getArch();
-   std::vector<std::string> Values =
-       Args.getAllArgValues(options::OPT__SLASH_arch);
-   if (!Values.empty()) {
-     llvm::SmallSet<std::string, 4> SupportedArches;
-     if (Arch == llvm::Triple::x86)
-       SupportedArches.insert("IA32");
-
-     for (auto &V : Values)
-       if (!SupportedArches.contains(V))
-         D.Diag(diag::err_drv_argument_not_allowed_with)
-             << std::string("/arch:").append(V) << "/kernel";
-   }
-
+ // CL-OPT-INCOMPATIBLE: /kernel with /GR or an /arch is D8016 in the driver
+ // (Driver.cpp, diagnoseCLIncompatibleOptions).
+ if (Args.hasArg(options::OPT__SLASH_kernel))
    CmdArgs.push_back("-fno-rtti");
-   if (Args.hasFlag(options::OPT__SLASH_GR, options::OPT__SLASH_GR_, false))
-     D.Diag(diag::err_drv_argument_not_allowed_with) << "/GR"
-                                                     << "/kernel";
- }
 
   if (const Arg *A = Args.getLastArg(options::OPT__SLASH_vlen,
                                      options::OPT__SLASH_vlen_EQ_256,
@@ -9510,23 +9494,14 @@ void Clang::AddClangCLArgs(const ArgList &Args, types::ID InputType,
     }
   }
 
+  // CL-OPT-INCOMPATIBLE: /vmg with /vmb and two of /vms /vmm /vmv are D8016
+  // in the driver (Driver.cpp, diagnoseCLIncompatibleOptions).
+  Args.ClaimAllArgs(options::OPT__SLASH_vmb);
   Arg *MostGeneralArg = Args.getLastArg(options::OPT__SLASH_vmg);
-  Arg *BestCaseArg = Args.getLastArg(options::OPT__SLASH_vmb);
-  if (MostGeneralArg && BestCaseArg)
-    D.Diag(clang::diag::err_drv_argument_not_allowed_with)
-        << MostGeneralArg->getAsString(Args) << BestCaseArg->getAsString(Args);
-
   if (MostGeneralArg) {
+    Args.ClaimAllArgs(options::OPT__SLASH_vmv);
     Arg *SingleArg = Args.getLastArg(options::OPT__SLASH_vms);
     Arg *MultipleArg = Args.getLastArg(options::OPT__SLASH_vmm);
-    Arg *VirtualArg = Args.getLastArg(options::OPT__SLASH_vmv);
-
-    Arg *FirstConflict = SingleArg ? SingleArg : MultipleArg;
-    Arg *SecondConflict = VirtualArg ? VirtualArg : MultipleArg;
-    if (FirstConflict && SecondConflict && FirstConflict != SecondConflict)
-      D.Diag(clang::diag::err_drv_argument_not_allowed_with)
-          << FirstConflict->getAsString(Args)
-          << SecondConflict->getAsString(Args);
 
     if (SingleArg)
       CmdArgs.push_back("-fms-memptr-rep=single");

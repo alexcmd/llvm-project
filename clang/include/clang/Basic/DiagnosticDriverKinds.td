@@ -18,10 +18,15 @@ def warn_drv_ignoring_unknown_option : Warning<
 // earlier different one; warnings also under /WX (observed, exit 0).
 def warn_drv_cl_overriding_option : Warning<
   "D9025 : overriding '%0' with '%1'">,
-  InGroup<DiagGroup<"cl-overriding-option">>, DefaultWarnNoWerror;
+  InGroup<CLOverridingOption>, DefaultWarnNoWerror;
 def warn_drv_cl_option_requires : Warning<
   "D9007 : '%0' requires '%1'; option ignored">,
   InGroup<DiagGroup<"cl-option-requires">>, DefaultWarnNoWerror;
+def warn_drv_cl_options_global : Warning<
+  "D9026 : options apply to entire command line">,
+  InGroup<CLOverridingOption>, DefaultWarnNoWerror;
+def err_drv_cl_incompatible_options : Error<
+  "D8016 : '%0' and '%1' command-line options are incompatible">;
 def warn_drv_cl_pd_requires_zc : Warning<
   "D9007 : '/PD' has no effect without '/Zc:preprocessor'">, DefaultWarnNoWerror;
 // Exit codes differ from cl (GAP).

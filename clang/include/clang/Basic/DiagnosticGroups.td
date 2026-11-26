@@ -862,6 +862,8 @@ def NullArithmetic : DiagGroup<"null-arithmetic">;
 def NullCharacter : DiagGroup<"null-character">;
 def NullDereference : DiagGroup<"null-dereference">;
 def NonNull : DiagGroup<"nonnull">;
+// CL-OPT-OVERRIDE: D9025, D9026.
+def CLOverridingOption : DiagGroup<"cl-overriding-option">;
 // CL-DX-NONPOD-VARARG: C4840 in cl mode.
 def MicrosoftNonPODVarargs : DiagGroup<"microsoft-non-pod-varargs">;
 def NonPODVarargs : DiagGroup<"non-pod-varargs", [MicrosoftNonPODVarargs]>;

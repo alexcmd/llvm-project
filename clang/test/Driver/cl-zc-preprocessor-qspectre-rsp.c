@@ -7,7 +7,10 @@
 // CONF: #define _MSVC_TRADITIONAL 0
 // RUN: %clang_cl --target=x86_64-pc-windows-msvc -fms-compatibility-version=19.44 \
 // RUN:   /WX /Zc:preprocessor /Zc:preprocessor- /E /clang:-dM -- %s 2>&1 \
-// RUN:   | FileCheck %s --check-prefix=TRAD
+// RUN:   | FileCheck %s --check-prefix=TRAD2
+// TRAD2: warning: D9025 : overriding '/Zc:preprocessor' with '/Zc:preprocessor-'
+// TRAD2-NOT: error
+// TRAD2: #define _MSVC_TRADITIONAL 1
 // RUN: %clang_cl --target=x86_64-pc-windows-msvc -fms-compatibility-version=19.44 \
 // RUN:   /E /clang:-dM -- %s 2>&1 | FileCheck %s --check-prefix=TRAD
 // TRAD-NOT: warning

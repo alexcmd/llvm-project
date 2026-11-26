@@ -22,11 +22,12 @@
 
 // Last one should win:
 
-// RUN: %clang_cl --target=i686-windows-msvc /Gd /Gv -### -- %s 2>&1 | FileCheck --check-prefix=LASTWINS_VECTOR %s
-// LASTWINS_VECTOR: -fdefault-calling-conv=vectorcall
+// CL-OPT-INCOMPATIBLE: two calling conventions are D8016 in cl 19.44 (observed).
+// RUN: not %clang_cl --target=i686-windows-msvc /Gd /Gv -### -- %s 2>&1 | FileCheck --check-prefix=LASTWINS_VECTOR %s
+// LASTWINS_VECTOR: error: D8016 : '/Gd' and '/Gv' command-line options are incompatible
 
-// RUN: %clang_cl --target=i686-windows-msvc /Gv /Gd -### -- %s 2>&1 | FileCheck --check-prefix=LASTWINS_CDECL %s
-// LASTWINS_CDECL: -fdefault-calling-conv=cdecl
+// RUN: not %clang_cl --target=i686-windows-msvc /Gv /Gd -### -- %s 2>&1 | FileCheck --check-prefix=LASTWINS_CDECL %s
+// LASTWINS_CDECL: error: D8016 : '/Gv' and '/Gd' command-line options are incompatible
 
 // No fastcall or stdcall on x86_64:
 

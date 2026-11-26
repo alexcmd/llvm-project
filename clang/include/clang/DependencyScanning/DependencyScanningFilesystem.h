@@ -50,6 +50,15 @@ struct CachedFileContents {
   /// \p CachedFileContents has ownership of the pointer.
   std::atomic<const std::optional<DependencyDirectivesTy> *> DepDirectives;
 
+  /// CL-EXEC-CHARSET: directives scanned from the conversion of the contents
+  /// from a source character set, one per character set (another TU may
+  /// read the same file in another one); guarded by ValueLock.
+  struct ConvertedDirectives {
+    SmallVector<dependency_directives_scan::Token, 10> Tokens;
+    std::optional<DependencyDirectivesTy> Directives;
+  };
+  llvm::StringMap<std::unique_ptr<ConvertedDirectives>> ConvertedByCharset;
+
   ~CachedFileContents() { delete DepDirectives.load(); }
 };
 
@@ -333,8 +342,10 @@ public:
   /// (cl's source character set, -fms-source-charset), as the compile does,
   /// so that directive offsets and include names match it. Null: as is.
   void setSourceCharsetConverter(
-      std::shared_ptr<llvm::TextEncodingConverter> Converter) {
+      std::shared_ptr<llvm::TextEncodingConverter> Converter,
+      StringRef Charset) {
     SourceCharsetConverter = std::move(Converter);
+    SourceCharset = SourceCharsetConverter ? Charset.lower() : std::string();
   }
 
   llvm::ErrorOr<llvm::vfs::Status> status(const Twine &Path) override;
@@ -362,11 +373,22 @@ public:
   /// used to speed up preprocessing, if available.
   std::optional<ArrayRef<dependency_directives_scan::Directive>>
   getDirectiveTokens(const Twine &Path) {
-    if (llvm::ErrorOr<EntryRef> Entry = getOrCreateFileSystemEntry(Path.str()))
+    if (llvm::ErrorOr<EntryRef> Entry = getOrCreateFileSystemEntry(Path.str())) {
+      // CL-EXEC-CHARSET: a file the compile converts gets directives scanned
+      // from the same conversion, kept apart per character set.
+      if (needsSourceCharsetConversion(*Entry))
+        return getConvertedDirectiveTokens(*Entry);
       if (ensureDirectiveTokensArePopulated(*Entry))
         return Entry->getDirectiveTokens();
+    }
     return std::nullopt;
   }
+
+  /// CL-EXEC-CHARSET: whether the SourceManager converts this file (a source
+  /// character set is set, no UTF-8 BOM, a non-ASCII byte).
+  bool needsSourceCharsetConversion(EntryRef Entry) const;
+  std::optional<ArrayRef<dependency_directives_scan::Directive>>
+  getConvertedDirectiveTokens(EntryRef Entry);
 
   /// Check whether \p Path exists. By default checks cached result of \c
   /// status(), and falls back on FS if unable to do so.
@@ -375,6 +397,7 @@ public:
 private:
   /// CL-EXEC-CHARSET: see setSourceCharsetConverter.
   std::shared_ptr<llvm::TextEncodingConverter> SourceCharsetConverter;
+  std::string SourceCharset;
 
   /// Resolves the cache entry for \p FilenameForLookup through the shared
   /// cache: returns an entry already produced by another worker (a cache hit

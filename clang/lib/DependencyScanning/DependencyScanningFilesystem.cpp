@@ -65,25 +65,10 @@ bool DependencyScanningWorkerFilesystem::ensureDirectiveTokensArePopulated(
     return true;
 
   SmallVector<dependency_directives_scan::Directive, 64> Directives;
-  // CL-EXEC-CHARSET: the preprocessor lexes the SourceManager's buffer, which
-  // is converted from the source character set (a source without a UTF-8 BOM
-  // and with a non-ASCII byte); the directives are scanned from the same
-  // conversion, so that their offsets and spellings (a non-ASCII include
-  // name) match it. Files of a known binary format are left alone.
-  StringRef ScanText = Contents->Original->getBuffer();
-  SmallString<0> Converted;
-  if (SourceCharsetConverter && !ScanText.starts_with("\xEF\xBB\xBF") &&
-      llvm::identify_magic(ScanText) == llvm::file_magic::unknown &&
-      llvm::any_of(ScanText,
-                   [](char C) { return (unsigned char)C >= 0x80; }) &&
-      !SourceCharsetConverter->convert(ScanText, Converted)) {
-    // The lexer wants a NUL after the text, as in a MemoryBuffer.
-    Converted.push_back('\0');
-    ScanText = StringRef(Converted.data(), Converted.size() - 1);
-  }
   // Scan the file for preprocessor directives that might affect the
   // dependencies.
-  if (scanSourceForDependencyDirectives(ScanText, Contents->DepDirectiveTokens,
+  if (scanSourceForDependencyDirectives(Contents->Original->getBuffer(),
+                                        Contents->DepDirectiveTokens,
                                         Directives)) {
     Contents->DepDirectiveTokens.clear();
     // FIXME: Propagate the diagnostic if desired by the client.
@@ -98,6 +83,48 @@ bool DependencyScanningWorkerFilesystem::ensureDirectiveTokensArePopulated(
   Contents->DepDirectives.store(
       new std::optional<DependencyDirectivesTy>(std::move(Directives)));
   return true;
+}
+
+// CL-EXEC-CHARSET: the preprocessor lexes the SourceManager's buffer, which
+// is converted from the source character set for a source without a UTF-8
+// BOM and with a non-ASCII byte. Such a file gets its directives scanned from
+// the same conversion (offsets and spellings, a non-ASCII include name,
+// match the buffer), stored per character set in the shared entry: another
+// TU may read the same file in another character set (/utf-8).
+bool DependencyScanningWorkerFilesystem::needsSourceCharsetConversion(
+    EntryRef Ref) const {
+  if (!SourceCharsetConverter || Ref.Entry.isError() || Ref.Entry.isDirectory())
+    return false;
+  StringRef Text = Ref.getContents();
+  return !Text.starts_with("\xEF\xBB\xBF") &&
+         llvm::any_of(Text, [](char C) { return (unsigned char)C >= 0x80; });
+}
+
+std::optional<ArrayRef<dependency_directives_scan::Directive>>
+DependencyScanningWorkerFilesystem::getConvertedDirectiveTokens(EntryRef Ref) {
+  CachedFileContents *Contents = Ref.Entry.getCachedContents();
+  assert(Contents && "contents not initialized");
+  std::lock_guard<std::mutex> GuardLock(Contents->ValueLock);
+  std::unique_ptr<CachedFileContents::ConvertedDirectives> &Slot =
+      Contents->ConvertedByCharset[SourceCharset];
+  if (!Slot) {
+    Slot = std::make_unique<CachedFileContents::ConvertedDirectives>();
+    SmallString<0> Converted;
+    if (!SourceCharsetConverter->convert(Contents->Original->getBuffer(),
+                                         Converted)) {
+      // The lexer wants a NUL after the text, as in a MemoryBuffer.
+      Converted.push_back('\0');
+      StringRef Text(Converted.data(), Converted.size() - 1);
+      SmallVector<dependency_directives_scan::Directive, 64> Directives;
+      if (!scanSourceForDependencyDirectives(Text, Slot->Tokens, Directives))
+        Slot->Directives = std::move(Directives);
+      else
+        Slot->Tokens.clear();
+    }
+  }
+  if (Slot->Directives)
+    return ArrayRef<dependency_directives_scan::Directive>(*Slot->Directives);
+  return std::nullopt;
 }
 
 DependencyScanningFilesystemSharedCache::

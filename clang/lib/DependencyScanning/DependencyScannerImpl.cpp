@@ -405,11 +405,16 @@ void dependencies::initializeScanCompilerInstance(
   // CL-EXEC-CHARSET: the SourceManager converts the sources from the source
   // character set as in the compile; the scanning file system scans the
   // directives from the same conversion, so offsets and include names match.
-  if (const std::string &Charset = ScanInstance.getFrontendOpts().MSSourceCharset;
-      !Charset.empty() && DepFS)
-    if (auto Converter = llvm::TextEncodingConverter::create(Charset, "UTF-8"))
-      DepFS->setSourceCharsetConverter(
-          std::make_shared<llvm::TextEncodingConverter>(std::move(*Converter)));
+  // Set for every TU: a worker scans TUs with different character sets.
+  if (DepFS) {
+    const std::string &Charset = ScanInstance.getFrontendOpts().MSSourceCharset;
+    std::shared_ptr<llvm::TextEncodingConverter> Conv;
+    if (!Charset.empty())
+      if (auto Converter = llvm::TextEncodingConverter::create(Charset, "UTF-8"))
+        Conv = std::make_shared<llvm::TextEncodingConverter>(
+            std::move(*Converter));
+    DepFS->setSourceCharsetConverter(std::move(Conv), Charset);
+  }
   ScanInstance.createSourceManager();
 
   // Use DepFS for getting the dependency directives if requested to do so.

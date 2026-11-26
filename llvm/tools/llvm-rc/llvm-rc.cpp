@@ -116,6 +116,10 @@ public:
 static ExitOnError ExitOnErr;
 static FileRemover TempPreprocFile;
 static FileRemover TempResFile;
+// openrt RC-OUTPUT-ON-ERROR: rc.exe leaves no output file when it fails
+// (observed: an error in the script or a missing script removes an older
+// .res of that name; a bad option leaves it).
+static FileRemover OutputOnError;
 
 [[noreturn]] static void fatalError(const Twine &Message) {
   errs() << Message << "\n";
@@ -296,8 +300,10 @@ void preprocess(StringRef Src, StringRef Dst, const RcOptions &Opts,
       sys::printArg(outs(), A, Opts.PrintCmdAndExit);
     }
     outs() << "\n";
-    if (Opts.PrintCmdAndExit)
+    if (Opts.PrintCmdAndExit) {
+      OutputOnError.releaseFile();
       exit(0);
+    }
   }
   // The llvm Support classes don't handle reading from stdout of a child
   // process; otherwise we could avoid using a temp file.
@@ -625,6 +631,8 @@ RcOptions getOptions(const char *Argv0, ArrayRef<const char *> ArgsArr,
 
 void doRc(std::string Src, std::string Dest, RcOptions &Opts,
           const char *Argv0) {
+  if (!Opts.IsDryRun)
+    OutputOnError.setFile(Dest);
   std::string PreprocessedFile = Src;
   if (Opts.Preprocess) {
     std::string OutFile = createTempFile("preproc", "rc");
@@ -718,6 +726,9 @@ void doRc(std::string Src, std::string Dest, RcOptions &Opts,
   // STRINGTABLE resources come at the very end.
   if (!Opts.IsDryRun)
     ExitOnErr(Visitor->dumpAllStringTables());
+  // The output is complete; it is kept.
+  Visitor.reset();
+  OutputOnError.releaseFile();
 }
 
 void doCvtres(std::string Src, std::string Dest, std::string TargetTriple) {

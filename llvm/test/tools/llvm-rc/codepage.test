@@ -88,3 +88,17 @@
 ; RUN: llvm-rc -no-preprocess /FO %t.escud.res -- %p/Inputs/escud1251.rc
 ; RUN: llvm-readobj %t.escud.res | FileCheck %s --check-prefix=ESCUD1251
 ; ESCUD1251: Data:: (C6)
+
+; A narrow user-resource string is written in 1252 with best fit, '?' where
+; there is none (rc.exe: under 1250 "\xA5\xB3" (U+0104 U+0142) is 41 6C; under
+; 1253 "\xC1\xE1" (U+0391 U+03B1) is 3F 61), and an escaped byte there is
+; written as it is (rc.exe: under 1251 "\351\x80" is E9 80).
+; RUN: llvm-rc -no-preprocess /FO %t.bf1250.res -- %p/Inputs/bf1250.rc
+; RUN: llvm-readobj %t.bf1250.res | FileCheck %s --check-prefix=BF1250
+; BF1250: Data:: (41 6C)
+; RUN: llvm-rc -no-preprocess /FO %t.g1253.res -- %p/Inputs/g1253.rc
+; RUN: llvm-readobj %t.g1253.res | FileCheck %s --check-prefix=G1253
+; G1253: Data:: (3F 61)
+; RUN: llvm-rc -no-preprocess /FO %t.octud.res -- %p/Inputs/octud1251.rc
+; RUN: llvm-readobj %t.octud.res | FileCheck %s --check-prefix=OCTUD
+; OCTUD: Data:: (E9 80)

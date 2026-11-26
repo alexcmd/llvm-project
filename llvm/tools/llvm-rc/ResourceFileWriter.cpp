@@ -146,14 +146,37 @@ enum class NullHandlingMethod {
 //   * Squash "" to a single ".
 //   * Replace the escape sequences with their processed version.
 // For identifiers, this is no-op.
+// openrt RC-PRAGMA-CODEPAGE: a code point written in 1252 with best fit, as
+// rc.exe writes narrow user-resource strings ('?' when there is none).
+#include "BestFit1252.inc"
+static UTF16 unicodeTo1252BestFit(UTF32 C) {
+  if (C < 0x80)
+    return C;
+  for (unsigned B = 0x80; B != 0x100; ++B)
+    if (cp1252ToUnicode(B) == C)
+      return B;
+  auto *It = std::lower_bound(
+      std::begin(BestFit1252), std::end(BestFit1252), C,
+      [](const auto &E, UTF32 V) { return E.CP < V; });
+  if (It != std::end(BestFit1252) && It->CP == C)
+    return It->Byte;
+  return '?';
+}
+
 static Error processString(StringRef Str, NullHandlingMethod NullHandler,
                            bool &IsLongString, SmallVectorImpl<UTF16> &Result,
                            int CodePage) {
   bool IsString = stripQuotes(Str, IsLongString);
   SmallVector<UTF16, 128> Chars;
-  // openrt RC-PRAGMA-CODEPAGE: one conversion for this string's code page.
+  // openrt RC-PRAGMA-CODEPAGE: one conversion for this string's code page,
+  // made only for a string with a non-ASCII byte or an escape.
+  bool OtherCodePage =
+      CodePage != CpUtf8 && CodePage != CpWin1252 && CodePage != CpAcp;
   std::optional<TextEncodingConverter> CPConv;
-  if (CodePage != CpUtf8 && CodePage != CpWin1252 && CodePage != CpAcp)
+  if (OtherCodePage && IsString &&
+      llvm::any_of(Str, [](char C) {
+        return (unsigned char)C >= 0x80 || C == '\\';
+      }))
     if (auto C = TextEncodingConverter::create(("." + Twine(CodePage)).str(),
                                                "UTF-8"))
       CPConv.emplace(std::move(*C));
@@ -167,21 +190,23 @@ static Error processString(StringRef Str, NullHandlingMethod NullHandler,
   } else if (!IsLongString && NullHandler == NullHandlingMethod::UserResource &&
              CPConv) {
     // openrt RC-PRAGMA-CODEPAGE: a narrow string of a user resource is read in
-    // the pragma's code page and written in 1252, '?' for a character 1252
-    // lacks (observed, rc.exe: "\xC6\xE8" under code_page(1251) in RCDATA is
-    // 3F 3F).
-    SmallString<128> UTF8, Narrow;
-    if (CPConv->convert(Str, UTF8))
+    // the pragma's code page and written in 1252 with best fit, '?' where
+    // there is none (observed, rc.exe: under code_page(1251) "\xC6\xE8" is
+    // 3F 3F; under 1250 "\xA5\xB3" (U+0104 U+0142) is 41 6C; under 1253
+    // "\xC1\xE1" is 3F 61).
+    SmallString<128> Text;
+    if (CPConv->convert(Str, Text))
       return createError("Non-ASCII 8-bit codepoint can't be interpreted in "
                          "the current codepage");
-    auto To1252 = TextEncodingConverter::create("UTF-8", "windows-1252");
-    std::error_code EC = To1252 ? To1252->convert(UTF8, Narrow)
-                                : std::make_error_code(std::errc::invalid_argument);
-    if (EC && EC != std::errc::result_out_of_range)
-      return createError("Non-ASCII 8-bit codepoint can't be interpreted in "
-                         "the current codepage");
-    for (char C : Narrow)
-      Chars.push_back((unsigned char)C);
+    const UTF8 *P = reinterpret_cast<const UTF8 *>(Text.begin());
+    const UTF8 *E = reinterpret_cast<const UTF8 *>(Text.end());
+    while (P < E) {
+      UTF32 C = 0;
+      if (convertUTF8Sequence(&P, E, &C, strictConversion) != conversionOK)
+        return createError("Non-ASCII 8-bit codepoint can't be interpreted "
+                           "in the current codepage");
+      Chars.push_back(unicodeTo1252BestFit(C));
+    }
   } else {
     // openrt RC-PRAGMA-CODEPAGE: other code pages (#pragma code_page(1251),
     // (932), ... as Visual Studio writes them) through llvm's Windows code
@@ -231,7 +256,7 @@ static Error processString(StringRef Str, NullHandlingMethod NullHandler,
     Result.push_back(Char);
     return Error::success();
   };
-  auto AddEscapedChar = [AddRes, IsLongString, CodePage,
+  auto AddEscapedChar = [AddRes, IsLongString, CodePage, NullHandler,
                          &CPConv](UTF16 Char) -> Error {
     if (!IsLongString) {
       // Escaped chars in narrow strings have to be interpreted according to
@@ -245,10 +270,15 @@ static Error processString(StringRef Str, NullHandlingMethod NullHandler,
                              ") as UTF-8");
       } else if (CodePage == CpWin1252) {
         Char = cp1252ToUnicode(Char);
+      } else if (CPConv && NullHandler == NullHandlingMethod::UserResource) {
+        // openrt RC-PRAGMA-CODEPAGE: in a narrow user-resource string under
+        // another pragma code page an escaped byte is written as it is
+        // (observed, rc.exe: "\x82\xA0" under 932 is 82 A0, "\351\x80"
+        // under 1251 is E9 80).
       } else if (CPConv) {
-        // openrt RC-PRAGMA-CODEPAGE: under another pragma code page an escaped
-        // byte is taken as in 1252 (observed, rc.exe: "\xC6" under
-        // code_page(1251) is U+00C6 in a STRINGTABLE, C6 in RCDATA).
+        // openrt RC-PRAGMA-CODEPAGE: in a UTF-16 string an escaped byte is
+        // taken as in 1252 (observed, rc.exe: "\xC6" under code_page(1251)
+        // is U+00C6 in a STRINGTABLE).
         Char = cp1252ToUnicode(Char);
       } else {
         // Unknown/unsupported codepage, only allow ASCII input.

@@ -1,0 +1,2 @@
+#pragma code_page(932)
+1 RCDATA { "a‚ b" }

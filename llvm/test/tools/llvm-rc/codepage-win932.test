@@ -1,0 +1,12 @@
+; openrt RC-PRAGMA-CODEPAGE: code page 932 is converted by the Windows API.
+; REQUIRES: system-windows
+
+; An invalid 932 pair reads as U+30FB, which best-fits to B7 in 1252 (rc.exe:
+; "a\x82 b" in RCDATA under 932 is 61 B7 62); an escaped byte in a narrow
+; user-resource string is written as it is (rc.exe: "\x82\xA0" is 82 A0).
+; RUN: llvm-rc -no-preprocess /FO %t.inv.res -- %p/Inputs/inv932.rc
+; RUN: llvm-readobj %t.inv.res | FileCheck %s --check-prefix=INV
+; INV: Data:: (61 B7 62)
+; RUN: llvm-rc -no-preprocess /FO %t.esc.res -- %p/Inputs/escud932.rc
+; RUN: llvm-readobj %t.esc.res | FileCheck %s --check-prefix=ESC
+; ESC: Data:: (82 A0)

@@ -58,6 +58,25 @@ TypeResult Parser::ParseTypeName(SourceRange *Range, DeclaratorContext Context,
   if (OwnedType)
     *OwnedType = DS.isTypeSpecOwned() ? DS.getRepAsDecl() : nullptr;
 
+  // CL-ATTR-AFTER-TYPE: in an alias declaration the attribute applies to the
+  // alias (cl: using T = int [[deprecated]]; T x; is C4996 'T'); a type-id
+  // elsewhere has no entity for it.
+  if (!DS.getCLDeclAttributes().empty()) {
+    SmallVector<ParsedAttr *, 2> CLAttrs;
+    for (ParsedAttr &AL : DS.getCLDeclAttributes())
+      CLAttrs.push_back(&AL);
+    for (ParsedAttr *AL : CLAttrs) {
+      if (Attrs && (Context == DeclaratorContext::AliasDecl ||
+                    Context == DeclaratorContext::AliasTemplate)) {
+        Attrs->takeOneFrom(DS.getCLDeclAttributes(), AL);
+      } else {
+        Diag(AL->getLoc(), diag::err_attribute_not_type_attr)
+            << *AL << AL->isRegularKeywordAttribute();
+        AL->setInvalid();
+      }
+    }
+  }
+
   // Move declspec attributes to ParsedAttributes
   if (Attrs) {
     llvm::SmallVector<ParsedAttr *, 1> ToBeMoved;
@@ -3479,15 +3498,23 @@ void Parser::ParseDeclarationSpecifiers(
               PA.getKind() != ParsedAttr::AT_AnyX86NoCfCheck)
             continue;
 
-          // CL-ATTR-AFTER-TYPE: cl 19.44 applies such an attribute to the
-          // declared entity (observed: typedef'd Fn [[deprecated("x")]] A;
-          // in a union, int [[deprecated]] v;, a parameter; C4996 on use).
-          if (getLangOpts().MSCLRules && PA.isCXX11Attribute() &&
-              !PA.isRegularKeywordAttribute() &&
-              PA.getKind() != ParsedAttr::AT_LifetimeBound &&
-              PA.getKind() != ParsedAttr::AT_AnyX86NoCfCheck) {
-            CLDeclAttrs.push_back(&PA);
-            continue;
+          // CL-ATTR-AFTER-TYPE: cl 19.44 (observed) applies [[deprecated]]
+          // written here to the declared entity (typedef'd Fn
+          // [[deprecated("x")]] A; in a union, int [[deprecated]] v;, a
+          // parameter, using T = int [[deprecated]]; C4996 on each use),
+          // ignores [[nodiscard]] and [[maybe_unused]] silently, and rejects
+          // the others (noreturn C3829, fallthrough, likely, ...).
+          if (getLangOpts().MSVCCompat && getLangOpts().MSCLRules &&
+              PA.isCXX11Attribute() && !PA.isRegularKeywordAttribute()) {
+            if (PA.getKind() == ParsedAttr::AT_Deprecated) {
+              CLDeclAttrs.push_back(&PA);
+              continue;
+            }
+            if (PA.getKind() == ParsedAttr::AT_WarnUnusedResult ||
+                PA.getKind() == ParsedAttr::AT_Unused) {
+              PA.setInvalid();
+              continue;
+            }
           }
           if (PA.getKind() == ParsedAttr::AT_LifetimeBound)
             Diag(PA.getLoc(), diag::err_attribute_wrong_decl_type)

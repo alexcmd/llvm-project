@@ -359,6 +359,11 @@ int clang_main(int Argc, char **Argv, const llvm::ToolContext &ToolContext) {
   // parsing them. CC1 still receives full args, so this doesn't impact other
   // actions.
   DiagOpts->DiagnosticSuppressionMappingsFile.clear();
+  // CL-OPT-OVERRIDE: cl's /w and /W0 silence the compiler, not its command
+  // line warnings (observed: /w /O1 /O2 still gives D9025, /w /Gm D9035 and
+  // D9007); the driver's own diagnostics ignore -w in cl mode.
+  if (ClangCLMode)
+    DiagOpts->IgnoreWarnings = false;
 
   TextDiagnosticPrinter *DiagClient =
       new TextDiagnosticPrinter(llvm::errs(), *DiagOpts);

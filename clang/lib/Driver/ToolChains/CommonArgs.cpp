@@ -3591,6 +3591,9 @@ static void emitComplexRangeDiag(const Driver &D, StringRef LastOpt,
       (LastOpt.starts_with("-fcomplex-arithmetic=") &&
        NewOpt.starts_with("-fcomplex-arithmetic=")))
     return;
+  // CL-OPT-OVERRIDE: in cl mode /fp:fast /fp:precise is D9025 alone, as cl.
+  if (D.IsCLMode())
+    return;
 
   D.Diag(clang::diag::warn_drv_overriding_complex_range)
       << LastOpt << NewOpt << complexRangeKindToStr(Range)

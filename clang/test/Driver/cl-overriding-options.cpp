@@ -53,3 +53,36 @@
 // Not in the clang driver.
 // RUN: %clang --target=x86_64-pc-windows-msvc -c -O1 -O2 -### -- %s 2>&1 | FileCheck --check-prefix=GNU %s
 // GNU-NOT: D9025
+
+// /w and /W0 silence the compiler, not the command line warnings (cl: /W4 /w
+// D9025, /w /Gm D9035 and D9007).
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc /nologo /c /W4 /w /Gm -### -- %s 2>&1 | FileCheck --check-prefix=QUIET %s
+// QUIET: warning: D9035 : option 'Gm' is deprecated
+// QUIET: warning: D9025 : overriding '/W4' with '/w'
+// QUIET: warning: D9007 : '/Gm' requires '/Zi or /ZI'; option ignored
+
+// /Og: D9035, and D9025 when it is overridden but not when it overrides.
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc /nologo /c /Og /Od -### -- %s 2>&1 | FileCheck --check-prefix=OG %s
+// OG: warning: D9035 : option 'Og' is deprecated
+// OG: warning: D9025 : overriding '/Og' with '/Od'
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc /nologo /c /Od /Og -### -- %s 2>&1 | FileCheck --check-prefix=OG2 %s
+// OG2: warning: D9035 : option 'Og' is deprecated
+// OG2-NOT: D9025
+
+// Only the cl text: no D9025 next to the D8016 of a C and a C++ /std:, no
+// "argument unused" for the overridden /TC, no complex-range note for /fp:.
+// RUN: not %clang_cl --target=x86_64-pc-windows-msvc /nologo /c /std:c11 /std:c++17 -### -- %s 2>&1 | FileCheck --check-prefix=NOISE1 %s
+// NOISE1-NOT: D9025
+// NOISE1: error: D8016 : '/std:c11' and '/std:c++17' command-line options are incompatible
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc /nologo /c /TC /TP /fp:fast /fp:precise -### -- %s 2>&1 | FileCheck --check-prefix=NOISE2 %s
+// NOISE2: warning: D9025 : overriding '/TC' with '/TP'
+// NOISE2: warning: D9025 : overriding '/fp:fast' with '/fp:precise'
+// NOISE2-NOT: argument unused
+// NOISE2-NOT: complex range
+
+// D9026 only when a plain input follows the /TC or /TP that follows a /Tc or
+// /Tp file (cl: /Tc x.c /TP alone is silent).
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc /nologo /c /Tc%s /TP -### 2>&1 | FileCheck --check-prefix=NO26 %s
+// NO26-NOT: D9026
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc /nologo /c /Tc%s /TP -### -- %s 2>&1 | FileCheck --check-prefix=YES26 %s
+// YES26: warning: D9026 : options apply to entire command line

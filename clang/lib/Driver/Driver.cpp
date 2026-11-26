@@ -3267,17 +3267,24 @@ void Driver::BuildInputs(const ToolChain &TC, DerivedArgList &Args,
     // differ (silent for the same one twice), and D9026 once when a /TC or
     // /TP comes after a /Tc or /Tp file.
     if (IsCLMode()) {
-      unsigned FirstTcTp = ~0U;
+      unsigned FirstTcTp = ~0U, LastInput = 0;
       for (const Arg *A : Args.filtered(options::OPT__SLASH_Tc,
                                         options::OPT__SLASH_Tp))
         FirstTcTp = std::min(FirstTcTp, A->getIndex());
+      for (const Arg *A : Args.filtered(options::OPT_INPUT))
+        LastInput = std::max(LastInput, A->getIndex());
       bool Global = false;
       for (Arg *A :
            Args.filtered(options::OPT__SLASH_TC, options::OPT__SLASH_TP)) {
-        if (Previous && !Previous->getOption().matches(A->getOption().getID()))
-          Diag(clang::diag::warn_drv_cl_overriding_option)
-              << Previous->getSpelling() << A->getSpelling();
-        if (A->getIndex() > FirstTcTp)
+        if (Previous) {
+          if (!Previous->getOption().matches(A->getOption().getID()))
+            Diag(clang::diag::warn_drv_cl_overriding_option)
+                << Previous->getSpelling() << A->getSpelling();
+          Previous->claim(); // overridden, not unused (cl)
+        }
+        // D9026 when a plain input follows a /TC or /TP that follows a /Tc
+        // or /Tp file (cl: /Tc x.c /TP alone is silent).
+        if (A->getIndex() > FirstTcTp && LastInput > A->getIndex())
           Global = true;
         Previous = A;
       }
@@ -4535,7 +4542,7 @@ static void collectCLOptTokens(const Arg *A, unsigned Index,
     StringRef V = S.drop_front(1);
     for (size_t I = 0; I < V.size(); ++I) {
       char C = V[I];
-      if (C == 'd' || C == '1' || C == '2' || C == 'x') {
+      if (C == 'd' || C == '1' || C == '2' || C == 'x' || C == 'g') {
         Add("Olevel", std::string("O") + C, C == 'x' ? "O2" : std::string("O") + C);
       } else if (C == 's' || C == 't') {
         Add("Ost", std::string("O") + C, std::string("O") + C);
@@ -4733,12 +4740,25 @@ static void diagnoseCLOverridingOptions(const Driver &D,
       collectCLOptTokens(A, Index, Tokens);
     ++Index;
   }
+  // D9035 for /Og (cl: deprecated), ahead of the D9025 that names it.
+  for (const CLOptToken &T : Tokens)
+    if (T.Text == "Og")
+      D.Diag(clang::diag::warn_drv_cl_deprecated_option) << "Og";
   llvm::StringMap<const CLOptToken *> Last;
   for (const CLOptToken &T : Tokens) {
     const CLOptToken *&Prev = Last[T.Family];
     if (Prev && Prev->ArgIndex != T.ArgIndex && Prev->Key != T.Key) {
       bool Overrides = true;
       if (T.Family == "GL" && Prev->Text == "GL-")
+        Overrides = false;
+      // /Og (deprecated) is reported when overridden, not when it overrides
+      // (cl: /Og /Od D9025, /Od /Og none).
+      if (T.Text == "Og")
+        Overrides = false;
+      // A C and a C++ /std: are D8016, without D9025 (cl).
+      if (T.Family == "std:" &&
+          StringRef(Prev->Text).starts_with("std:c++") !=
+              StringRef(T.Text).starts_with("std:c++"))
         Overrides = false;
       // /EHa and /EHs: the same letter with the other sign, or the other
       // letter, both positive.

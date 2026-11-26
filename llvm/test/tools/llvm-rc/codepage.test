@@ -61,3 +61,13 @@
 ; RUN: llvm-readobj %t.pragma.res | FileCheck %s --check-prefix=PRAGMA
 ; PRAGMA:      0000: 00000300 A9002000 78000400 C200A900
 ; PRAGMA-NEXT: 0010: 20007900 00000000 00000000 00000000
+
+; Another code page in the pragma (Visual Studio writes code_page(1251), (932))
+; takes plain ASCII, as rc.exe and llvm-rc before; non-ASCII text under it
+; is still an error where it is used.
+; RUN: llvm-rc -no-preprocess /FO %t.p1251.res -- %p/Inputs/pragma-1251-ascii.rc
+; RUN: llvm-readobj %t.p1251.res | FileCheck %s --check-prefix=P1251
+; P1251: Data size: 52
+; RUN: llvm-windres --no-preprocess %p/Inputs/pragma-1251-ascii.rc %t.p1251w.res
+; RUN: not llvm-rc -no-preprocess /FO %t.p1251n.res -- %p/Inputs/pragma-1251-nonascii.rc 2>&1 | FileCheck %s --check-prefix=P1251N
+; P1251N: Non-ASCII 8-bit codepoint

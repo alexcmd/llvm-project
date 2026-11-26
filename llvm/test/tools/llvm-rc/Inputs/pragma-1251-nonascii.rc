@@ -1,0 +1,4 @@
+#pragma code_page(1251)
+STRINGTABLE {
+  1 "é"
+}

@@ -19,6 +19,7 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Endian.h"
 
+#include <functional>
 #include <map>
 
 namespace llvm {
@@ -44,10 +45,16 @@ struct WriterParams {
   // openrt RC-PRAGMA-CODEPAGE: "#pragma code_page(N)" in the script, as
   // (first byte it applies to, N), in order; -1 is the default again.
   std::vector<std::pair<const char *, int>> CodePageChanges;
+  const char *ScriptBegin = nullptr, *ScriptEnd = nullptr;
 
-  /// The code page for the text at \p Text.
+  /// The code page for the text at \p Text (text outside the script: /C or
+  /// the default).
   int codePageAt(StringRef Text) const {
     int CP = CodePage;
+    if (!ScriptBegin ||
+        !(std::less_equal<const char *>()(ScriptBegin, Text.data()) &&
+          std::less<const char *>()(Text.data(), ScriptEnd)))
+      return CP;
     for (const auto &[Pos, N] : CodePageChanges) {
       if (Text.data() < Pos)
         break;

@@ -680,13 +680,13 @@ void doRc(std::string Src, std::string Dest, RcOptions &Opts,
     fatalError("Unsupported code page, only 0, 1252 and 65001 are supported!");
   }
   // openrt RC-PRAGMA-CODEPAGE: the text after "#pragma code_page(N)" is read
-  // in code page N, as rc.exe does.
-  for (const auto &[Offset, CP] : PragmaCodePages) {
-    if (CP != -1 && CP != CpAcp && CP != CpWin1252 && CP != CpUtf8)
-      fatalError("Unsupported code page in #pragma code_page(" + Twine(CP) +
-                 "), only 0, 1252 and 65001 are supported!");
+  // in code page N, as rc.exe does. Another page than 1252 and 65001 (Visual
+  // Studio writes code_page(1251), (932), ... in every language block) takes
+  // plain ASCII and rejects a non-ASCII byte where it is used, as before.
+  Params.ScriptBegin = FilteredContents.data();
+  Params.ScriptEnd = FilteredContents.data() + FilteredContents.size();
+  for (const auto &[Offset, CP] : PragmaCodePages)
     Params.CodePageChanges.emplace_back(FilteredContents.data() + Offset, CP);
-  }
 
   std::unique_ptr<ResourceFileWriter> Visitor;
 

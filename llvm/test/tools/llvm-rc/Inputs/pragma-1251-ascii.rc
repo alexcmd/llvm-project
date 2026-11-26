@@ -1,0 +1,8 @@
+#pragma code_page(1251)
+STRINGTABLE {
+  1 "hello"
+}
+#pragma code_page(932)
+STRINGTABLE {
+  2 "world"
+}

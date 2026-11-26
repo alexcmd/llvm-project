@@ -36,3 +36,5 @@ int [[gnu::unused]] gu; // std-error {{'gnu::unused' attribute cannot be applied
 int [[gnu::deprecated]] gd; // std-error {{'gnu::deprecated' attribute cannot be applied to types}} cl-warning {{unknown attribute 'gnu::deprecated' ignored}}
 int usegd() { return gd; }
 auto tr() -> int [[deprecated]]; // std-error {{'deprecated' attribute cannot be applied to types}}
+int [[msvc::noinline]] mni; // std-error {{'msvc::noinline' attribute cannot be applied to types}}
+int [[clang::annotate_type("x")]] cat; // cl-warning {{unknown attribute 'clang::annotate_type' ignored}}

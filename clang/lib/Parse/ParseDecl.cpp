@@ -3489,6 +3489,26 @@ void Parser::ParseDeclarationSpecifiers(
             PA.setInvalid();
             continue;
           }
+          // CL-ATTR-AFTER-TYPE: cl knows no gnu:: or clang:: attribute:
+          // C5030 "not recognized" ([[gnu::unused]], [[gnu::deprecated]],
+          // also a type attribute such as [[clang::annotate_type]]);
+          // [[msvc::noinline]] after the type is silent in cl (forceinline
+          // keeps its error, cl C3829).
+          if (getLangOpts().MSVCCompat && getLangOpts().MSCLRules &&
+              PA.isCXX11Attribute() && !PA.isRegularKeywordAttribute() &&
+              PA.hasScope()) {
+            if (PA.getScopeName()->isStr("gnu") ||
+                PA.getScopeName()->isStr("clang")) {
+              Diag(PA.getLoc(), diag::warn_unknown_attribute_ignored) << PA;
+              PA.setInvalid();
+              continue;
+            }
+            if (PA.getScopeName()->isStr("msvc") &&
+                PA.getKind() == ParsedAttr::AT_NoInline) {
+              PA.setInvalid();
+              continue;
+            }
+          }
           // We reject AT_LifetimeBound and AT_AnyX86NoCfCheck, even though they
           // are type attributes, because we historically haven't allowed these
           // to be used as type attributes in C++11 / C23 syntax.
@@ -3502,17 +3522,6 @@ void Parser::ParseDeclarationSpecifiers(
           // parameter, using T = int [[deprecated]]; C4996 on each use),
           // ignores [[nodiscard]] and [[maybe_unused]] silently, and rejects
           // the others (noreturn C3829, fallthrough, likely, ...).
-          if (getLangOpts().MSVCCompat && getLangOpts().MSCLRules &&
-              PA.isCXX11Attribute() && !PA.isRegularKeywordAttribute()) {
-            // cl knows no gnu:: or clang:: attribute: C5030 "not recognized"
-            // ([[gnu::unused]], [[gnu::deprecated]] after the type).
-            if (PA.hasScope() && (PA.getScopeName()->isStr("gnu") ||
-                                  PA.getScopeName()->isStr("clang"))) {
-              Diag(PA.getLoc(), diag::warn_unknown_attribute_ignored) << PA;
-              PA.setInvalid();
-              continue;
-            }
-          }
           if (getLangOpts().MSVCCompat && getLangOpts().MSCLRules &&
               PA.isCXX11Attribute() && !PA.isRegularKeywordAttribute() &&
               !PA.hasScope()) {

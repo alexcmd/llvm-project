@@ -656,6 +656,13 @@ FileID SourceManager::createFileIDImpl(ContentCache &File, StringRef Filename,
     return FileID::get(LoadedID);
   }
   unsigned FileSize = File.getSize();
+  // CL-EXEC-CHARSET: a file read in the source character set grows when it
+  // is converted to UTF-8 (getBufferOrNone); the FileID covers the converted
+  // buffer. The FileEntry keeps its disk size (PCH input validation).
+  if (File.SourceCharsetConverter && File.ContentsEntry.has_value())
+    if (std::optional<llvm::MemoryBufferRef> Buffer =
+            File.getBufferOrNone(Diag, getFileManager()))
+      FileSize = std::max<unsigned>(FileSize, Buffer->getBufferSize());
   llvm::ErrorOr<bool> NeedConversion = llvm::needConversion(Filename);
   if (NeedConversion && *NeedConversion) {
     // Buffer size may increase due to potential z/OS EBCDIC to UTF-8

@@ -430,6 +430,11 @@ std::shared_ptr<CompilerInvocation> dependencies::createScanCompilerInvocation(
   ScanInvocation->getFrontendOpts().UseGlobalModuleIndex = false;
   ScanInvocation->getFrontendOpts().GenReducedBMI = false;
   ScanInvocation->getFrontendOpts().ModuleOutputPath.clear();
+  // CL-EXEC-CHARSET: the scan lexes the files as they are on disk (the
+  // dependency-directives scanner works on the raw contents); converting them
+  // to UTF-8 here would move the directive offsets. Directives are ASCII, so
+  // the scan does not need the source character set.
+  ScanInvocation->getFrontendOpts().MSSourceCharset.clear();
   // This will prevent us compiling individual modules asynchronously since
   // FileManager is not thread-safe, but it does improve performance for now.
   ScanInvocation->getFrontendOpts().ModulesShareFileManager = true;

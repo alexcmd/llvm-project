@@ -8516,7 +8516,12 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   // default here is windows-1252, fixed, so that a build does not depend on the
   // host locale (cl on a 1252 host).
   if (D.IsCLMode()) {
-    std::string Exec = "windows-1252", Src = "windows-1252";
+    // The 1252 defaults are part of the cl rules (/clang:-fno-ms-cl-rules
+    // keeps clang's UTF-8); the options are taken either way.
+    bool CLRules = Args.hasFlag(options::OPT_fms_cl_rules,
+                                options::OPT_fno_ms_cl_rules, true);
+    std::string Exec = CLRules ? "windows-1252" : "utf-8";
+    std::string Src = Exec;
     for (Arg *A : Args.filtered(options::OPT_finput_charset_EQ,
                                 options::OPT_fexec_charset_EQ,
                                 options::OPT__SLASH_utf8)) {

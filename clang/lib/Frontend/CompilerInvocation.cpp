@@ -62,6 +62,7 @@
 #include "llvm/Option/Option.h"
 #include "llvm/ProfileData/InstrProfReader.h"
 #include "llvm/Remarks/HotnessThresholdParser.h"
+#include "llvm/Support/TextEncoding.h"
 #include "llvm/Support/CodeGen.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/Error.h"
@@ -564,6 +565,13 @@ static bool FixupInvocation(CompilerInvocation &Invocation,
   LangOpts.ForceEmitVTables = CodeGenOpts.ForceEmitVTables;
   LangOpts.SpeculativeLoadHardening = CodeGenOpts.SpeculativeLoadHardening;
   LangOpts.CurrentModule = LangOpts.ModuleName;
+  // CL-EXEC-CHARSET: the source character set is a language option too, so a
+  // PCH or module built with another one is not used (review C4).
+  LangOpts.MSSourceCodePage = 0;
+  if (!FrontendOpts.MSSourceCharset.empty())
+    if (std::optional<unsigned> CP =
+            llvm::getWindowsCodePage(FrontendOpts.MSSourceCharset))
+      LangOpts.MSSourceCodePage = *CP;
 
   llvm::Triple T(TargetOpts.Triple);
   llvm::Triple::ArchType Arch = T.getArch();

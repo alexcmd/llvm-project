@@ -88,10 +88,13 @@ LLVM_ABI std::optional<unsigned> getWindowsCodePage(StringRef Name);
 /// Utility class to convert between different character encodings.
 ///
 /// openrt CL-EXEC-CHARSET: between UTF-8 and a Windows code page (see
-/// getWindowsCodePage; 1252 built in, the others through the Windows API on a
-/// Windows host), a character without a representation in the code page is
-/// written as '?' and convert() returns std::errc::result_out_of_range with
-/// the whole result in place.
+/// getWindowsCodePage; the single-byte pages are built in and give the same
+/// result on every host, the multi-byte ones go through the Windows API and
+/// exist only on a Windows host), a character without a representation in the
+/// code page is written as '?' and convert() returns
+/// std::errc::result_out_of_range with the whole result in place. Callers
+/// that want iconv's behaviour treat that as an error (clang does outside cl
+/// mode).
 class TextEncodingConverter {
   std::unique_ptr<details::TextEncodingConverterImplBase> Converter;
 

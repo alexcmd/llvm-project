@@ -14,11 +14,13 @@
 
 #include "llvm/Support/TextEncoding.h"
 #include "llvm/ADT/SmallString.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Config/config.h"
 #include "llvm/Support/ConvertEBCDIC.h"
 #include "llvm/Support/ConvertUTF.h"
+#include <algorithm>
 #include <system_error>
 
 #ifdef _WIN32
@@ -97,26 +99,16 @@ std::optional<unsigned> llvm::getWindowsCodePage(StringRef Name) {
 }
 
 namespace {
-// openrt CL-EXEC-CHARSET: windows-1252, built in so that the cl default does
-// not depend on the host. 0x80-0x9F; 0x81, 0x8D, 0x8F, 0x90 and 0x9D map to
-// the C1 controls of the same value, as the Windows conversion does.
-const uint16_t Win1252High[32] = {
-    0x20AC, 0x0081, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021,
-    0x02C6, 0x2030, 0x0160, 0x2039, 0x0152, 0x008D, 0x017D, 0x008F,
-    0x0090, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014,
-    0x02DC, 0x2122, 0x0161, 0x203A, 0x0153, 0x009D, 0x017E, 0x0178};
+// openrt CL-EXEC-CHARSET: the single-byte code pages are built in (the same
+// result on every host); the others go through the Windows API on a Windows
+// host and are not available elsewhere.
+#include "WindowsCodePages.inc"
 
-unsigned decode1252(unsigned char B) {
-  return B >= 0x80 && B < 0xA0 ? Win1252High[B - 0x80] : B;
-}
-
-int encode1252(UTF32 C) {
-  if (C < 0x80 || (C >= 0xA0 && C <= 0xFF))
-    return (int)C;
-  for (unsigned I = 0; I != 32; ++I)
-    if (Win1252High[I] == C)
-      return (int)(0x80 + I);
-  return -1;
+const uint16_t *singleByteTable(unsigned CP) {
+  for (const auto &T : SingleByteTables)
+    if (T.CP == CP)
+      return T.High;
+  return nullptr;
 }
 
 void appendUTF8(UTF32 C, SmallVectorImpl<char> &Result) {
@@ -126,19 +118,49 @@ void appendUTF8(UTF32 C, SmallVectorImpl<char> &Result) {
   Result.append(Buf, P);
 }
 
+// Code pages whose ASCII range is ASCII (most of them); the others (EBCDIC,
+// ISO-2022, symbol) are converted character by character.
+bool isASCIICompatible(unsigned CP) {
+  if (singleByteTable(CP))
+    return true;
+  switch (CP) {
+  case 932: case 936: case 949: case 950: case 1361: case 20127:
+  case 20932: case 20936: case 20949: case 51932: case 51936: case 51949:
+  case 54936:
+    return true;
+  default:
+    return false;
+  }
+}
+
+// WideCharToMultiByte takes no flags and no default character for these
+// (documented); unrepresentable characters are then found by a round trip.
+bool windowsNeedsNoFlags(unsigned CP) {
+  return CP == 42 || (CP >= 50220 && CP <= 50229) || CP == 52936 ||
+         CP == 54936 || (CP >= 57002 && CP <= 57011) || CP == 65000;
+}
+
 class TextEncodingConverterWindowsCP final
     : public details::TextEncodingConverterImplBase {
   unsigned CodePage;
   bool FromUTF8;
+  const uint16_t *Table;
 
 public:
   TextEncodingConverterWindowsCP(unsigned CodePage, bool FromUTF8)
-      : CodePage(CodePage), FromUTF8(FromUTF8) {}
+      : CodePage(CodePage), FromUTF8(FromUTF8),
+        Table(singleByteTable(CodePage)) {}
 
   std::error_code convertString(StringRef Source,
                                 SmallVectorImpl<char> &Result) override {
     Result.clear();
-    if (CodePage == 1252)
+    // Plain ASCII is the same in an ASCII-compatible code page.
+    if (isASCIICompatible(CodePage) &&
+        llvm::all_of(Source, [](char C) { return (unsigned char)C < 0x80; })) {
+      Result.append(Source.begin(), Source.end());
+      return std::error_code();
+    }
+    if (Table)
       return FromUTF8 ? toTable(Source, Result) : fromTable(Source, Result);
 #ifdef _WIN32
     return FromUTF8 ? toWindows(Source, Result) : fromWindows(Source, Result);
@@ -150,6 +172,15 @@ public:
   void reset() override {}
 
 private:
+  int encodeTable(UTF32 C) const {
+    if (C < 0x80)
+      return (int)C;
+    for (unsigned I = 0; I != 128; ++I)
+      if (Table[I] == C)
+        return (int)(0x80 + I);
+    return -1;
+  }
+
   std::error_code toTable(StringRef Source, SmallVectorImpl<char> &Result) {
     bool Substituted = false;
     const UTF8 *P = reinterpret_cast<const UTF8 *>(Source.begin());
@@ -158,7 +189,7 @@ private:
       UTF32 C = 0;
       if (convertUTF8Sequence(&P, E, &C, strictConversion) != conversionOK)
         return std::make_error_code(std::errc::illegal_byte_sequence);
-      int B = encode1252(C);
+      int B = encodeTable(C);
       if (B < 0) {
         B = '?';
         Substituted = true;
@@ -171,7 +202,7 @@ private:
 
   std::error_code fromTable(StringRef Source, SmallVectorImpl<char> &Result) {
     for (unsigned char B : Source)
-      appendUTF8(decode1252(B), Result);
+      appendUTF8(B < 0x80 ? B : Table[B - 0x80], Result);
     return std::error_code();
   }
 
@@ -186,16 +217,27 @@ private:
     SmallVector<wchar_t, 64> W(WN);
     ::MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, Source.data(),
                           (int)Source.size(), W.data(), WN);
+    bool NoFlags = windowsNeedsNoFlags(CodePage);
     BOOL UsedDefault = FALSE;
-    DWORD Flags = WC_NO_BEST_FIT_CHARS;
+    DWORD Flags = NoFlags ? 0 : WC_NO_BEST_FIT_CHARS;
+    const char *Default = NoFlags ? nullptr : "?";
+    BOOL *UsedPtr = NoFlags ? nullptr : &UsedDefault;
     int N = ::WideCharToMultiByte(CodePage, Flags, W.data(), WN, nullptr, 0,
-                                  "?", &UsedDefault);
+                                  Default, UsedPtr);
     if (N <= 0)
       return std::make_error_code(std::errc::invalid_argument);
     Result.resize(N);
     UsedDefault = FALSE;
-    ::WideCharToMultiByte(CodePage, Flags, W.data(), WN, Result.data(), N, "?",
-                          &UsedDefault);
+    ::WideCharToMultiByte(CodePage, Flags, W.data(), WN, Result.data(), N,
+                          Default, UsedPtr);
+    if (NoFlags) {
+      // No default-character report for these: compare a round trip.
+      int BN = ::MultiByteToWideChar(CodePage, 0, Result.data(), N, nullptr, 0);
+      SmallVector<wchar_t, 64> Back(BN > 0 ? BN : 0);
+      if (BN > 0)
+        ::MultiByteToWideChar(CodePage, 0, Result.data(), N, Back.data(), BN);
+      UsedDefault = BN != WN || !std::equal(W.begin(), W.end(), Back.begin());
+    }
     return UsedDefault ? std::make_error_code(std::errc::result_out_of_range)
                        : std::error_code();
   }
@@ -222,11 +264,19 @@ private:
 };
 
 bool isUsableWindowsCodePage(unsigned CP) {
-  if (CP == 1252)
+  if (CP == 65001)
+    return false;
+  if (singleByteTable(CP))
     return true;
 #ifdef _WIN32
   CPINFO Info;
-  return CP != 65001 && ::GetCPInfo(CP, &Info);
+  if (!::GetCPInfo(CP, &Info))
+    return false;
+  // A test conversion, so that a page the API cannot write fails here.
+  TextEncodingConverterWindowsCP Test(CP, /*FromUTF8=*/true);
+  SmallString<8> Out;
+  std::error_code EC = Test.convert("a\xC3\xA9", Out);
+  return !EC || EC == std::errc::result_out_of_range;
 #else
   return false;
 #endif

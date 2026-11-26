@@ -899,8 +899,9 @@ static void EncodeUCNEscape(const char *ThisTokBegin, const char *&ThisTokBuf,
     SmallString<4> CpConv;
     char *Cp = ResultBuf - bytesToWrite;
     auto EC = Converter->convert(StringRef(Cp, bytesToWrite), CpConv);
-    // CL-EXEC-CHARSET: a character the code page lacks is '?' (C4566).
-    if (EC == std::errc::result_out_of_range) {
+    // CL-EXEC-CHARSET: a character the code page lacks is '?' (C4566) in cl
+    // mode; elsewhere it stays an error, as with iconv.
+    if (EC == std::errc::result_out_of_range && Features.MSCLRules) {
       if (Diags)
         Diags->Report(Loc, diag::warn_exec_charset_unrepresentable);
       EC = std::error_code();
@@ -1938,8 +1939,10 @@ CharLiteralParser::CharLiteralParser(const char *begin, const char *end,
           HadError = true;
         }
       } else {
+        // With a converter the range is that of the converted bytes (cl:
+        // '\u20AC' in a 1252 literal is 0x80), checked by the conversion.
         uint32_t *validation_ptr = tmp_out_start;
-        for (; validation_ptr < buffer_begin; ++validation_ptr) {
+        for (; !Converter && validation_ptr < buffer_begin; ++validation_ptr) {
           if (*validation_ptr > largest_character_for_kind) {
             HadError = true;
             PP.Diag(Loc, diag::err_character_too_large);
@@ -1951,15 +1954,21 @@ CharLiteralParser::CharLiteralParser(const char *begin, const char *end,
           assert(isOrdinary() && "Only ordinary characters are supported");
           SmallString<4> Converted;
           auto ErrorOrChar = Converter->convert(UTF8String, Converted);
-          // CL-EXEC-CHARSET: a character the code page lacks is '?' (C4566).
-          if (ErrorOrChar == std::errc::result_out_of_range) {
+          // CL-EXEC-CHARSET: a character the code page lacks is '?' (C4566)
+          // in cl mode; elsewhere it stays an error, as with iconv.
+          if (ErrorOrChar == std::errc::result_out_of_range &&
+              PP.getLangOpts().MSCLRules) {
             PP.Diag(Loc, diag::warn_exec_charset_unrepresentable);
             ErrorOrChar = std::error_code();
           }
           if (!ErrorOrChar) {
-            for (int i = 0; tmp_out_start < buffer_begin;
-                 ++tmp_out_start, ++i) {
-              *tmp_out_start = Converted[i];
+            // One element per converted byte: a double-byte character is
+            // two (a multi-character literal), as in cl.
+            buffer_begin = tmp_out_start;
+            for (char C : Converted) {
+              if (buffer_begin == buffer_end)
+                break;
+              *buffer_begin++ = static_cast<unsigned char>(C);
             }
           } else {
             HadError = true;
@@ -1984,12 +1993,19 @@ CharLiteralParser::CharLiteralParser(const char *begin, const char *end,
           PP.Diag(Loc, diag::err_character_too_large);
         }
       } else {
-        char Cp[5];
+        char Cp[8];
         char *ResultPtr = Cp;
         EncodeUCNEscape(TokBegin, begin, end, ResultPtr, HadError,
                         FullSourceLoc(Loc, PP.getSourceManager()),
                         /*CharByteWidth=*/1u, &PP.getDiagnostics(),
                         PP.getLangOpts(), Converter);
+        // CL-EXEC-CHARSET: every converted byte (two for a double-byte
+        // character).
+        if (!HadError && ResultPtr > Cp + 1) {
+          for (char *P = Cp; P < ResultPtr && buffer_begin != buffer_end; ++P)
+            *buffer_begin++ = static_cast<unsigned char>(*P);
+          continue;
+        }
         if (!HadError)
           *buffer_begin = *Cp;
       }
@@ -2473,8 +2489,9 @@ bool StringLiteralParser::CopyStringFragment(
       SmallString<64> CpConv;
       char *Cp = ResultPtr - Fragment.size();
       auto EC = Converter->convert(Fragment, CpConv);
-      // CL-EXEC-CHARSET: a character the code page lacks is '?' (C4566).
-      if (EC == std::errc::result_out_of_range) {
+      // CL-EXEC-CHARSET: a character the code page lacks is '?' (C4566) in cl
+      // mode; elsewhere it stays an error, as with iconv.
+      if (EC == std::errc::result_out_of_range && Features.MSCLRules) {
         if (Diags)
           Diags->Report(Tok.getLocation(),
                         diag::warn_exec_charset_unrepresentable);

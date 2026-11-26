@@ -22,6 +22,7 @@
 #include "clang/Lex/HeaderSearch.h"
 #include "clang/Lex/Preprocessor.h"
 #include "clang/Lex/TextEncoding.h"
+#include "llvm/Support/ConvertUTF.h"
 #include "llvm/Support/TextEncoding.h"
 #include "clang/Lex/PreprocessorOptions.h"
 #include "clang/Parse/ParseHLSLRootSignature.h"
@@ -1145,12 +1146,30 @@ void PrintPreprocessedAction::ExecuteAction() {
     SmallString<0> Text;
     llvm::raw_svector_ostream TextOS(Text);
     DoPrintPreprocessedInput(PP, &TextOS, CI.getPreprocessorOutputOpts());
-    SmallString<0> Converted;
-    std::error_code EC = Conv->convert(Text, Converted);
-    if (!EC || EC == std::errc::result_out_of_range)
-      OS->write(Converted.data(), Converted.size());
-    else
-      OS->write(Text.data(), Text.size()); // not UTF-8: as it is
+    // Valid UTF-8 runs are converted; a byte that is not UTF-8 (a stray
+    // byte under /source-charset:utf-8) is written as it is.
+    StringRef Rest = Text;
+    while (!Rest.empty()) {
+      size_t Valid = 0;
+      while (Valid < Rest.size()) {
+        unsigned N = llvm::getNumBytesForUTF8((unsigned char)Rest[Valid]);
+        if (Valid + N > Rest.size() ||
+            !llvm::isLegalUTF8Sequence(
+                reinterpret_cast<const llvm::UTF8 *>(Rest.data() + Valid),
+                reinterpret_cast<const llvm::UTF8 *>(Rest.data() + Valid + N)))
+          break;
+        Valid += N;
+      }
+      SmallString<0> Converted;
+      std::error_code EC = Conv->convert(Rest.take_front(Valid), Converted);
+      if (!EC || EC == std::errc::result_out_of_range)
+        OS->write(Converted.data(), Converted.size());
+      else
+        OS->write(Rest.data(), Valid);
+      if (Valid < Rest.size())
+        OS->write(Rest[Valid]);
+      Rest = Rest.drop_front(std::min(Rest.size(), Valid + 1));
+    }
     return;
   }
   DoPrintPreprocessedInput(CI.getPreprocessor(), OS.get(),

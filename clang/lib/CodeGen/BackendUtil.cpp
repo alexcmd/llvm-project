@@ -45,6 +45,7 @@
 #include "llvm/Passes/StandardInstrumentations.h"
 #include "llvm/Plugins/PassPlugin.h"
 #include "llvm/ProfileData/InstrProfCorrelator.h"
+#include "llvm/Support/Path.h"
 #include "llvm/Support/BuryPointer.h"
 #include "llvm/Support/CodeGen.h"
 #include "llvm/Support/CommandLine.h"
@@ -486,7 +487,17 @@ static bool initTargetOptions(const CompilerInstance &CI,
   Options.XRayFunctionIndex = CodeGenOpts.XRayFunctionIndex;
   Options.LoopAlignment = CodeGenOpts.LoopAlignment;
   Options.DebugStrictDwarf = CodeGenOpts.DebugStrictDwarf;
-  Options.ObjectFilenameForDebug = CodeGenOpts.ObjectFilenameForDebug;
+  // CL-PATHMAP-OBJNAME: cl /pathmap maps the S_OBJNAME path too (observed,
+  // cl 19.44 /experimental:deterministic /pathmap:<root>=X:\root gives
+  // X:\root\sub\p.obj); here the debug prefix map does, the last matching
+  // entry first as for the other debug paths.
+  {
+    SmallString<256> ObjName(CodeGenOpts.ObjectFilenameForDebug);
+    for (const auto &[From, To] : llvm::reverse(CodeGenOpts.DebugPrefixMap))
+      if (llvm::sys::path::replace_path_prefix(ObjName, From, To))
+        break;
+    Options.ObjectFilenameForDebug = std::string(ObjName);
+  }
   Options.Hotpatch = CodeGenOpts.HotPatch;
   Options.JMCInstrument = CodeGenOpts.JMCInstrument;
   Options.XCOFFReadOnlyPointers = CodeGenOpts.XCOFFReadOnlyPointers;
@@ -553,6 +564,17 @@ static bool initTargetOptions(const CompilerInstance &CI,
       InputFiles.push_back(Input.getFile());
   Options.MCOptions.CommandlineArgs = flattenClangCommandLine(
       CodeGenOpts.CommandLineArgs, CodeGenOpts.MainFileName, InputFiles);
+  // CL-PATHMAP-OBJNAME: the debug prefix map (clang-cl /pathmap) also covers
+  // the command line of the CodeView build information, wherever a prefix
+  // occurs in it, so two build roots give the same object.
+  for (const auto &[From, To] : llvm::reverse(CodeGenOpts.DebugPrefixMap)) {
+    if (From.empty())
+      continue;
+    std::string &S = Options.MCOptions.CommandlineArgs;
+    for (size_t Pos = S.find(From); Pos != std::string::npos;
+         Pos = S.find(From, Pos + To.size()))
+      S.replace(Pos, From.size(), To);
+  }
   Options.MCOptions.AsSecureLogFile = CodeGenOpts.AsSecureLogFile;
   Options.MCOptions.PPCUseFullRegisterNames =
       CodeGenOpts.PPCUseFullRegisterNames;

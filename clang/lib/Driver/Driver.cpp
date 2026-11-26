@@ -4755,6 +4755,10 @@ static void diagnoseCLOverridingOptions(const Driver &D,
       // (cl: /Og /Od D9025, /Od /Og none).
       if (T.Text == "Og")
         Overrides = false;
+      // Only /Od overrides /Og; /O1, /O2 and /Ox include it (cl: /Og /O2
+      // gives D9035 alone).
+      if (Prev->Text == "Og" && T.Text != "Od")
+        Overrides = false;
       // A C and a C++ /std: are D8016, without D9025 (cl).
       if (T.Family == "std:" &&
           StringRef(Prev->Text).starts_with("std:c++") !=

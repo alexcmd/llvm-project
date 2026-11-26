@@ -12,6 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "clang/Driver/Driver.h"
+#include "clang/Basic/DiagnosticDriver.h"
 #include "clang/Basic/DiagnosticOptions.h"
 #include "clang/Basic/HeaderInclude.h"
 #include "clang/Basic/Stack.h"
@@ -361,8 +362,10 @@ int clang_main(int Argc, char **Argv, const llvm::ToolContext &ToolContext) {
   DiagOpts->DiagnosticSuppressionMappingsFile.clear();
   // CL-OPT-OVERRIDE: cl's /w and /W0 silence the compiler, not its command
   // line warnings (observed: /w /O1 /O2 still gives D9025, /w /Gm D9035 and
-  // D9007); the driver's own diagnostics ignore -w in cl mode.
-  if (ClangCLMode)
+  // D9007). In cl mode -w does not silence the driver's D9xxx warnings; the
+  // other driver warnings stay silent (below, after ProcessWarningOptions).
+  bool CLQuiet = ClangCLMode && DiagOpts->IgnoreWarnings;
+  if (CLQuiet)
     DiagOpts->IgnoreWarnings = false;
 
   TextDiagnosticPrinter *DiagClient =
@@ -380,6 +383,19 @@ int clang_main(int Argc, char **Argv, const llvm::ToolContext &ToolContext) {
   }
 
   ProcessWarningOptions(Diags, *DiagOpts, *VFS, /*ReportDiags=*/false);
+  if (CLQuiet) {
+    Diags.setSeverityForAll(diag::Flavor::WarningOrError,
+                            diag::Severity::Ignored);
+    for (diag::kind K :
+         {diag::warn_drv_ignoring_unknown_option,
+          diag::warn_drv_cl_overriding_option, diag::warn_drv_cl_option_requires,
+          diag::warn_drv_cl_options_global, diag::warn_drv_cl_pd_requires_zc,
+          diag::warn_drv_cl_deprecated_option,
+          diag::warn_drv_cl_invalid_warning_number,
+          diag::warn_drv_cl_invalid_warning_level,
+          diag::warn_drv_cl_jmc_requires_zi})
+      Diags.setSeverity(K, diag::Severity::Warning, SourceLocation());
+  }
 
   Driver TheDriver(Path, llvm::sys::getDefaultTargetTriple(), Diags,
                    /*Title=*/"clang LLVM compiler", VFS);

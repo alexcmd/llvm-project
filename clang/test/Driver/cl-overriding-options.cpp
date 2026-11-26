@@ -86,3 +86,14 @@
 // NO26-NOT: D9026
 // RUN: %clang_cl --target=x86_64-pc-windows-msvc /nologo /c /Tc%s /TP -### -- %s 2>&1 | FileCheck --check-prefix=YES26 %s
 // YES26: warning: D9026 : options apply to entire command line
+
+// /O1, /O2 and /Ox include /Og: no D9025 for /Og /O2 (cl: D9035 alone).
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc /nologo /c /Og /O2 -### -- %s 2>&1 | FileCheck --check-prefix=OG3 %s
+// OG3: warning: D9035 : option 'Og' is deprecated
+// OG3-NOT: D9025
+
+// /w keeps the D9xxx warnings but silences the other driver warnings, which
+// cl does not have (here "argument unused" for /Fe with /Zs).
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc /nologo /Zs /w /O1 /O2 /Fe:%t.exe -### -- %s 2>&1 | FileCheck --check-prefix=QUIET2 %s
+// QUIET2: warning: D9025 : overriding '/O1' with '/O2'
+// QUIET2-NOT: argument unused

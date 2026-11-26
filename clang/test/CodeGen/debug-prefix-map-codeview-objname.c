@@ -29,3 +29,9 @@ int f(void) { return 0; }
 // RUN: llvm-readobj --codeview %t3.obj | FileCheck --check-prefix=CASE %s
 // CASE-DAG: "-I" "X:\\b\\inc"
 // CASE: ObjectName: X:\b\sub\a.obj
+
+// Any COFF/CodeView target takes Windows paths (UEFI here).
+// RUN: %clang_cc1 -triple x86_64-unknown-uefi -gcodeview -debug-info-kind=limited \
+// RUN:   "-fdebug-prefix-map=C:\src=X:\b" "-object-file-name=c:\src\sub\u.obj" -emit-obj -o %t4.obj %s
+// RUN: llvm-readobj --codeview %t4.obj | FileCheck --check-prefix=UEFI %s
+// UEFI: ObjectName: X:\b\sub\u.obj

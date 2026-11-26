@@ -531,7 +531,10 @@ static bool initTargetOptions(const CompilerInstance &CI,
   // cl 19.44 /experimental:deterministic /pathmap:<root>=X:\root gives
   // X:\root\sub\p.obj); here the debug prefix map does, the last matching
   // entry first as for the other debug paths.
-  bool WindowsPaths = llvm::Triple(TargetOpts.Triple).isOSWindows();
+  // Windows paths for any COFF/CodeView target (Windows, UEFI, ...).
+  llvm::Triple PathTriple(TargetOpts.Triple);
+  bool WindowsPaths = PathTriple.isOSWindows() || PathTriple.isUEFI() ||
+                      PathTriple.isOSBinFormatCOFF();
   Options.ObjectFilenameForDebug =
       CodeGenOpts.DebugPrefixMap.empty()
           ? CodeGenOpts.ObjectFilenameForDebug
@@ -608,8 +611,11 @@ static bool initTargetOptions(const CompilerInstance &CI,
   std::vector<std::string> MappedArgs = CodeGenOpts.CommandLineArgs;
   if (!CodeGenOpts.DebugPrefixMap.empty())
     for (std::string &Arg : MappedArgs)
-      Arg = mapDebugPrefixes(Arg, CodeGenOpts.DebugPrefixMap,
-                             llvm::Triple(TargetOpts.Triple).isOSWindows());
+      Arg = mapDebugPrefixes(
+          Arg, CodeGenOpts.DebugPrefixMap,
+          llvm::Triple(TargetOpts.Triple).isOSWindows() ||
+              llvm::Triple(TargetOpts.Triple).isUEFI() ||
+              llvm::Triple(TargetOpts.Triple).isOSBinFormatCOFF());
   Options.MCOptions.CommandlineArgs = flattenClangCommandLine(
       MappedArgs, CodeGenOpts.MainFileName, InputFiles);
   Options.MCOptions.AsSecureLogFile = CodeGenOpts.AsSecureLogFile;

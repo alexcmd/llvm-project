@@ -575,6 +575,12 @@ RcOptions parseRcOptions(ArrayRef<const char *> ArgsArr,
     ::unsetenv("INCLUDE");
 #endif
   }
+  // openrt RC-DEFAULT-CODEPAGE: rc.exe reads a script without /c in the ANSI
+  // code page (observed, SDK 10.0.26100 rc.exe on a 1252 host: the UTF-8
+  // bytes C2 A9 of "(c)" become U+00C2 U+00A9, no error); llvm-rc refused any
+  // non-ASCII byte without /C. The default is 1252, as in the windres mode,
+  // fixed so that a build does not depend on the host locale.
+  Opts.Params.CodePage = CpWin1252;
   if (InputArgs.hasArg(OPT_codepage)) {
     if (InputArgs.getLastArgValue(OPT_codepage)
             .getAsInteger(10, Opts.Params.CodePage))

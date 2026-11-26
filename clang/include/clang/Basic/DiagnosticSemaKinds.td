@@ -9940,6 +9940,9 @@ def warn_cannot_pass_non_pod_arg_to_vararg : Warning<
   "cannot pass object of %select{non-POD|non-trivial}0 type %1 through variadic"
   " %select{function|block|method|constructor}2; call will abort at runtime">,
   InGroup<NonPODVarargs>, DefaultError;
+// CL-DX-NOOP: cl, C3321.
+def err_ms_noop_init_list : Error<
+  "an initializer list cannot be an argument of '__noop'">;
 // CL-DX-NONPOD-VARARG: cl, C4840 (level 4).
 def warn_cl_nonportable_class_vararg : Warning<
   "non-portable use of class %0 as an argument to a variadic "

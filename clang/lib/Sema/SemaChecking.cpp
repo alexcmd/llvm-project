@@ -3250,6 +3250,13 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
     // CL-DX-NOOP: the arguments stay unconverted (a non-copyable class lvalue
     // is fine); only placeholders such as an overload set are resolved.
     for (unsigned I = 0, N = TheCall->getNumArgs(); I != N; ++I) {
+      // CL-DX-NOOP: a braced list is C3321 in cl 19.44 (observed:
+      // __noop({1, 2}), __noop({}); __noop(voidfn()) and packs are fine).
+      if (const auto *IL = dyn_cast<InitListExpr>(TheCall->getArg(I))) {
+        Diag(IL->getBeginLoc(), diag::err_ms_noop_init_list)
+            << IL->getSourceRange();
+        return ExprError();
+      }
       ExprResult Arg = CheckPlaceholderExpr(TheCall->getArg(I));
       if (Arg.isInvalid())
         return ExprError();

@@ -11674,23 +11674,33 @@ OverloadingResult OverloadCandidateSet::BestViableFunctionImpl(
     CudaExcludeWrongSideCandidates(S, Candidates);
 
   // CL-DX-REF-BINDING: a candidate that needs a non-const lvalue reference
-  // bound to an rvalue is a last resort: it stays viable only when no other
-  // candidate is.
+  // bound to an rvalue, directly or in the argument of a converting
+  // constructor (cl: char g(B) with B(A&) vs long g(...) picks the ellipsis
+  // for g(A())), is a last resort: it takes part only when no other candidate
+  // is viable. It stays viable in the set, so diagnostics that list the
+  // candidates (a deleted best candidate, ambiguity) see it as it is.
   if (S.getLangOpts().MSRvalueRefBinding) {
     auto UsesMSBinding = [](const OverloadCandidate *C) {
       return llvm::any_of(C->Conversions, [](const ImplicitConversionSequence &I) {
-        return I.isInitialized() && I.isStandard() &&
-               I.Standard.MSRvalueToNonConstLRef;
+        if (!I.isInitialized())
+          return false;
+        if (I.isStandard())
+          return (bool)I.Standard.MSRvalueToNonConstLRef;
+        if (I.isUserDefined())
+          return I.UserDefined.Before.MSRvalueToNonConstLRef ||
+                 I.UserDefined.After.MSRvalueToNonConstLRef;
+        return false;
       });
     };
     if (llvm::any_of(Candidates, [&](const OverloadCandidate *C) {
           return C->Viable && !UsesMSBinding(C);
         }))
-      for (OverloadCandidate *C : Candidates)
-        if (C->Viable && UsesMSBinding(C)) {
-          C->Viable = false;
-          C->FailureKind = ovl_fail_bad_conversion;
-        }
+      llvm::erase_if(Candidates, [&](OverloadCandidate *C) {
+        if (!C->Viable || !UsesMSBinding(C))
+          return false;
+        C->Best = false;
+        return true;
+      });
   }
 
   Best = end();

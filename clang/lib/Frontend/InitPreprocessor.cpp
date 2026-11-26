@@ -1996,10 +1996,16 @@ void clang::InitializePreprocessor(Preprocessor &PP,
   Builder.append("# 1 \"<built-in>\" 2");
 
   // The Microsoft C++ EH/RTTI types, ahead of -imacros and -include files.
-  if (InitOpts.MSPredeclareEHTypes && LangOpts.CPlusPlus)
-    AddMSPredeclaredEHTypes(Builder, PP.getTargetInfo());
-  if (InitOpts.MSPredeclareEHTypes)
+  // CL-WALL-BUILTIN: they are the compiler's own declarations, not source:
+  // no warning comes from them (cl /Wall on an empty source is silent).
+  if (InitOpts.MSPredeclareEHTypes) {
+    Builder.append("#pragma clang diagnostic push");
+    Builder.append("#pragma clang diagnostic ignored \"-Weverything\"");
+    if (LangOpts.CPlusPlus)
+      AddMSPredeclaredEHTypes(Builder, PP.getTargetInfo());
     AddMSPredeclaredRuntimeNames(Builder, PP.getTargetInfo(), LangOpts);
+    Builder.append("#pragma clang diagnostic pop");
+  }
 
   // If -imacros are specified, include them now.  These are processed before
   // any -include directives.

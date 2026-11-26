@@ -1464,7 +1464,13 @@ void BitcodeFile::parse() {
 void BitcodeFile::parseLazy() {
   for (const lto::InputFile::Symbol &sym : obj->symbols())
     if (!sym.isUndefined()) {
-      symtab.addLazyObject(this, sym.getName());
+      // The name must outlive obj: the symbol table keys on it, and LTO
+      // consumes obj (moved into the LTO object and freed by compile()).
+      // With an unsaved name a symbol first inserted here (-start-lib
+      // bitcode or fat LTO objects) could no longer be found after LTO, so
+      // the native definition became a second symbol and the first stayed
+      // undefined, depending on whether the freed memory was reused.
+      symtab.addLazyObject(this, saver().save(sym.getName()));
       if (!lazy)
         return;
     }

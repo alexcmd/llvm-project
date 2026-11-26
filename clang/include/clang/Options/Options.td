@@ -3603,7 +3603,8 @@ defm ms_rvalue_ref_binding : BoolFOption<"ms-rvalue-ref-binding",
   LangOpts<"MSRvalueRefBinding">, DefaultFalse,
   PosFlag<SetTrue, [], [ClangOption, CLOption, CC1Option],
           "Let a non-const lvalue reference bind a class rvalue, as cl does "
-          "without /permissive- or /Zc:referenceBinding (default in cl mode)">,
+          "without /permissive- or /Zc:referenceBinding (default in cl mode); "
+          "takes effect only with -fms-cl-rules (on in cl mode)">,
   NegFlag<SetFalse, [], [ClangOption, CLOption]>>;
 defm ms_predeclare_eh_types : BoolFOption<"ms-predeclare-eh-types",
   PreprocessorOpts<"MSPredeclareEHTypes">, DefaultFalse,

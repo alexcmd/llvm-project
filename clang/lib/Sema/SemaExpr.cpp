@@ -1042,8 +1042,14 @@ bool Sema::checkCLBitwiseVarArg(const Expr *E, VariadicCallType CT,
   // C4840 also in a constant-evaluated context (cl: constexpr int k =
   // cf(L{}); warns), not in an unevaluated one.
   if (Diagnose && !isUnevaluatedContext() &&
-      (RD->hasNonTrivialCopyConstructor() || RD->hasNonTrivialMoveConstructor()))
+      (RD->hasNonTrivialCopyConstructor() || RD->hasNonTrivialMoveConstructor())) {
+    // Not in a template definition: the call is checked again when the
+    // template is instantiated, which is where cl warns (nothing for a
+    // template that is never instantiated).
+    if (CurContext->isDependentContext())
+      return true;
     Diag(E->getBeginLoc(), diag::warn_cl_nonportable_class_vararg) << Ty << CT;
+  }
   return true;
 }
 

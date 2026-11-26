@@ -86,6 +86,12 @@ struct L { int v; constexpr L() : v(1) {} constexpr L(const L &o) : v(o.v) {} };
 constexpr int kc = cf(L{}); // cl-warning {{non-portable use of class 'L'}}
 constexpr int kc2 = cf(kc ? L{} : L{}); // cl-warning {{non-portable use of class 'L'}}
 
+// In a template the warning comes with an instantiation, as in cl (none for a
+// template that is never instantiated).
+template <class T> void a6(C c, T) { f(1, c); } // std-error {{cannot pass object of non-trivial type 'C'}}
+template <class T> void a7(C c, T) { f(1, c); } // cl-warning {{non-portable use of class 'C'}} std-error 2 {{cannot pass object of non-trivial type 'C'}}
+void usea7() { a7(C(), 1); } // cl-note {{in instantiation of function template specialization 'a7<int>' requested here}} std-note {{in instantiation of function template specialization 'a7<int>' requested here}}
+
 // Deleted copy: an error, as in cl (C4839, C2280).
 void q(M m) {
   f(1, m); // cl-error {{call to implicitly-deleted copy constructor of 'M'}} std-error {{call to implicitly-deleted copy constructor of 'M'}}

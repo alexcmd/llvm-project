@@ -8304,7 +8304,18 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   if (Args.hasFlag(options::OPT_fdelayed_template_parsing,
                    options::OPT_fno_delayed_template_parsing,
                    IsWindowsMSVC && !HaveCxx20)) {
-    if (HaveCxx20)
+    // cl prints nothing for /std:c++20 /permissive (observed): the note is
+    // for the clang option as written, not for what /permissive or
+    // /Zc:twoPhase- turn into.
+    bool WrittenAsClangOption = true;
+    if (const Arg *A = Args.getLastArg(options::OPT_fdelayed_template_parsing,
+                                       options::OPT_fno_delayed_template_parsing)) {
+      const Arg &Base = A->getBaseArg();
+      const Arg *Orig = Base.getAlias() ? Base.getAlias() : &Base;
+      WrittenAsClangOption =
+          Orig->getOption().matches(options::OPT_fdelayed_template_parsing);
+    }
+    if (HaveCxx20 && (!D.IsCLMode() || WrittenAsClangOption))
       D.Diag(clang::diag::warn_drv_delayed_template_parsing_after_cxx20);
 
     CmdArgs.push_back("-fdelayed-template-parsing");

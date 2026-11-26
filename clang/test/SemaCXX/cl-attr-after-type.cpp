@@ -29,3 +29,10 @@ int [[fallthrough]] ft; // std-error {{'fallthrough' attribute cannot be applied
 using T = int [[deprecated("t")]]; // std-error {{'deprecated' attribute cannot be applied to types}} cl-note {{'T' has been explicitly marked deprecated here}}
 T tv; // cl-warning {{'T' is deprecated: t}}
 int sz = sizeof(int [[deprecated]]); // std-error {{'deprecated' attribute cannot be applied to types}} (cl: silent)
+
+// Scoped gnu:: attributes are unknown to cl (C5030); a trailing return type
+// has no entity and cl is silent.
+int [[gnu::unused]] gu; // std-error {{'gnu::unused' attribute cannot be applied to types}} cl-warning {{unknown attribute 'gnu::unused' ignored}}
+int [[gnu::deprecated]] gd; // std-error {{'gnu::deprecated' attribute cannot be applied to types}} cl-warning {{unknown attribute 'gnu::deprecated' ignored}}
+int usegd() { return gd; }
+auto tr() -> int [[deprecated]]; // std-error {{'deprecated' attribute cannot be applied to types}}

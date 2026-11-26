@@ -60,20 +60,18 @@ TypeResult Parser::ParseTypeName(SourceRange *Range, DeclaratorContext Context,
 
   // CL-ATTR-AFTER-TYPE: in an alias declaration the attribute applies to the
   // alias (cl: using T = int [[deprecated]]; T x; is C4996 'T'); a type-id
-  // elsewhere has no entity for it.
+  // elsewhere (sizeof, a trailing return type) has no entity for it and cl is
+  // silent, so it is dropped.
   if (!DS.getCLDeclAttributes().empty()) {
     SmallVector<ParsedAttr *, 2> CLAttrs;
     for (ParsedAttr &AL : DS.getCLDeclAttributes())
       CLAttrs.push_back(&AL);
     for (ParsedAttr *AL : CLAttrs) {
       if (Attrs && (Context == DeclaratorContext::AliasDecl ||
-                    Context == DeclaratorContext::AliasTemplate)) {
+                    Context == DeclaratorContext::AliasTemplate))
         Attrs->takeOneFrom(DS.getCLDeclAttributes(), AL);
-      } else {
-        Diag(AL->getLoc(), diag::err_attribute_not_type_attr)
-            << *AL << AL->isRegularKeywordAttribute();
+      else
         AL->setInvalid();
-      }
     }
   }
 
@@ -3506,6 +3504,18 @@ void Parser::ParseDeclarationSpecifiers(
           // the others (noreturn C3829, fallthrough, likely, ...).
           if (getLangOpts().MSVCCompat && getLangOpts().MSCLRules &&
               PA.isCXX11Attribute() && !PA.isRegularKeywordAttribute()) {
+            // cl knows no gnu:: or clang:: attribute: C5030 "not recognized"
+            // ([[gnu::unused]], [[gnu::deprecated]] after the type).
+            if (PA.hasScope() && (PA.getScopeName()->isStr("gnu") ||
+                                  PA.getScopeName()->isStr("clang"))) {
+              Diag(PA.getLoc(), diag::warn_unknown_attribute_ignored) << PA;
+              PA.setInvalid();
+              continue;
+            }
+          }
+          if (getLangOpts().MSVCCompat && getLangOpts().MSCLRules &&
+              PA.isCXX11Attribute() && !PA.isRegularKeywordAttribute() &&
+              !PA.hasScope()) {
             if (PA.getKind() == ParsedAttr::AT_Deprecated) {
               CLDeclAttrs.push_back(&PA);
               continue;

@@ -19,6 +19,8 @@
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/Process.h"
+#include "llvm/Support/TextEncoding.h"
+#include "llvm/ADT/STLExtras.h"
 
 using namespace llvm::support;
 
@@ -156,12 +158,27 @@ static Error processString(StringRef Str, NullHandlingMethod NullHandler,
     for (char C : Str)
       Chars.push_back(cp1252ToUnicode((unsigned char)C));
   } else {
-    // For other, unknown codepages, only allow plain ASCII input.
-    for (char C : Str) {
-      if ((unsigned char)C > 0x7F)
-        return createError("Non-ASCII 8-bit codepoint (" + Twine(C) +
-                           ") can't be interpreted in the current codepage");
-      Chars.push_back((unsigned char)C);
+    // openrt RC-PRAGMA-CODEPAGE: other code pages (#pragma code_page(1251),
+    // (932), ... as Visual Studio writes them) through llvm's Windows code
+    // page conversion (single-byte pages built in), as rc.exe reads them.
+    // Plain ASCII needs none; without a conversion a non-ASCII byte is an
+    // error.
+    bool ASCII = llvm::all_of(Str, [](char C) { return (unsigned char)C < 0x80; });
+    if (ASCII) {
+      for (char C : Str)
+        Chars.push_back((unsigned char)C);
+    } else {
+      auto Conv = TextEncodingConverter::create(("." + Twine(CodePage)).str(),
+                                                "UTF-8");
+      SmallString<128> UTF8;
+      if (!Conv || Conv->convert(Str, UTF8)) {
+        for (char C : Str)
+          if ((unsigned char)C > 0x7F)
+            return createError("Non-ASCII 8-bit codepoint (" + Twine(C) +
+                               ") can't be interpreted in the current "
+                               "codepage");
+      }
+      convertUTF8ToUTF16String(UTF8, Chars);
     }
   }
 

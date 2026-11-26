@@ -10,3 +10,43 @@
 ; RUN: llvm-rc -no-preprocess /FO %t.esc.res -- %p/Inputs/escud932.rc
 ; RUN: llvm-readobj %t.esc.res | FileCheck %s --check-prefix=ESC
 ; ESC: Data:: (82 A0)
+
+; /C 932: a narrow user-resource string is written back in 932, escapes too
+; (rc.exe: "\x82\xA0" is 82 A0, "\x82\x20" is 81 45, "\x82a" is 82 61).
+; RUN: llvm-rc -no-preprocess /C 932 /FO %t.c932.res -- %p/Inputs/escape932.rc
+; RUN: llvm-readobj %t.c932.res | FileCheck %s --check-prefix=C932E
+; C932E: Data:: (82 A0)
+; C932E: Data:: (81 45)
+; C932E: Data:: (82 61)
+; RUN: llvm-rc -no-preprocess /C 932 /FO %t.c932b.res -- %p/Inputs/cp932-option.rc
+; RUN: llvm-readobj %t.c932b.res | FileCheck %s --check-prefix=C932B
+; C932B: Data:: (82 A0)
+; C932B: 0000: 00000100 42300000
+
+; A lead byte takes the next byte, even a quote (rc.exe: "a\x82" then a quote
+; does not end the string, so the file ends inside it; "a\x82"b" is a, U+30FB,
+; b); at the end of a line it stands alone (U+30FB, then the line break).
+; RUN: not llvm-rc -no-preprocess /FO %t.q.res -- %p/Inputs/lead932-quote.rc 2>&1 | FileCheck %s --check-prefix=LQUOTE
+; LQUOTE: Unterminated string literal
+; RUN: llvm-rc -no-preprocess /FO %t.eq.res -- %p/Inputs/lead932-eats-quote.rc
+; RUN: llvm-readobj %t.eq.res | FileCheck %s --check-prefix=LEATS
+; LEATS: Data:: (61 B7 62)
+; LEATS: Data:: (61 00 FB 30 62 00)
+; LEATS: 0000: 00000300 6100FB30 62000000
+; RUN: llvm-rc -no-preprocess /FO %t.eol.res -- %p/Inputs/lead932-eol.rc
+; RUN: llvm-readobj %t.eol.res | FileCheck %s --check-prefix=LEOL
+; LEOL: Data:: (61 B7 20 0A 62)
+; RUN: llvm-rc -no-preprocess /FO %t.eolt.res -- %p/Inputs/lead932-eol-table.rc
+; RUN: llvm-readobj %t.eolt.res | FileCheck %s --check-prefix=LEOLT
+; LEOLT: 0000: 00000500 6100FB30 20000A00 62000000
+
+; The second byte may be a backslash, or an escape (rc.exe: the bytes 82 5C
+; are one character, B7 in RCDATA; 82 then "\x41" is one character too).
+; RUN: llvm-rc -no-preprocess /FO %t.bs.res -- %p/Inputs/lead932-backslash.rc
+; RUN: llvm-readobj %t.bs.res | FileCheck %s --check-prefix=LBS
+; LBS: Data:: (B7)
+; LBS: 0000: 00000100 BD300000
+; RUN: llvm-rc -no-preprocess /FO %t.et.res -- %p/Inputs/lead932-escape-trail.rc
+; RUN: llvm-readobj %t.et.res | FileCheck %s --check-prefix=LET
+; LET: Data:: (B7)
+; LET: Data:: (B7)

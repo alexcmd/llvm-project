@@ -12,6 +12,7 @@
 //===---------------------------------------------------------------------===//
 
 #include "ResourceScriptToken.h"
+#include "CodePageSupport.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/raw_ostream.h"
 
@@ -95,8 +96,10 @@ namespace {
 
 class Tokenizer {
 public:
-  Tokenizer(StringRef Input, bool IsWindres)
-      : Data(Input), DataLength(Input.size()), Pos(0), IsWindres(IsWindres) {}
+  Tokenizer(StringRef Input, bool IsWindres,
+            function_ref<int(size_t)> CodePageAt)
+      : Data(Input), DataLength(Input.size()), Pos(0), IsWindres(IsWindres),
+        CodePageAt(CodePageAt) {}
 
   Expected<std::vector<RCToken>> run();
 
@@ -156,6 +159,7 @@ private:
   StringRef Data;
   size_t DataLength, Pos;
   bool IsWindres;
+  function_ref<int(size_t)> CodePageAt;
 };
 
 void Tokenizer::skipCurrentLine() {
@@ -259,14 +263,29 @@ Error Tokenizer::consumeToken(const Kind TokenKind) {
       advance();
     return Error::success();
 
-  case Kind::String:
+  case Kind::String: {
     // Consume the preceding 'L', if there is any.
-    if (std::toupper(Data[Pos]) == 'L')
+    bool IsLong = std::toupper(Data[Pos]) == 'L';
+    if (IsLong)
       advance();
     // Consume the double-quote.
     advance();
 
-    // Consume the characters until the end of the file, line or string.
+    // openrt RC-STRING-CHARS: the code page of a byte, for its lead bytes.
+    auto IsLead = [&](size_t At, unsigned Value) {
+      return CodePageAt && Value >= 0x80 && Value <= 0xFF &&
+             rc::isCodePageLeadByte(CodePageAt(At), Value);
+    };
+    // A lead byte takes the next byte unless the line ends there (observed,
+    // rc.exe under code_page(932): "a\x82" followed by a quote does not end
+    // the string, nor does "\x82" written as an escape).
+    auto TakeTrail = [&]() {
+      if (!streamEof() && Data[Pos] != '\r' && Data[Pos] != '\n')
+        advance();
+    };
+
+    // Consume the characters until the end of the file or string. A string
+    // may go on over lines (observed, rc.exe).
     while (true) {
       if (streamEof()) {
         return getStringError("Unterminated string literal.");
@@ -277,12 +296,40 @@ Error Tokenizer::consumeToken(const Kind TokenKind) {
         // end and we just included '"' into the string.
         if (!willNowRead("\""))
           return Error::success();
-      } else if (Data[Pos] == '\n') {
-        return getStringError("String literal not terminated in the line.");
+      } else if (Data[Pos] == '\\' && CodePageAt) {
+        // An escape whose value is a lead byte takes the next byte too.
+        size_t Start = Pos;
+        advance();
+        if (streamEof())
+          continue;
+        unsigned Value = 0;
+        bool Numeric = false;
+        if (Data[Pos] == 'x' || Data[Pos] == 'X') {
+          advance();
+          for (unsigned N = IsLong ? 4 : 2; N && !streamEof() &&
+                                            isHexDigit(Data[Pos]);
+               --N, advance())
+            Value = Value * 16 + hexDigitValue(Data[Pos]);
+          Numeric = true;
+        } else if (Data[Pos] >= '0' && Data[Pos] < '8') {
+          for (unsigned N = IsLong ? 7 : 3;
+               N && !streamEof() && Data[Pos] >= '0' && Data[Pos] < '8';
+               --N, advance())
+            Value = Value * 8 + (Data[Pos] - '0');
+          Numeric = true;
+        }
+        if (Numeric && IsLead(Start, Value))
+          TakeTrail();
+        continue;
+      } else if (IsLead(Pos, (unsigned char)Data[Pos])) {
+        advance();
+        TakeTrail();
+        continue;
       }
 
       advance();
     }
+  }
 
   case Kind::Invalid:
     assert(false && "Cannot consume an invalid token.");
@@ -396,8 +443,10 @@ void Tokenizer::trimIntString(StringRef &Str) const {
 
 namespace llvm {
 
-Expected<std::vector<RCToken>> tokenizeRC(StringRef Input, bool IsWindres) {
-  return Tokenizer(Input, IsWindres).run();
+Expected<std::vector<RCToken>>
+tokenizeRC(StringRef Input, bool IsWindres,
+           function_ref<int(size_t)> CodePageAt) {
+  return Tokenizer(Input, IsWindres, CodePageAt).run();
 }
 
 } // namespace llvm

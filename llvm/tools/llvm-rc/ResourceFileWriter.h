@@ -46,6 +46,12 @@ struct WriterParams {
   // (first byte it applies to, N), in order; -1 is the default again.
   std::vector<std::pair<const char *, int>> CodePageChanges;
   const char *ScriptBegin = nullptr, *ScriptEnd = nullptr;
+  // openrt RC-STRING-CHARS: the first pragma, when nothing comes before it,
+  // changes how text is read but not the code page narrow user-resource
+  // strings are written in (observed, rc.exe: code_page(1250) first, then
+  // RCDATA "\xA5\xB3" is 41 6C, best fit in the /c page 1252; after another
+  // pragma or a statement the string is written in 1250, A5 B3).
+  bool FirstPragmaKeepsNarrow = false;
 
   /// The code page for the text at \p Text (text outside the script: /C or
   /// the default).
@@ -61,6 +67,37 @@ struct WriterParams {
       CP = N < 0 ? CodePage : N;
     }
     return CP;
+  }
+
+  /// openrt RC-STRING-CHARS: the code page a narrow user-resource string at
+  /// \p Text is written in (see FirstPragmaKeepsNarrow).
+  int narrowCodePageAt(StringRef Text) const {
+    int CP = CodePage;
+    if (!ScriptBegin ||
+        !(std::less_equal<const char *>()(ScriptBegin, Text.data()) &&
+          std::less<const char *>()(Text.data(), ScriptEnd)))
+      return CP;
+    for (size_t I = 0; I != CodePageChanges.size(); ++I) {
+      auto [Pos, N] = CodePageChanges[I];
+      if (Text.data() < Pos)
+        break;
+      CP = N < 0 || (I == 0 && FirstPragmaKeepsNarrow) ? CodePage : N;
+    }
+    return CP;
+  }
+
+  /// openrt RC-STRING-LINES: the column \p Text starts at in its line (rc.exe
+  /// expands a tab in a string to the next multiple of 8).
+  unsigned columnAt(StringRef Text) const {
+    if (!ScriptBegin ||
+        !(std::less_equal<const char *>()(ScriptBegin, Text.data()) &&
+          std::less<const char *>()(Text.data(), ScriptEnd)))
+      return 0;
+    unsigned Col = 0;
+    for (const char *P = Text.data(); P != ScriptBegin && P[-1] != '\n'; --P)
+      if (((unsigned char)P[-1] & 0xC0) != 0x80)
+        ++Col;
+    return Col;
   }
 };
 

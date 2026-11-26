@@ -1,9 +1,12 @@
 ; openrt RC-OUTPUT-ON-ERROR: rc.exe leaves no output file when it fails, also
 ; not an older one of that name (observed: an error in the script, a missing
-; script).
+; script); a bad /c option leaves it.
 ; RUN: echo stale > %t.res
 ; RUN: not llvm-rc -no-preprocess /FO %t.res -- %p/Inputs/bad-unterminated-block.rc
 ; RUN: %python -c "import os, sys; sys.exit(os.path.exists(sys.argv[1]))" %t.res
 ; RUN: echo stale > %t.res
 ; RUN: not llvm-rc -no-preprocess /FO %t.res -- %t.no-such-file.rc
 ; RUN: %python -c "import os, sys; sys.exit(os.path.exists(sys.argv[1]))" %t.res
+; RUN: echo stale > %t.res
+; RUN: not llvm-rc -no-preprocess /C 0 /FO %t.res -- %p/Inputs/bad-unterminated-block.rc
+; RUN: %python -c "import os, sys; sys.exit(not os.path.exists(sys.argv[1]))" %t.res

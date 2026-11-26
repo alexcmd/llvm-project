@@ -1,0 +1,3 @@
+#pragma code_page(932)
+3 RCDATA { "‚A" }
+4 RCDATA { "‚\" }

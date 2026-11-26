@@ -1,0 +1,40 @@
+; openrt RC-CODEPAGE-OPTION: /C takes the Windows code pages, as rc.exe (the
+; same .res data): a narrow user-resource string is written back in that page
+; (escapes included), a UTF-16 string is read in it.
+; RUN: llvm-rc -no-preprocess /C 1251 /FO %t.1251.res -- %p/Inputs/cp-option.rc
+; RUN: llvm-readobj %t.1251.res | FileCheck %s --check-prefix=C1251
+; C1251: Data:: (C6 E8 C6)
+; C1251: 0000: 00000200 16043804
+; RUN: llvm-rc -no-preprocess /C 1250 /FO %t.1250.res -- %p/Inputs/cp-option.rc
+; RUN: llvm-readobj %t.1250.res | FileCheck %s --check-prefix=C1250
+; C1250: Data:: (C6 E8 C6)
+; C1250: 0000: 00000200 06010D01
+; RUN: llvm-rc -no-preprocess /C 437 /FO %t.437.res -- %p/Inputs/cp-option.rc
+; RUN: llvm-readobj %t.437.res | FileCheck %s --check-prefix=C437
+; C437: Data:: (C6 E8 C6)
+; C437: 0000: 00000200 5E25A603
+
+; In UTF-8 a byte that is not a character is U+FFFD (EF BF BD in a narrow
+; string); escapes are part of the sequences, valid UTF-8 is written as it is.
+; RUN: llvm-rc -no-preprocess /C 65001 /FO %t.utf8.res -- %p/Inputs/cp-option.rc
+; RUN: llvm-readobj %t.utf8.res | FileCheck %s --check-prefix=CUTF8
+; CUTF8: Data:: (EF BF BD EF BF BD EF BF BD)
+; CUTF8: 0000: 00000200 FDFFFDFF
+; RUN: llvm-rc -no-preprocess /C 65001 /FO %t.utf8e.res -- %p/Inputs/utf8-escape-user.rc
+; RUN: llvm-readobj %t.utf8e.res | FileCheck %s --check-prefix=CUTF8E
+; CUTF8E: Data:: (EF BF BD 41)
+; CUTF8E: Data:: (C3 A9 C3 A9)
+; RUN: llvm-rc -no-preprocess /C 65001 /FO %t.utf8u.res -- %p/Inputs/utf8-user.rc
+; RUN: llvm-readobj %t.utf8u.res | FileCheck %s --check-prefix=CUTF8U
+; CUTF8U: Data:: (C3 A9 D0 96 E2 82 AC)
+
+; 1252 (the default): every byte as it is (0x80 was an error).
+; RUN: llvm-rc -no-preprocess /FO %t.raw.res -- %p/Inputs/cp1252-raw-narrow.rc
+; RUN: llvm-readobj %t.raw.res | FileCheck %s --check-prefix=RAW
+; RAW: Data:: (80 9F E9 80)
+
+; rc.exe: /c0 is RC1205 "invalid code page", /c1200 is RC1206.
+; RUN: not llvm-rc -no-preprocess /C 0 /FO %t.0.res -- %p/Inputs/cp-option.rc 2>&1 | FileCheck %s --check-prefix=C0
+; C0: Invalid code page: 0
+; RUN: not llvm-rc -no-preprocess /C 1200 /FO %t.1200.res -- %p/Inputs/cp-option.rc 2>&1 | FileCheck %s --check-prefix=C1200
+; C1200: Code page 1200 is not supported

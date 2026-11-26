@@ -1,0 +1,21 @@
+; openrt RC-STRING-LINES: a string literal may go on over lines, as in rc.exe
+; (the same .res data): a line break is a space and a newline, white space and
+; empty lines after it are dropped, a lone carriage return is dropped, a tab
+; goes to the next multiple of 8 columns.
+; RUN: llvm-rc -no-preprocess /FO %t.lines.res -- %p/Inputs/string-lines.rc
+; RUN: llvm-readobj %t.lines.res | FileCheck %s --check-prefix=LINES
+; LINES: Data:: (61 20 0A 62)
+; LINES: Data:: (61 20 20 20 0A 62)
+; LINES: Data:: (61 20 0A 62)
+; LINES: Data:: (61 62)
+; LINES: Data:: (61 00 20 00 0A 00 62 00)
+; LINES: Data:: (61 20 20 20 62)
+; RUN: llvm-rc -no-preprocess /FO %t.tabs.res -- %p/Inputs/string-tabs.rc
+; RUN: llvm-readobj %t.tabs.res | FileCheck %s --check-prefix=TABS
+; TABS: Data:: (20 20 20 20 62)
+; TABS: Data:: (61 20 20 62)
+; TABS: Data:: (61 62 63 64 65 66 67 68 20 20 20 20 62)
+; TABS: Data:: (61 20 0A 62)
+; TABS: Data:: (61 20 20 20 20 20 20 20 20 20 20 20 62)
+; TABS: 0000: 00000800 61002000 20002000 20002000
+; TABS: 0010: 20006200

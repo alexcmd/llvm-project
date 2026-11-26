@@ -26,6 +26,7 @@
 #include "llvm/Support/Error.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/FileUtilities.h"
+#include "llvm/Support/TextEncoding.h"
 #include "llvm/Support/LLVMDriver.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Path.h"
@@ -124,6 +125,21 @@ static FileRemover OutputOnError;
 [[noreturn]] static void fatalError(const Twine &Message) {
   errs() << Message << "\n";
   exit(1);
+}
+
+// openrt RC-CODEPAGE-OPTION: the code pages /c takes, as rc.exe: 1252, 65001
+// and the other Windows pages (observed: /c1251, /c932, /c437 build; /c0 is
+// RC1205 "invalid code page", /c1200 and /c12345 are RC1206 "code page
+// specified on command line not in registry"). The multi-byte pages exist
+// only on a Windows host.
+static void checkCodePageOption(int CodePage) {
+  if (CodePage == CpWin1252 || CodePage == CpUtf8)
+    return;
+  if (CodePage <= 0)
+    fatalError("Invalid code page: " + Twine(CodePage));
+  if (!TextEncodingConverter::create(("." + Twine(CodePage)).str(), "UTF-8"))
+    fatalError("Code page " + Twine(CodePage) +
+               " is not supported (not a code page of this system)");
 }
 
 std::string createTempFile(const Twine &Prefix, StringRef Suffix) {
@@ -279,6 +295,9 @@ void preprocess(StringRef Src, StringRef Dst, const RcOptions &Opts,
     // _MSC_EXTENSIONS or __clang__.
     Args.push_back("-undef");
     Args.push_back("-D_WIN32");
+    // openrt RC-STRING-LINES: a string literal may go on over lines, as in
+    // rc.exe (no warning there).
+    Args.push_back("-Wno-invalid-pp-token");
     // rc.exe searches only the .rc file's directory, /I and %INCLUDE%. With
     // no %INCLUDE% directory (unset, empty, only separators, or /X), stop the
     // clang MSVC driver from autodetecting a Visual Studio / Windows SDK
@@ -516,6 +535,9 @@ RcOptions parseWindresOptions(ArrayRef<const char *> ArgsArr,
             .getAsInteger(0, Opts.Params.CodePage))
       fatalError("Invalid code page: " +
                  InputArgs.getLastArgValue(WINDRES_codepage));
+    // The windres mode keeps 0 (only ASCII).
+    if (Opts.Params.CodePage != CpAcp)
+      checkCodePageOption(Opts.Params.CodePage);
   }
   if (InputArgs.hasArg(WINDRES_language)) {
     StringRef Val = InputArgs.getLastArgValue(WINDRES_language);
@@ -592,6 +614,7 @@ RcOptions parseRcOptions(ArrayRef<const char *> ArgsArr,
             .getAsInteger(10, Opts.Params.CodePage))
       fatalError("Invalid code page: " +
                  InputArgs.getLastArgValue(OPT_codepage));
+    checkCodePageOption(Opts.Params.CodePage);
   }
   Opts.IsDryRun = InputArgs.hasArg(OPT_dry_run);
   auto OutArgsInfo = InputArgs.getAllArgValues(OPT_fileout);
@@ -654,8 +677,28 @@ void doRc(std::string Src, std::string Dest, RcOptions &Opts,
 
   std::vector<std::pair<size_t, int>> PragmaCodePages;
   std::string FilteredContents = filterCppOutput(Contents, &PragmaCodePages);
+
+  WriterParams &Params = Opts.Params;
+  // openrt RC-PRAGMA-CODEPAGE: the text after "#pragma code_page(N)" is read
+  // in code page N, as rc.exe does (Visual Studio writes code_page(1251),
+  // (932), ... in every language block).
+  Params.ScriptBegin = FilteredContents.data();
+  Params.ScriptEnd = FilteredContents.data() + FilteredContents.size();
+  for (const auto &[Offset, CP] : PragmaCodePages)
+    Params.CodePageChanges.emplace_back(FilteredContents.data() + Offset, CP);
+  // openrt RC-STRING-CHARS: the first pragma before any statement (see
+  // WriterParams::FirstPragmaKeepsNarrow).
+  if (!PragmaCodePages.empty() &&
+      StringRef(FilteredContents).take_front(PragmaCodePages[0].first).trim()
+          .empty())
+    Params.FirstPragmaKeepsNarrow = true;
+
+  // openrt RC-STRING-CHARS: lead bytes in strings by the code page in effect.
+  auto CodePageAt = [&](size_t Offset) {
+    return Params.codePageAt(StringRef(FilteredContents).substr(Offset, 1));
+  };
   std::vector<RCToken> Tokens =
-      ExitOnErr(tokenizeRC(FilteredContents, Opts.IsWindres));
+      ExitOnErr(tokenizeRC(FilteredContents, Opts.IsWindres, CodePageAt));
 
   if (Opts.BeVerbose) {
     const Twine TokenNames[] = {
@@ -674,27 +717,10 @@ void doRc(std::string Src, std::string Dest, RcOptions &Opts,
     }
   }
 
-  WriterParams &Params = Opts.Params;
   SmallString<128> InputFile(Src);
   llvm::sys::fs::make_absolute(InputFile);
   Params.InputFilePath = InputFile;
 
-  switch (Params.CodePage) {
-  case CpAcp:
-  case CpWin1252:
-  case CpUtf8:
-    break;
-  default:
-    fatalError("Unsupported code page, only 0, 1252 and 65001 are supported!");
-  }
-  // openrt RC-PRAGMA-CODEPAGE: the text after "#pragma code_page(N)" is read
-  // in code page N, as rc.exe does. Another page than 1252 and 65001 (Visual
-  // Studio writes code_page(1251), (932), ... in every language block) takes
-  // plain ASCII and rejects a non-ASCII byte where it is used, as before.
-  Params.ScriptBegin = FilteredContents.data();
-  Params.ScriptEnd = FilteredContents.data() + FilteredContents.size();
-  for (const auto &[Offset, CP] : PragmaCodePages)
-    Params.CodePageChanges.emplace_back(FilteredContents.data() + Offset, CP);
 
   std::unique_ptr<ResourceFileWriter> Visitor;
 

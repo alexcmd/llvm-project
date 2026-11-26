@@ -1,0 +1,4 @@
+#pragma code_page(932)
+1 RCDATA { "a‚"b" }
+STRINGTABLE { 1 "a‚"b" }
+2 RCDATA { L"a‚"b" }

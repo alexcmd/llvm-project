@@ -1,0 +1,7 @@
+1 RCDATA { "	b" }
+2 RCDATA {  "a	b" }
+3 RCDATA { "abcdefgh	b" }
+4 RCDATA { "a
+	b" }
+5 RCDATA { "a		b" }
+STRINGTABLE { 1 "a	b" }

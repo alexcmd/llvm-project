@@ -1,6 +1,6 @@
 ; RUN: env INCLUDE=%p llvm-rc -### -i%p "-DFOO1=\"foo bar\"" -UFOO2 -D FOO3 -- %p/Inputs/empty.rc | FileCheck %s
 
-; CHECK: {{^}} "clang" "--driver-mode=gcc" "-target" "{{.*}}-pc-windows-msvc-coff" "-E" "-xc" "-DRC_INVOKED" "-undef" "-D_WIN32" "-I" "{{.*}}" "-D" "FOO1=\"foo bar\"" "-U" "FOO2" "-D" "FOO3" "{{.*}}empty.rc" "-o" "{{.*}}preproc-{{.*}}.rc"{{$}}
+; CHECK: {{^}} "clang" "--driver-mode=gcc" "-target" "{{.*}}-pc-windows-msvc-coff" "-E" "-xc" "-DRC_INVOKED" "-undef" "-D_WIN32" "-Wno-invalid-pp-token" "-I" "{{.*}}" "-D" "FOO1=\"foo bar\"" "-U" "FOO2" "-D" "FOO3" "{{.*}}empty.rc" "-o" "{{.*}}preproc-{{.*}}.rc"{{$}}
 
 ; openrt LLVM-RC-NO-VC-AUTODETECT: rc mode predefines what rc.exe does (RC_INVOKED,
 ; _WIN32; -undef drops _MSC_VER, _WIN64, _M_X64, __clang__, ...), and with no
@@ -11,5 +11,5 @@
 ; RUN: env "INCLUDE=;;" llvm-rc -### -- %p/Inputs/empty.rc | FileCheck %s --check-prefix=NOVC
 ; RUN: env INCLUDE=%p llvm-rc -### /X -- %p/Inputs/empty.rc | FileCheck %s --check-prefix=NOVC
 ; RUN: env INCLUDE=%p llvm-rc -### -- %p/Inputs/empty.rc | FileCheck %s --check-prefix=INC
-; NOVC: {{^}} "clang" "--driver-mode=gcc" "-target" "{{.*}}-pc-windows-msvc-coff" "-E" "-xc" "-DRC_INVOKED" "-undef" "-D_WIN32" "-nostdlibinc" "{{[^"]*}}empty.rc" "-o" "{{[^"]*}}"{{$}}
-; INC: {{^}} "clang" "--driver-mode=gcc" "-target" "{{.*}}-pc-windows-msvc-coff" "-E" "-xc" "-DRC_INVOKED" "-undef" "-D_WIN32" "{{[^"]*}}empty.rc" "-o" "{{[^"]*}}"{{$}}
+; NOVC: {{^}} "clang" "--driver-mode=gcc" "-target" "{{.*}}-pc-windows-msvc-coff" "-E" "-xc" "-DRC_INVOKED" "-undef" "-D_WIN32" "-Wno-invalid-pp-token" "-nostdlibinc" "{{[^"]*}}empty.rc" "-o" "{{[^"]*}}"{{$}}
+; INC: {{^}} "clang" "--driver-mode=gcc" "-target" "{{.*}}-pc-windows-msvc-coff" "-E" "-xc" "-DRC_INVOKED" "-undef" "-D_WIN32" "-Wno-invalid-pp-token" "{{[^"]*}}empty.rc" "-o" "{{[^"]*}}"{{$}}

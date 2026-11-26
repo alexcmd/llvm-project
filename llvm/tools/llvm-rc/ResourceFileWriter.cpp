@@ -11,6 +11,7 @@
 //===---------------------------------------------------------------------===//
 
 #include "ResourceFileWriter.h"
+#include "CodePageSupport.h"
 #include "llvm/Object/WindowsResource.h"
 #include "llvm/Support/ConvertUTF.h"
 #include "llvm/Support/Endian.h"
@@ -146,28 +147,239 @@ enum class NullHandlingMethod {
 //   * Squash "" to a single ".
 //   * Replace the escape sequences with their processed version.
 // For identifiers, this is no-op.
-// openrt RC-PRAGMA-CODEPAGE: a code point written in 1252 with best fit, as
-// rc.exe writes narrow user-resource strings ('?' when there is none).
-#include "BestFit1252.inc"
-static UTF16 unicodeTo1252BestFit(UTF32 C) {
-  if (C < 0x80)
-    return C;
-  for (unsigned B = 0x80; B != 0x100; ++B)
-    if (cp1252ToUnicode(B) == C)
-      return B;
-  auto *It = std::lower_bound(
-      std::begin(BestFit1252), std::end(BestFit1252), C,
-      [](const auto &E, UTF32 V) { return E.CP < V; });
-  if (It != std::end(BestFit1252) && It->CP == C)
-    return It->Byte;
-  return '?';
+// openrt RC-STRING-CHARS: UTF-8 read as Windows reads it
+// (MultiByteToWideChar(65001)): an invalid byte, or the longest invalid start
+// of a sequence, is U+FFFD (observed, rc.exe /c65001: RCDATA "\xC6\x41" is
+// EF BF BD 41).
+static void decodeUTF8Lenient(ArrayRef<uint8_t> In,
+                              SmallVectorImpl<UTF32> &Out) {
+  size_t I = 0, N = In.size();
+  while (I < N) {
+    uint8_t B = In[I];
+    if (B < 0x80) {
+      Out.push_back(B);
+      ++I;
+      continue;
+    }
+    unsigned Len;
+    UTF32 C;
+    uint8_t Lo = 0x80, Hi = 0xBF;
+    if (B >= 0xC2 && B <= 0xDF) {
+      Len = 2;
+      C = B & 0x1F;
+    } else if (B >= 0xE0 && B <= 0xEF) {
+      Len = 3;
+      C = B & 0x0F;
+      if (B == 0xE0)
+        Lo = 0xA0;
+      if (B == 0xED)
+        Hi = 0x9F;
+    } else if (B >= 0xF0 && B <= 0xF4) {
+      Len = 4;
+      C = B & 0x07;
+      if (B == 0xF0)
+        Lo = 0x90;
+      if (B == 0xF4)
+        Hi = 0x8F;
+    } else {
+      Out.push_back(0xFFFD);
+      ++I;
+      continue;
+    }
+    size_t J = 1;
+    for (; J < Len && I + J < N; ++J) {
+      uint8_t T = In[I + J];
+      if (T < (J == 1 ? Lo : 0x80) || T > (J == 1 ? Hi : 0xBF))
+        break;
+      C = (C << 6) | (T & 0x3F);
+    }
+    if (J == Len) {
+      Out.push_back(C);
+      I += Len;
+    } else {
+      Out.push_back(0xFFFD);
+      I += J;
+    }
+  }
+}
+
+// openrt RC-STRING-CHARS: bytes in a code page to code points (Windows'
+// reading: an invalid double-byte pair is one substitute character).
+static Error decodeCodePage(int CodePage, ArrayRef<uint8_t> In,
+                            SmallVectorImpl<UTF32> &Out) {
+  if (llvm::all_of(In, [](uint8_t B) { return B < 0x80; })) {
+    Out.append(In.begin(), In.end());
+    return Error::success();
+  }
+  if (CodePage == CpUtf8) {
+    decodeUTF8Lenient(In, Out);
+    return Error::success();
+  }
+  if (CodePage == CpWin1252) {
+    for (uint8_t B : In)
+      Out.push_back(cp1252ToUnicode(B));
+    return Error::success();
+  }
+  SmallString<64> Text;
+  auto Conv = TextEncodingConverter::create(("." + Twine(CodePage)).str(),
+                                            "UTF-8");
+  if (!Conv || Conv->convert(toStringRef(In), Text))
+    return createError("Non-ASCII 8-bit codepoint can't be interpreted in "
+                       "the current codepage");
+  decodeUTF8Lenient(arrayRefFromStringRef(Text), Out);
+  return Error::success();
+}
+
+// openrt RC-STRING-LINES: the text of a string literal as rc.exe takes it: a
+// line break in it is a space and a newline, the white space and empty lines
+// after it are dropped, a lone carriage return is dropped and a tab goes to
+// the next multiple of 8 columns (observed: "a\r\n   b" is "a \nb",
+// "a\r\rb" is "ab"). The parts between line breaks are returned.
+static void splitStringLines(StringRef Body, unsigned Column, int CodePage,
+                             SmallVectorImpl<std::string> &Parts) {
+  Parts.emplace_back();
+  unsigned Col = Column;
+  for (size_t I = 0; I < Body.size(); ++I) {
+    char C = Body[I];
+    if (C == '\r')
+      continue;
+    if (C == '\n') {
+      size_t J = I + 1;
+      while (J < Body.size() && (Body[J] == ' ' || Body[J] == '\t' ||
+                                 Body[J] == '\r' || Body[J] == '\n'))
+        ++J;
+      I = J - 1;
+      Parts.emplace_back();
+      Col = 0;
+      continue;
+    }
+    if (C == '\t') {
+      unsigned N = 8 - Col % 8;
+      Parts.back().append(N, ' ');
+      Col += N;
+      continue;
+    }
+    Parts.back().push_back(C);
+    if (!(CodePage == CpUtf8 && ((unsigned char)C & 0xC0) == 0x80))
+      ++Col;
+  }
+}
+
+// openrt RC-STRING-CHARS: units of a narrow user-resource string before it is
+// written: a byte from the script (high ones tagged, they are read in the
+// script's code page), a byte from an escape (written as it is), a line break.
+static constexpr UTF16 RawTag = 0xF000, LineBreakUnit = 0xF100;
+static bool isRawUnit(UTF16 U) { return (U & 0xFF00) == RawTag; }
+
+// openrt RC-STRING-CHARS: writes the units of a narrow user-resource string,
+// read in \p CodePage, in \p NarrowCodePage, as rc.exe (observed):
+//  - the same page: the bytes as Windows reads and writes them back (a
+//    double-byte pair that is not a character becomes the substitute, 932
+//    "\x82 " is 81 45; invalid UTF-8 is EF BF BD; a single-byte page keeps
+//    every byte), escapes included ("\x82\xA0" under /c932 is 82 A0);
+//  - another page: script characters with best fit ("\xA5\xB3" in 1250 is
+//    41 6C in 1252), a lead byte with the unit after it (also an escape) as
+//    one character, escaped bytes as they are ("\351\x80" is E9 80); in UTF-8
+//    escapes are part of the sequences ("\xC6" is '?').
+static Error writeNarrowUnits(ArrayRef<UTF16> Units, int CodePage,
+                              int NarrowCodePage,
+                              SmallVectorImpl<UTF16> &Result) {
+  SmallVector<char, 8> Enc;
+  auto Emit = [&](ArrayRef<UTF32> Chars) -> Error {
+    for (UTF32 C : Chars) {
+      Enc.clear();
+      if (!rc::encodeBestFit(NarrowCodePage, C, Enc))
+        return createError("Unable to write a character in code page " +
+                           Twine(NarrowCodePage));
+      for (char B : Enc)
+        Result.push_back((unsigned char)B);
+    }
+    return Error::success();
+  };
+  auto Bytes = [](ArrayRef<UTF16> Run) {
+    SmallVector<uint8_t, 64> B;
+    for (UTF16 U : Run)
+      B.push_back(U & 0xFF);
+    return B;
+  };
+  bool DoubleByte = rc::isDoubleByteCodePage(CodePage);
+  size_t I = 0;
+  while (true) {
+    size_t J = I;
+    while (J < Units.size() && Units[J] != LineBreakUnit)
+      ++J;
+    ArrayRef<UTF16> Run = Units.slice(I, J - I);
+    SmallVector<UTF32, 64> Chars;
+    if (CodePage == NarrowCodePage) {
+      SmallVector<uint8_t, 64> B = Bytes(Run);
+      if (CodePage == CpUtf8 || DoubleByte) {
+        RETURN_IF_ERROR(decodeCodePage(CodePage, B, Chars));
+        RETURN_IF_ERROR(Emit(Chars));
+      } else {
+        Result.append(B.begin(), B.end());
+      }
+    } else if (CodePage == CpUtf8) {
+      RETURN_IF_ERROR(decodeCodePage(CodePage, Bytes(Run), Chars));
+      RETURN_IF_ERROR(Emit(Chars));
+    } else {
+      for (size_t K = 0; K < Run.size(); ++K) {
+        UTF16 U = Run[K];
+        if (!isRawUnit(U)) {
+          Result.push_back(U);
+          continue;
+        }
+        uint8_t Pair[2] = {uint8_t(U & 0xFF), 0};
+        size_t Len = 1;
+        if (DoubleByte && rc::isCodePageLeadByte(CodePage, Pair[0]) &&
+            K + 1 < Run.size()) {
+          Pair[1] = Run[++K] & 0xFF;
+          Len = 2;
+        }
+        Chars.clear();
+        RETURN_IF_ERROR(
+            decodeCodePage(CodePage, ArrayRef<uint8_t>(Pair, Len), Chars));
+        RETURN_IF_ERROR(Emit(Chars));
+      }
+    }
+    if (J == Units.size())
+      break;
+    Result.push_back(' ');
+    Result.push_back('\n');
+    I = J + 1;
+  }
+  return Error::success();
+}
+
+// openrt RC-STRING-CHARS: the last unit is a lead byte without its second
+// byte yet.
+static bool endsWithLeadUnit(ArrayRef<UTF16> Units, int CodePage) {
+  bool Lead = false;
+  for (UTF16 U : Units)
+    Lead = !Lead && U != LineBreakUnit &&
+           rc::isCodePageLeadByte(CodePage, U & 0xFF) &&
+           (isRawUnit(U) || U <= 0xFF);
+  return Lead;
 }
 
 static Error processString(StringRef Str, NullHandlingMethod NullHandler,
                            bool &IsLongString, SmallVectorImpl<UTF16> &Result,
-                           int CodePage) {
+                           int CodePage, int NarrowCodePage = -1,
+                           unsigned Column = 0) {
   bool IsString = stripQuotes(Str, IsLongString);
+  if (NarrowCodePage < 0)
+    NarrowCodePage = CodePage;
+  // openrt RC-STRING-CHARS: a narrow user-resource string is bytes: read in
+  // the script's code page, written in NarrowCodePage (writeNarrowUnits).
+  bool NarrowUnits = IsString && !IsLongString &&
+                     NullHandler == NullHandlingMethod::UserResource &&
+                     CodePage != CpAcp && NarrowCodePage != CpAcp;
   SmallVector<UTF16, 128> Chars;
+  // openrt RC-STRING-LINES: the parts of the string between line breaks.
+  SmallVector<std::string, 1> Parts;
+  if (IsString)
+    splitStringLines(Str, Column + (IsLongString ? 2 : 1), CodePage, Parts);
+  else
+    Parts.push_back(Str.str());
   // openrt RC-PRAGMA-CODEPAGE: one conversion for this string's code page,
   // made only for a string with a non-ASCII byte or an escape.
   bool OtherCodePage =
@@ -181,52 +393,63 @@ static Error processString(StringRef Str, NullHandlingMethod NullHandler,
                                                "UTF-8"))
       CPConv.emplace(std::move(*C));
 
-  // Convert the input bytes according to the chosen codepage.
-  if (CodePage == CpUtf8) {
-    convertUTF8ToUTF16String(Str, Chars);
-  } else if (CodePage == CpWin1252) {
-    for (char C : Str)
-      Chars.push_back(cp1252ToUnicode((unsigned char)C));
-  } else if (!IsLongString && NullHandler == NullHandlingMethod::UserResource &&
-             CPConv) {
-    // openrt RC-PRAGMA-CODEPAGE: a narrow string of a user resource is read in
-    // the pragma's code page and written in 1252 with best fit, '?' where
-    // there is none (observed, rc.exe: under code_page(1251) "\xC6\xE8" is
-    // 3F 3F; under 1250 "\xA5\xB3" (U+0104 U+0142) is 41 6C; under 1253
-    // "\xC1\xE1" is 3F 61).
-    SmallString<128> Text;
-    if (CPConv->convert(Str, Text))
-      return createError("Non-ASCII 8-bit codepoint can't be interpreted in "
-                         "the current codepage");
-    const UTF8 *P = reinterpret_cast<const UTF8 *>(Text.begin());
-    const UTF8 *E = reinterpret_cast<const UTF8 *>(Text.end());
-    while (P < E) {
-      UTF32 C = 0;
-      if (convertUTF8Sequence(&P, E, &C, strictConversion) != conversionOK)
-        return createError("Non-ASCII 8-bit codepoint can't be interpreted "
-                           "in the current codepage");
-      Chars.push_back(unicodeTo1252BestFit(C));
-    }
-  } else {
-    // openrt RC-PRAGMA-CODEPAGE: other code pages (#pragma code_page(1251),
-    // (932), ... as Visual Studio writes them) through llvm's Windows code
-    // page conversion (single-byte pages built in), as rc.exe reads them.
-    // Plain ASCII needs none; without a conversion a non-ASCII byte is an
-    // error.
-    bool ASCII = llvm::all_of(Str, [](char C) { return (unsigned char)C < 0x80; });
-    if (ASCII) {
-      for (char C : Str)
-        Chars.push_back((unsigned char)C);
-    } else {
-      SmallString<128> UTF8;
-      if (!CPConv || CPConv->convert(Str, UTF8)) {
-        for (char C : Str)
-          if ((unsigned char)C > 0x7F)
-            return createError("Non-ASCII 8-bit codepoint (" + Twine(C) +
-                               ") can't be interpreted in the current "
-                               "codepage");
+  for (size_t PartNo = 0; PartNo != Parts.size(); ++PartNo) {
+    StringRef Part = Parts[PartNo];
+    if (PartNo) {
+      if (NarrowUnits) {
+        Chars.push_back(LineBreakUnit);
+      } else {
+        Chars.push_back(' ');
+        Chars.push_back('\n');
       }
-      convertUTF8ToUTF16String(UTF8, Chars);
+    }
+    if (NarrowUnits) {
+      for (char C : Part)
+        Chars.push_back((unsigned char)C < 0x80 ? (unsigned char)C
+                                                : RawTag | (unsigned char)C);
+      continue;
+    }
+    // Convert the input bytes according to the chosen codepage.
+    if (CodePage == CpUtf8) {
+      // openrt RC-STRING-CHARS: invalid UTF-8 is U+FFFD (observed, rc.exe
+      // /c65001: STRINGTABLE "\xC6\xE8" as bytes is U+FFFD U+FFFD).
+      SmallVector<UTF32, 128> P;
+      decodeUTF8Lenient(arrayRefFromStringRef(Part), P);
+      for (UTF32 C : P) {
+        if (C >= 0x10000) {
+          Chars.push_back(0xD800 + ((C - 0x10000) >> 10));
+          Chars.push_back(0xDC00 + ((C - 0x10000) & 0x3FF));
+        } else {
+          Chars.push_back(C);
+        }
+      }
+    } else if (CodePage == CpWin1252) {
+      for (char C : Part)
+        Chars.push_back(cp1252ToUnicode((unsigned char)C));
+    } else {
+      // openrt RC-PRAGMA-CODEPAGE: other code pages (#pragma code_page(1251),
+      // (932), ... as Visual Studio writes them) through llvm's Windows code
+      // page conversion (single-byte pages built in), as rc.exe reads them.
+      // Plain ASCII needs none; without a conversion a non-ASCII byte is an
+      // error.
+      bool ASCII =
+          llvm::all_of(Part, [](char C) { return (unsigned char)C < 0x80; });
+      if (ASCII) {
+        for (char C : Part)
+          Chars.push_back((unsigned char)C);
+      } else {
+        SmallString<128> UTF8;
+        if (!CPConv || CPConv->convert(Part, UTF8)) {
+          for (char C : Part)
+            if ((unsigned char)C > 0x7F)
+              return createError("Non-ASCII 8-bit codepoint (" + Twine(C) +
+                                 ") can't be interpreted in the current "
+                                 "codepage");
+        }
+        SmallVector<UTF16, 128> P;
+        convertUTF8ToUTF16String(UTF8, P);
+        Chars.append(P.begin(), P.end());
+      }
     }
   }
 
@@ -242,8 +465,9 @@ static Error processString(StringRef Str, NullHandlingMethod NullHandler,
   Result.reserve(Chars.size());
   size_t Pos = 0;
 
-  auto AddRes = [&Result, NullHandler, IsLongString](UTF16 Char) -> Error {
-    if (!IsLongString) {
+  auto AddRes = [&Result, NullHandler, IsLongString,
+                 NarrowUnits](UTF16 Char) -> Error {
+    if (!IsLongString && !NarrowUnits) {
       if (NullHandler == NullHandlingMethod::UserResource) {
         // Narrow strings in user-defined resources are *not* output in
         // UTF-16 format.
@@ -256,8 +480,20 @@ static Error processString(StringRef Str, NullHandlingMethod NullHandler,
     Result.push_back(Char);
     return Error::success();
   };
-  auto AddEscapedChar = [AddRes, IsLongString, CodePage, NullHandler,
-                         &CPConv](UTF16 Char) -> Error {
+  // openrt RC-STRING-CHARS: where an escape whose value is a lead byte ended
+  // (a quote right after it belongs to the string, see tokenizeRC).
+  size_t EscapedLeadEnd = ~size_t(0);
+  auto AddEscapedChar = [&AddRes, IsLongString, CodePage, NarrowUnits, &CPConv,
+                         &EscapedLeadEnd, &Result](UTF16 Char) -> Error {
+    if (Char <= 0xFF && rc::isCodePageLeadByte(CodePage, Char))
+      EscapedLeadEnd = Result.size() + 1;
+    if (NarrowUnits) {
+      // openrt RC-STRING-CHARS: the byte as it is (writeNarrowUnits).
+      if (Char > 0xFF)
+        return createError("Non-8-bit escaped char (" + Twine(Char) +
+                           ") can't occur in narrow string");
+      return AddRes(Char);
+    }
     if (!IsLongString) {
       // Escaped chars in narrow strings have to be interpreted according to
       // the chosen code page.
@@ -265,16 +501,13 @@ static Error processString(StringRef Str, NullHandlingMethod NullHandler,
         return createError("Non-8-bit escaped char (" + Twine(Char) +
                            ") can't occur in narrow string");
       if (CodePage == CpUtf8) {
+        // openrt RC-STRING-CHARS: a byte that is not a character is U+FFFD
+        // (observed, rc.exe /c65001: STRINGTABLE "\xc3\xa5" is U+FFFD
+        // U+FFFD).
         if (Char >= 0x80)
-          return createError("Unable to interpret single byte (" + Twine(Char) +
-                             ") as UTF-8");
+          Char = 0xFFFD;
       } else if (CodePage == CpWin1252) {
         Char = cp1252ToUnicode(Char);
-      } else if (CPConv && NullHandler == NullHandlingMethod::UserResource) {
-        // openrt RC-PRAGMA-CODEPAGE: in a narrow user-resource string under
-        // another pragma code page an escaped byte is written as it is
-        // (observed, rc.exe: "\x82\xA0" under 932 is 82 A0, "\351\x80"
-        // under 1251 is E9 80).
       } else if (CPConv) {
         // openrt RC-PRAGMA-CODEPAGE: in a UTF-16 string an escaped byte is
         // taken as in 1252 (observed, rc.exe: "\xC6" under code_page(1251)
@@ -298,14 +531,30 @@ static Error processString(StringRef Str, NullHandlingMethod NullHandler,
 
     // Strip double "".
     if (CurChar == '"') {
-      if (Pos == Chars.size() || Chars[Pos] != '"')
+      if (Pos == Chars.size() || Chars[Pos] != '"') {
+        // openrt RC-STRING-CHARS: a quote after a lead byte is its second
+        // byte (tokenizeRC); after an escape in a UTF-16 string it is dropped.
+        if (NarrowUnits && endsWithLeadUnit(Result, CodePage)) {
+          RETURN_IF_ERROR(AddRes(RawTag | '"'));
+          continue;
+        }
+        if (EscapedLeadEnd == Result.size())
+          continue;
         return createError("Expected \"\"");
+      }
       ++Pos;
       RETURN_IF_ERROR(AddRes('"'));
       continue;
     }
 
     if (CurChar == '\\') {
+      // openrt RC-STRING-CHARS: a backslash that ends the string is itself
+      // (it is the second byte of a double-byte character; observed, rc.exe
+      // under code_page(932): "\x82\x5C" as bytes is one character).
+      if (Pos == Chars.size()) {
+        RETURN_IF_ERROR(AddRes(NarrowUnits ? RawTag | '\\' : '\\'));
+        continue;
+      }
       UTF16 TypeChar = Chars[Pos];
       ++Pos;
 
@@ -414,6 +663,13 @@ static Error processString(StringRef Str, NullHandlingMethod NullHandler,
     RETURN_IF_ERROR(AddRes(CurChar));
   }
 
+  if (NarrowUnits) {
+    SmallVector<UTF16, 128> Units;
+    Units.swap(Result);
+    RETURN_IF_ERROR(
+        writeNarrowUnits(Units, CodePage, NarrowCodePage, Result));
+  }
+
   switch (NullHandler) {
   case NullHandlingMethod::CutAtNull:
     for (size_t Pos = 0; Pos < Result.size(); ++Pos)
@@ -447,7 +703,8 @@ Error ResourceFileWriter::writeCString(StringRef Str, bool WriteTerminator) {
   bool IsLongString;
   RETURN_IF_ERROR(processString(Str, NullHandlingMethod::CutAtNull,
                                 IsLongString, ProcessedString,
-                                Params.codePageAt(Str)));
+                                Params.codePageAt(Str), -1,
+                                Params.columnAt(Str)));
   for (auto Ch : ProcessedString)
     writeInt<uint16_t>(Ch);
   if (WriteTerminator)
@@ -1407,7 +1664,8 @@ Error ResourceFileWriter::writeStringTableBundleBody(const RCResource *Base) {
       for (StringRef S : *Res->Bundle.Data[ID])
         RETURN_IF_ERROR(processString(S, NullHandlingMethod::CutAtDoubleNull,
                                       IsLongString, Data,
-                                      Params.codePageAt(S)));
+                                      Params.codePageAt(S), -1,
+                                      Params.columnAt(S)));
       if (AppendNull)
         Data.push_back('\0');
     }
@@ -1458,7 +1716,9 @@ Error ResourceFileWriter::writeUserDefinedBody(const RCResource *Base) {
     RETURN_IF_ERROR(
         processString(Elem.getString(), NullHandlingMethod::UserResource,
                       IsLongString, ProcessedString,
-                      Params.codePageAt(Elem.getString())));
+                      Params.codePageAt(Elem.getString()),
+                      Params.narrowCodePageAt(Elem.getString()),
+                      Params.columnAt(Elem.getString())));
 
     for (auto Ch : ProcessedString) {
       if (IsLongString) {

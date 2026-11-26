@@ -1,0 +1,11 @@
+1 RCDATA { "a
+b" }
+2 RCDATA { "a  
+   b" }
+3 RCDATA { "a
+
+b" }
+4 RCDATA { "ab" }
+5 RCDATA { L"a
+b" }
+6 RCDATA { "a	b" }

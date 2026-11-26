@@ -24,9 +24,11 @@
 ; UTF8-NEXT:   0040: 00000000                             |....|
 ; UTF8-NEXT: )
 
-; RUN: not llvm-rc -no-preprocess /C 65001 /FO %t.utf8-escape-narrow.res -- %p/Inputs/utf8-escape-narrow.rc 2>&1 | FileCheck %s --check-prefix UTF8_ESCAPE
-; UTF8_ESCAPE: llvm-rc: Error in STRINGTABLE statement (ID 1):
-; UTF8_ESCAPE-NEXT: Unable to interpret single byte (195) as UTF-8
+; openrt RC-STRING-CHARS: an escaped byte that is not a UTF-8 character is
+; U+FFFD, as rc.exe writes it (observed: "\xc3\xa5" is U+FFFD U+FFFD).
+; RUN: llvm-rc -no-preprocess /C 65001 /FO %t.utf8-escape-narrow.res -- %p/Inputs/utf8-escape-narrow.rc
+; RUN: llvm-readobj %t.utf8-escape-narrow.res | FileCheck %s --check-prefix UTF8_ESCAPE
+; UTF8_ESCAPE: 0000: 00000600 E500E400 F6002000 FDFFFDFF
 
 ; RUN: llvm-rc -no-preprocess /C 1252 /FO %t.cp1252.res -- %p/Inputs/cp1252.rc
 ; openrt RC-DEFAULT-CODEPAGE: without /C the script is read as 1252, as rc.exe
@@ -102,3 +104,25 @@
 ; RUN: llvm-rc -no-preprocess /FO %t.octud.res -- %p/Inputs/octud1251.rc
 ; RUN: llvm-readobj %t.octud.res | FileCheck %s --check-prefix=OCTUD
 ; OCTUD: Data:: (E9 80)
+
+; openrt RC-STRING-CHARS: only the first pragma, when nothing comes before it,
+; leaves narrow user-resource strings in the /c page (rc.exe, same data); a
+; second pragma, or one after a statement, writes them in its own page.
+; RUN: llvm-rc -no-preprocess /FO %t.pf1.res -- %p/Inputs/pragma-first-twice.rc
+; RUN: llvm-readobj %t.pf1.res | FileCheck %s --check-prefix=PFTWICE
+; PFTWICE: Data:: (C6 E8)
+; RUN: llvm-rc -no-preprocess /FO %t.pf2.res -- %p/Inputs/pragma-first-again.rc
+; RUN: llvm-readobj %t.pf2.res | FileCheck %s --check-prefix=PFAGAIN
+; PFAGAIN: Data:: (41 6C)
+; PFAGAIN: Data:: (A5 B3)
+; RUN: llvm-rc -no-preprocess /FO %t.pf3.res -- %p/Inputs/pragma-first-1252.rc
+; RUN: llvm-readobj %t.pf3.res | FileCheck %s --check-prefix=PF1252
+; PF1252: Data:: (A5 B3)
+; RUN: llvm-rc -no-preprocess /FO %t.pf4.res -- %p/Inputs/pragma-first-ascii.rc
+; RUN: llvm-readobj %t.pf4.res | FileCheck %s --check-prefix=PFASCII
+; PFASCII: Data:: (61)
+; PFASCII: Data:: (41 6C)
+; RUN: llvm-rc -no-preprocess /FO %t.pf5.res -- %p/Inputs/pragma-after-statement.rc
+; RUN: llvm-readobj %t.pf5.res | FileCheck %s --check-prefix=PFAFTER
+; PFAFTER: Data:: (61)
+; PFAFTER: Data:: (C6 E8)

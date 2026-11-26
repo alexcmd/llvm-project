@@ -15,6 +15,7 @@ add_public_tablegen_target(WindresOptsTableGen)
 
 add_llvm_tool(llvm-rc
   llvm-rc.cpp
+  CodePageSupport.cpp
   ResourceFileWriter.cpp
   ResourceScriptCppFilter.cpp
   ResourceScriptParser.cpp

@@ -24,6 +24,7 @@
 #ifndef LLVM_TOOLS_LLVMRC_RESOURCESCRIPTTOKEN_H
 #define LLVM_TOOLS_LLVMRC_RESOURCESCRIPTTOKEN_H
 
+#include "llvm/ADT/STLFunctionalExtras.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Error.h"
 
@@ -75,7 +76,13 @@ private:
 // Tokens returned by this function hold only references to the parts
 // of the Input. Memory buffer containing Input cannot be freed,
 // modified or reallocated.
-Expected<std::vector<RCToken>> tokenizeRC(StringRef Input, bool IsWindres);
+//
+// openrt RC-STRING-CHARS: \p CodePageAt gives the code page of the text at an
+// offset; in a double-byte page a lead byte in a string literal (also one
+// written as an escape) takes the next byte, even a quote, as rc.exe does.
+Expected<std::vector<RCToken>>
+tokenizeRC(StringRef Input, bool IsWindres,
+           function_ref<int(size_t)> CodePageAt = nullptr);
 
 } // namespace llvm
 

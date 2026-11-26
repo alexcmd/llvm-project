@@ -1,0 +1,3 @@
+#pragma code_page(932)
+1 RCDATA { "‚\" }
+STRINGTABLE { 1 "ƒ\" }

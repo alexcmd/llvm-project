@@ -1,0 +1,3 @@
+#pragma code_page(932)
+STRINGTABLE { 1 "a‚
+b" }

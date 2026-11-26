@@ -57,7 +57,7 @@
 // D9035-ZE: D9035 : option 'Ze' is deprecated
 // D9035-O: D9035 : option 'o' is deprecated
 // D9035-H: D9035 : option 'H' is deprecated
-// D9014: D9014 : level '5' is out of range for '/W'; using level '1'
+// D9014: D9014 : invalid value '5' for '/W'; assuming '1'
 
 // Accepted without a diagnostic: /Ft<dir>, /Yl<sym>, /Wv:<ver>, /WL-, /H<n>
 // is above; /d2Zi is accepted (crashes in cl, GAP).

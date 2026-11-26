@@ -49,3 +49,10 @@ L ret() { L l; return l; }
 struct C { operator A &(); };
 C mk();
 A &r = (A &)mk();
+
+// An unrelated class with other conversion functions keeps the cl reading
+// (MiniEngine BoundingBox.h: (OrientedBox&)(xform * m_repr); 0.3.10 regressed).
+struct Xf { operator int() const; operator A() const; };
+struct OB {};
+Xf mkx();
+OB &ob = (OB &)mkx(); // expected-warning {{C-style cast from rvalue of type 'Xf' to reference type 'OB &' binds a temporary; Microsoft extension}}

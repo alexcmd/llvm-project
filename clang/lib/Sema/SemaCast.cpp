@@ -2856,18 +2856,36 @@ void CastOperation::CheckCXXCStyleCast(bool FunctionalStyle,
       SrcExpr.get()->isPRValue() && SrcType->isRecordType()) {
     if (const auto *Ref = DestType->getAs<LValueReferenceType>()) {
       QualType Pointee = Ref->getPointeeType();
-      // Not when a conversion function of an unrelated class can do the
-      // cast in standard C++ ((A&)mk() with B::operator A&(); cl silent).
-      bool Related =
-          Self.Context.hasSameUnqualifiedType(Pointee, SrcType) ||
-          (Pointee->isRecordType() &&
-           Self.IsDerivedFrom(OpRange.getBegin(), SrcType,
-                              Pointee.getUnqualifiedType()));
-      const auto *SrcRD = SrcType->getAsCXXRecordDecl();
-      bool HasConversions =
+      // Not when a conversion function of the source class returns a
+      // reference to the target type: then the cast is standard C++
+      // ((A&)mk() with B::operator A&(); cl silent). Any other class prvalue,
+      // also of an unrelated class with other conversion functions
+      // ((OrientedBox&)(xform * m_repr) in MiniEngine), takes the cl reading.
+      bool StandardByConversion = false;
+      if (const auto *SrcRD = SrcType->getAsCXXRecordDecl();
           SrcRD && SrcRD->hasDefinition() &&
-          !SrcRD->getVisibleConversionFunctions().empty();
-      if ((Related || !HasConversions) &&
+          !Self.Context.hasSameUnqualifiedType(Pointee, SrcType)) {
+        for (const NamedDecl *ND : SrcRD->getVisibleConversionFunctions()) {
+          const auto *Conv =
+              dyn_cast<CXXConversionDecl>(ND->getUnderlyingDecl());
+          if (!Conv)
+            continue;
+          const auto *ConvRef =
+              Conv->getConversionType()->getAs<LValueReferenceType>();
+          if (!ConvRef)
+            continue;
+          QualType ConvPointee = ConvRef->getPointeeType();
+          if (Self.Context.hasSameUnqualifiedType(ConvPointee, Pointee) ||
+              (Pointee->isRecordType() && ConvPointee->isRecordType() &&
+               Self.IsDerivedFrom(OpRange.getBegin(),
+                                  ConvPointee.getUnqualifiedType(),
+                                  Pointee.getUnqualifiedType()))) {
+            StandardByConversion = true;
+            break;
+          }
+        }
+      }
+      if (!StandardByConversion &&
           (!Pointee.isConstQualified() || Pointee.isVolatileQualified())) {
         Self.Diag(OpRange.getBegin(), diag::ext_ms_cast_rvalue_to_reference)
             << FunctionalStyle << SrcType << DestType << OpRange;

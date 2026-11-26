@@ -697,6 +697,15 @@ public:
         Object RequiredInfo{{"logical-name", Info.ModuleName}};
         if (!Info.SourcePath.empty())
           RequiredInfo.insert({"source-path", Info.SourcePath});
+        // CL-MODULE-OPTIONS: a header unit import (P1689R5 lookup-method).
+        if (Info.Type != P1689ModuleInfo::ModuleType::NamedCXXModule) {
+          RequiredInfo.insert(
+              {"lookup-method",
+               Info.Type == P1689ModuleInfo::ModuleType::AngleHeaderUnit
+                   ? "include-angle"
+                   : "include-quote"});
+          RequiredInfo.insert({"unique-on-source-path", true});
+        }
         Requires.push_back(std::move(RequiredInfo));
       }
 
@@ -726,6 +735,8 @@ private:
 
     for (P1689Rule &R : Rules) {
       for (P1689ModuleInfo &Info : R.Requires) {
+        if (Info.Type != P1689ModuleInfo::ModuleType::NamedCXXModule)
+          continue; // a header unit keeps the file it was found at
         auto Iter = ModuleSourceMapper.find(Info.ModuleName);
         if (Iter != ModuleSourceMapper.end())
           Info.SourcePath = Iter->second;

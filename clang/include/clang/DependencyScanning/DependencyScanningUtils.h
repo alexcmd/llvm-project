@@ -60,8 +60,10 @@ public:
       std::optional<P1689ModuleInfo> Provided,
       std::vector<P1689ModuleInfo> Requires) override {
     ModuleName = Provided ? Provided->ModuleName : "";
-    llvm::transform(Requires, std::back_inserter(NamedModuleDeps),
-                    [](const auto &Module) { return Module.ModuleName; });
+    // CL-MODULE-OPTIONS: a header unit import is not a named module.
+    for (const P1689ModuleInfo &Module : Requires)
+      if (Module.Type == P1689ModuleInfo::ModuleType::NamedCXXModule)
+        NamedModuleDeps.push_back(Module.ModuleName);
   }
 
   TranslationUnitDeps takeTranslationUnitDeps();

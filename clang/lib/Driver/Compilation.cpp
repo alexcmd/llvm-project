@@ -432,9 +432,9 @@ void Compilation::ExecuteJobs(const JobList &Jobs,
     const Command *FailingCommand = nullptr;
     if (int Res = ExecuteCommand(Job, FailingCommand, LogOnly)) {
       FailingCommands.push_back(std::make_pair(Res, FailingCommand));
-      // Bail as soon as one command fails in cl driver mode.
-      if (TheDriver.IsCLMode())
-        return;
+      // CL-MULTI-SOURCE-CONTINUE: cl 19.44 (observed) compiles every source
+      // after one fails, then links nothing; jobs that need a failed job's
+      // output are skipped by InputsOk above. Upstream bailed here in cl mode.
     }
     ++I;
   }

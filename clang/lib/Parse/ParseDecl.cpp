@@ -3478,6 +3478,25 @@ void Parser::ParseDeclarationSpecifiers(
           if (!PA.isCXX11Attribute() && !PA.isC23Attribute() &&
               !PA.isRegularKeywordAttribute())
             continue;
+          // CL-ATTR-AFTER-TYPE: msvc:: attributes after the type as cl 19.44
+          // (observed): noinline, flatten and constexpr are silent;
+          // intrinsic (C2416) and forceinline (C3829) are errors; the others
+          // (no_unique_address, C7545) keep clang's handling.
+          if (getLangOpts().MSVCCompat && getLangOpts().MSCLRules &&
+              PA.isCXX11Attribute() && PA.hasScope() &&
+              PA.getScopeName()->isStr("msvc")) {
+            StringRef Name = PA.getAttrName()->getName();
+            if (Name == "noinline" || Name == "flatten" || Name == "constexpr") {
+              PA.setInvalid();
+              continue;
+            }
+            if (Name == "intrinsic" || Name == "forceinline") {
+              Diag(PA.getLoc(), diag::err_attribute_not_type_attr)
+                  << PA << PA.isRegularKeywordAttribute();
+              PA.setInvalid();
+              continue;
+            }
+          }
           if (PA.getKind() == ParsedAttr::UnknownAttribute)
             // We will warn about the unknown attribute elsewhere (in
             // SemaDeclAttr.cpp)
@@ -3491,23 +3510,15 @@ void Parser::ParseDeclarationSpecifiers(
           }
           // CL-ATTR-AFTER-TYPE: cl knows no gnu:: or clang:: attribute:
           // C5030 "not recognized" ([[gnu::unused]], [[gnu::deprecated]],
-          // also a type attribute such as [[clang::annotate_type]]);
-          // [[msvc::noinline]] after the type is silent in cl (forceinline
-          // keeps its error, cl C3829).
+          // also a type attribute such as [[clang::annotate_type]]).
           if (getLangOpts().MSVCCompat && getLangOpts().MSCLRules &&
               PA.isCXX11Attribute() && !PA.isRegularKeywordAttribute() &&
-              PA.hasScope()) {
-            if (PA.getScopeName()->isStr("gnu") ||
-                PA.getScopeName()->isStr("clang")) {
-              Diag(PA.getLoc(), diag::warn_unknown_attribute_ignored) << PA;
-              PA.setInvalid();
-              continue;
-            }
-            if (PA.getScopeName()->isStr("msvc") &&
-                PA.getKind() == ParsedAttr::AT_NoInline) {
-              PA.setInvalid();
-              continue;
-            }
+              PA.hasScope() &&
+              (PA.getScopeName()->isStr("gnu") ||
+               PA.getScopeName()->isStr("clang"))) {
+            Diag(PA.getLoc(), diag::warn_unknown_attribute_ignored) << PA;
+            PA.setInvalid();
+            continue;
           }
           // We reject AT_LifetimeBound and AT_AnyX86NoCfCheck, even though they
           // are type attributes, because we historically haven't allowed these

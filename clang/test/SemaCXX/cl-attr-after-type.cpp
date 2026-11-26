@@ -38,3 +38,6 @@ int usegd() { return gd; }
 auto tr() -> int [[deprecated]]; // std-error {{'deprecated' attribute cannot be applied to types}}
 int [[msvc::noinline]] mni; // std-error {{'msvc::noinline' attribute cannot be applied to types}}
 int [[clang::annotate_type("x")]] cat; // cl-warning {{unknown attribute 'clang::annotate_type' ignored}}
+int [[msvc::flatten]] mfl; // std-warning {{unknown attribute 'msvc::flatten' ignored}}
+int [[msvc::constexpr]] mce; // std-error {{'msvc::constexpr' attribute cannot be applied to types}}
+int [[msvc::intrinsic]] mii; // cl-error {{'msvc::intrinsic' attribute cannot be applied to types}} std-warning {{unknown attribute 'msvc::intrinsic' ignored}}

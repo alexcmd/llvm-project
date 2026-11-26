@@ -1048,7 +1048,9 @@ bool Sema::checkCLBitwiseVarArg(const Expr *E, VariadicCallType CT,
     // template that is never instantiated).
     if (CurContext->isDependentContext())
       return true;
-    Diag(E->getBeginLoc(), diag::warn_cl_nonportable_class_vararg) << Ty << CT;
+    // Once per place (cl: the first instantiation only).
+    if (CLVarArgWarnedLocs.insert(E->getBeginLoc()).second)
+      Diag(E->getBeginLoc(), diag::warn_cl_nonportable_class_vararg) << Ty << CT;
   }
   return true;
 }

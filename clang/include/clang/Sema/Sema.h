@@ -8182,6 +8182,10 @@ public:
   /// bitwise copy built by DefaultVariadicArgumentPromotion in cl mode.
   static const Expr *lookThroughCLBitwiseVarArg(const Expr *E);
 
+  /// CL-DX-NONPOD-VARARG: places C4840 was reported at (cl: once per place,
+  /// not once per template instantiation).
+  llvm::DenseSet<SourceLocation> CLVarArgWarnedLocs;
+
   /// CL-DX-NONPOD-VARARG: trivially copyable stand-in of a class type, same
   /// size and alignment, the type the bitwise copy is passed as.
   QualType getCLBitwiseVarArgType(QualType Ty);

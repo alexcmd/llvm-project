@@ -89,8 +89,8 @@ constexpr int kc2 = cf(kc ? L{} : L{}); // cl-warning {{non-portable use of clas
 // In a template the warning comes with an instantiation, as in cl (none for a
 // template that is never instantiated).
 template <class T> void a6(C c, T) { f(1, c); } // std-error {{cannot pass object of non-trivial type 'C'}}
-template <class T> void a7(C c, T) { f(1, c); } // cl-warning {{non-portable use of class 'C'}} std-error 2 {{cannot pass object of non-trivial type 'C'}}
-void usea7() { a7(C(), 1); } // cl-note {{in instantiation of function template specialization 'a7<int>' requested here}} std-note {{in instantiation of function template specialization 'a7<int>' requested here}}
+template <class T> void a7(C c, T) { f(1, c); } // cl-warning {{non-portable use of class 'C'}} std-error 3 {{cannot pass object of non-trivial type 'C'}}
+void usea7() { a7(C(), 1); a7(C(), 2L); } // cl-note {{in instantiation of function template specialization 'a7<int>' requested here}} std-note {{in instantiation of function template specialization 'a7<int>' requested here}} std-note {{in instantiation of function template specialization 'a7<long>' requested here}}
 
 // Deleted copy: an error, as in cl (C4839, C2280).
 void q(M m) {

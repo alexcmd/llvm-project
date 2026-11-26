@@ -54,3 +54,10 @@
 ; CP1252-NEXT:   0040: 92010000 00000000 00000000 00000000  |................|
 ; CP1252-NEXT:   0050: 00000000 00000000 00000000           |............|
 ; CP1252-NEXT: )
+
+; openrt RC-PRAGMA-CODEPAGE: "#pragma code_page(N)" switches the code page for the
+; text after it, as rc.exe does (observed: the same .res from rc.exe).
+; RUN: llvm-rc -no-preprocess /FO %t.pragma.res -- %p/Inputs/utf8-pragma.rc
+; RUN: llvm-readobj %t.pragma.res | FileCheck %s --check-prefix=PRAGMA
+; PRAGMA:      0000: 00000300 A9002000 78000400 C200A900
+; PRAGMA-NEXT: 0010: 20007900 00000000 00000000 00000000

@@ -21,7 +21,9 @@ namespace {
 
 class Filter {
 public:
-  explicit Filter(StringRef Input) : Data(Input), DataLength(Input.size()) {}
+  explicit Filter(StringRef Input,
+                  std::vector<std::pair<size_t, int>> *CodePages)
+      : Data(Input), DataLength(Input.size()), CodePages(CodePages) {}
 
   std::string run();
 
@@ -37,6 +39,8 @@ private:
 
   size_t Pos = 0;
   bool Outputting = true;
+  std::vector<std::pair<size_t, int>> *CodePages;
+  size_t OutputSize = 0;
 };
 
 std::string Filter::run() {
@@ -48,8 +52,10 @@ std::string Filter::run() {
     Pos = Data.find_first_not_of("\r\n", Pos);
     StringRef Line = Data.take_front(Pos).drop_front(LineStart);
 
-    if (parseLine(Line))
+    if (parseLine(Line)) {
       Output.push_back(Line);
+      OutputSize += Line.size();
+    }
   }
 
   return llvm::join(Output, "");
@@ -65,6 +71,28 @@ bool Filter::parseLine(StringRef Line) {
 
   // Found a preprocessing directive line. From here on, we always return
   // false since the preprocessing directives should be filtered out.
+
+  // openrt RC-PRAGMA-CODEPAGE: rc.exe reads the text after
+  // "#pragma code_page(N)" in code page N (observed: a UTF-8 copyright sign
+  // after code_page(65001) is U+00A9); record where it takes effect.
+  {
+    StringRef P = Line.ltrim();
+    if (Outputting && CodePages && P.consume_front("pragma")) {
+      P = P.ltrim();
+      if (P.consume_front("code_page")) {
+        P = P.ltrim();
+        if (P.consume_front("(")) {
+          P = P.ltrim();
+          int CP = 0;
+          if (P.starts_with_insensitive("default"))
+            CodePages->emplace_back(OutputSize, -1);
+          else if (!P.consumeInteger(10, CP))
+            CodePages->emplace_back(OutputSize, CP);
+        }
+      }
+      return false;
+    }
+  }
 
   Line.consume_front("line");
   if (!Line.starts_with(" "))
@@ -106,6 +134,9 @@ bool Filter::streamEof() const { return Pos == DataLength; }
 
 namespace llvm {
 
-std::string filterCppOutput(StringRef Input) { return Filter(Input).run(); }
+std::string filterCppOutput(StringRef Input,
+                            std::vector<std::pair<size_t, int>> *CodePages) {
+  return Filter(Input, CodePages).run();
+}
 
 } // namespace llvm

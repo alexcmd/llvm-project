@@ -24,10 +24,17 @@
 #include "llvm/ADT/StringRef.h"
 
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace llvm {
 
-std::string filterCppOutput(StringRef Input);
+/// openrt RC-PRAGMA-CODEPAGE: when \p CodePages is given, each
+/// "#pragma code_page(N)" is recorded as (offset in the result, N);
+/// code_page(DEFAULT) records -1.
+std::string
+filterCppOutput(StringRef Input,
+                std::vector<std::pair<size_t, int>> *CodePages = nullptr);
 
 } // namespace llvm
 

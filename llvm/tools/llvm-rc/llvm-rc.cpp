@@ -644,7 +644,8 @@ void doRc(std::string Src, std::string Dest, RcOptions &Opts,
   std::unique_ptr<MemoryBuffer> FileContents = std::move(*File);
   StringRef Contents = FileContents->getBuffer();
 
-  std::string FilteredContents = filterCppOutput(Contents);
+  std::vector<std::pair<size_t, int>> PragmaCodePages;
+  std::string FilteredContents = filterCppOutput(Contents, &PragmaCodePages);
   std::vector<RCToken> Tokens =
       ExitOnErr(tokenizeRC(FilteredContents, Opts.IsWindres));
 
@@ -677,6 +678,14 @@ void doRc(std::string Src, std::string Dest, RcOptions &Opts,
     break;
   default:
     fatalError("Unsupported code page, only 0, 1252 and 65001 are supported!");
+  }
+  // openrt RC-PRAGMA-CODEPAGE: the text after "#pragma code_page(N)" is read
+  // in code page N, as rc.exe does.
+  for (const auto &[Offset, CP] : PragmaCodePages) {
+    if (CP != -1 && CP != CpAcp && CP != CpWin1252 && CP != CpUtf8)
+      fatalError("Unsupported code page in #pragma code_page(" + Twine(CP) +
+                 "), only 0, 1252 and 65001 are supported!");
+    Params.CodePageChanges.emplace_back(FilteredContents.data() + Offset, CP);
   }
 
   std::unique_ptr<ResourceFileWriter> Visitor;

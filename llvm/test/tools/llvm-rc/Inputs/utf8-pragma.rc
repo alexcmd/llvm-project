@@ -1,0 +1,8 @@
+#pragma code_page(65001)
+STRINGTABLE {
+  1 "© x"
+}
+#pragma code_page(1252)
+STRINGTABLE {
+  2 "© y"
+}

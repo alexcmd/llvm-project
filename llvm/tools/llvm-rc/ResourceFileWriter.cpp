@@ -371,7 +371,7 @@ Error ResourceFileWriter::writeCString(StringRef Str, bool WriteTerminator) {
   bool IsLongString;
   RETURN_IF_ERROR(processString(Str, NullHandlingMethod::CutAtNull,
                                 IsLongString, ProcessedString,
-                                Params.CodePage));
+                                Params.codePageAt(Str)));
   for (auto Ch : ProcessedString)
     writeInt<uint16_t>(Ch);
   if (WriteTerminator)
@@ -1330,7 +1330,8 @@ Error ResourceFileWriter::writeStringTableBundleBody(const RCResource *Base) {
       bool IsLongString;
       for (StringRef S : *Res->Bundle.Data[ID])
         RETURN_IF_ERROR(processString(S, NullHandlingMethod::CutAtDoubleNull,
-                                      IsLongString, Data, Params.CodePage));
+                                      IsLongString, Data,
+                                      Params.codePageAt(S)));
       if (AppendNull)
         Data.push_back('\0');
     }
@@ -1380,7 +1381,8 @@ Error ResourceFileWriter::writeUserDefinedBody(const RCResource *Base) {
     bool IsLongString;
     RETURN_IF_ERROR(
         processString(Elem.getString(), NullHandlingMethod::UserResource,
-                      IsLongString, ProcessedString, Params.CodePage));
+                      IsLongString, ProcessedString,
+                      Params.codePageAt(Elem.getString())));
 
     for (auto Ch : ProcessedString) {
       if (IsLongString) {

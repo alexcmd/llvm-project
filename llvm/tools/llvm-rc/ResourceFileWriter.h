@@ -41,6 +41,20 @@ struct WriterParams {
   bool NoInclude;                     // Ignore the INCLUDE variable.
   StringRef InputFilePath;            // The full path of the input file.
   int CodePage = CpAcp;               // The codepage for interpreting characters.
+  // openrt RC-PRAGMA-CODEPAGE: "#pragma code_page(N)" in the script, as
+  // (first byte it applies to, N), in order; -1 is the default again.
+  std::vector<std::pair<const char *, int>> CodePageChanges;
+
+  /// The code page for the text at \p Text.
+  int codePageAt(StringRef Text) const {
+    int CP = CodePage;
+    for (const auto &[Pos, N] : CodePageChanges) {
+      if (Text.data() < Pos)
+        break;
+      CP = N < 0 ? CodePage : N;
+    }
+    return CP;
+  }
 };
 
 class ResourceFileWriter : public Visitor {

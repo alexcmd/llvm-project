@@ -8174,6 +8174,10 @@ public:
   /// for such a type; then \p Diagnose emits C4840 where cl does.
   bool checkCLBitwiseVarArg(const Expr *E, VariadicCallType CT, bool Diagnose);
 
+  /// CL-DX-REF-BINDING: \p E is the xvalue of a local that a return or
+  /// throw tries first (implicit move); the cl binding never applies to it.
+  static bool isImplicitMoveXValue(const Expr *E);
+
   /// CL-DX-NONPOD-VARARG: the argument as written, looking through the
   /// bitwise copy built by DefaultVariadicArgumentPromotion in cl mode.
   static const Expr *lookThroughCLBitwiseVarArg(const Expr *E);

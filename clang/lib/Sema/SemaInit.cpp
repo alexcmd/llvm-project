@@ -5718,11 +5718,13 @@ static void TryReferenceInitializationCore(Sema &S,
       !T1Quals.hasConst() && !T1Quals.hasVolatile() &&
       InitCategory.isRValue() && T2->isRecordType() &&
       RefRelationship == Sema::Ref_Compatible &&
-      !isNonReferenceableGLValue(Initializer) && !S.isSFINAEContext();
-  if (MSRvalueBinding)
-    S.Diag(Initializer->getBeginLoc(), diag::ext_ms_rvalue_to_nonconst_lref)
-        << T2 << S.Context.getLValueReferenceType(cv1T1)
-        << Initializer->getSourceRange();
+      !isNonReferenceableGLValue(Initializer) && !S.isSFINAEContext() &&
+      !Sema::isImplicitMoveXValue(Initializer);
+  if (MSRvalueBinding) {
+    // Warned when performed (an InitializationSequence is also only tried).
+    Sequence.MSRvalueBindingFrom = T2;
+    Sequence.MSRvalueBindingTo = S.Context.getLValueReferenceType(cv1T1);
+  }
 
   //     - Otherwise, the reference shall be an lvalue reference to a
   //       non-volatile const type (i.e., cv1 shall be const), or the reference
@@ -8266,6 +8268,12 @@ ExprResult InitializationSequence::Perform(Sema &S,
     return S.RequireNonAbstractType(Kind.getLocation(), T,
                                     diag::err_allocation_of_abstract_type);
   };
+
+  // CL-DX-REF-BINDING: C4239 for the binding this sequence performs.
+  if (!MSRvalueBindingFrom.isNull() && !Args.empty() && Args[0])
+    S.Diag(Args[0]->getBeginLoc(), diag::ext_ms_rvalue_to_nonconst_lref)
+        << MSRvalueBindingFrom << MSRvalueBindingTo
+        << Args[0]->getSourceRange();
 
   // Walk through the computed steps for the initialization sequence,
   // performing the specified conversions along the way.

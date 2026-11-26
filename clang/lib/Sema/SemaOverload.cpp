@@ -5597,7 +5597,8 @@ TryReferenceInit(Sema &S, Expr *Init, QualType DeclType,
   if (!isRValRef && S.getLangOpts().MSRvalueRefBinding &&
       !T1.isConstQualified() && !T1.isVolatileQualified() &&
       InitCategory.isRValue() && T2->isRecordType() &&
-      RefRelationship == Sema::Ref_Compatible && !S.isSFINAEContext()) {
+      RefRelationship == Sema::Ref_Compatible && !S.isSFINAEContext() &&
+      !Sema::isImplicitMoveXValue(Init)) {
     SetAsReferenceBinding(/*BindsDirectly=*/true);
     ICS.Standard.MSRvalueToNonConstLRef = true;
     return ICS;
@@ -11659,6 +11660,17 @@ OverloadingResult OverloadCandidateSet::BestViableFunction(Sema &S,
 
   InjectNonDeducedTemplateCandidates(S);
   return BestViableFunctionImpl(S, Loc, Best);
+}
+
+bool Sema::isImplicitMoveXValue(const Expr *E) {
+  if (!E || !E->isXValue())
+    return false;
+  E = E->IgnoreParens();
+  if (const auto *ICE = dyn_cast<ImplicitCastExpr>(E))
+    if (ICE->getCastKind() == CK_NoOp)
+      E = ICE->getSubExpr()->IgnoreParens();
+  // A named variable is an lvalue except in the implicit-move pass.
+  return isa<DeclRefExpr>(E);
 }
 
 OverloadingResult OverloadCandidateSet::BestViableFunctionImpl(

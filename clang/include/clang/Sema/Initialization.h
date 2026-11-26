@@ -1274,6 +1274,10 @@ public:
   /// Set the kind of sequence computed.
   void setSequenceKind(enum SequenceKind SK) { SequenceKind = SK; }
 
+  /// CL-DX-REF-BINDING: the sequence binds a non-const lvalue reference
+  /// (To) to a class rvalue (From); Perform warns C4239, Try does not.
+  QualType MSRvalueBindingFrom, MSRvalueBindingTo;
+
   /// Determine whether the initialization sequence is valid.
   explicit operator bool() const { return !Failed(); }
 

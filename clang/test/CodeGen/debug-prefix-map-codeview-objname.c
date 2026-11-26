@@ -3,9 +3,20 @@
 // /pathmap does for S_OBJNAME (observed), so two build roots give the same
 // object.
 
-// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -gcodeview -debug-info-kind=limited \
+// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -gcodeview -gcodeview-command-line -debug-info-kind=limited \
 // RUN:   -fdebug-prefix-map=/build/root=/r -fdebug-compilation-dir=/build/root \
 // RUN:   -object-file-name=/build/root/sub/a.obj -emit-obj -o %t.obj %s
 // RUN: llvm-readobj --codeview %t.obj | FileCheck --implicit-check-not=/build/root %s
 // CHECK: ObjectName: /r/sub/a.obj
 int f(void) { return 0; }
+
+// Windows paths: the build command line is mapped before its backslashes are
+// doubled, and only at a path boundary (C:\src2 is not C:\src).
+// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -gcodeview -gcodeview-command-line -debug-info-kind=limited \
+// RUN:   "-fdebug-prefix-map=C:\src=X:\b" "-fdebug-compilation-dir=C:\src" \
+// RUN:   "-object-file-name=C:\src\sub\a.obj" -I "C:\src2\inc" -emit-obj -o %t2.obj %s
+// RUN: llvm-readobj --codeview %t2.obj | FileCheck --check-prefix=WIN %s
+// WIN-DAG: "-fdebug-prefix-map=X:\\b=X:\\b"
+// WIN-DAG: "-I" "C:\\src2\\inc"
+// WIN-NOT: C:\\src\\
+// WIN: ObjectName: X:\b\sub\a.obj

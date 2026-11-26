@@ -562,19 +562,38 @@ static bool initTargetOptions(const CompilerInstance &CI,
   for (const auto &Input : CI.getFrontendOpts().Inputs)
     if (Input.isFile())
       InputFiles.push_back(Input.getFile());
-  Options.MCOptions.CommandlineArgs = flattenClangCommandLine(
-      CodeGenOpts.CommandLineArgs, CodeGenOpts.MainFileName, InputFiles);
   // CL-PATHMAP-OBJNAME: the debug prefix map (clang-cl /pathmap) also covers
-  // the command line of the CodeView build information, wherever a prefix
-  // occurs in it, so two build roots give the same object.
-  for (const auto &[From, To] : llvm::reverse(CodeGenOpts.DebugPrefixMap)) {
-    if (From.empty())
-      continue;
-    std::string &S = Options.MCOptions.CommandlineArgs;
-    for (size_t Pos = S.find(From); Pos != std::string::npos;
-         Pos = S.find(From, Pos + To.size()))
-      S.replace(Pos, From.size(), To);
-  }
+  // the command line of the CodeView build information, so two build roots
+  // give the same object. Each argument is mapped before it is quoted (the
+  // quoted form doubles backslashes); a prefix counts where it starts the
+  // argument or follows '=' and ends at a separator, '=' or the end.
+  std::vector<std::string> MappedArgs = CodeGenOpts.CommandLineArgs;
+  if (!CodeGenOpts.DebugPrefixMap.empty())
+    for (std::string &Arg : MappedArgs)
+      for (const auto &[From, To] : llvm::reverse(CodeGenOpts.DebugPrefixMap)) {
+        if (From.empty())
+          continue;
+        std::string Out;
+        size_t Start = 0;
+        for (size_t Pos = Arg.find(From); Pos != std::string::npos;
+             Pos = Arg.find(From, Pos + 1)) {
+          bool AtStart = Pos == 0 || Arg[Pos - 1] == '=';
+          size_t End = Pos + From.size();
+          bool AtEnd = End == Arg.size() || Arg[End] == '=' ||
+                       llvm::sys::path::is_separator(Arg[End]) ||
+                       llvm::sys::path::is_separator(From.back());
+          if (!AtStart || !AtEnd || Pos < Start)
+            continue;
+          Out += Arg.substr(Start, Pos - Start) + To;
+          Start = End;
+        }
+        if (Start) {
+          Out += Arg.substr(Start);
+          Arg = std::move(Out);
+        }
+      }
+  Options.MCOptions.CommandlineArgs = flattenClangCommandLine(
+      MappedArgs, CodeGenOpts.MainFileName, InputFiles);
   Options.MCOptions.AsSecureLogFile = CodeGenOpts.AsSecureLogFile;
   Options.MCOptions.PPCUseFullRegisterNames =
       CodeGenOpts.PPCUseFullRegisterNames;

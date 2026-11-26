@@ -30,3 +30,11 @@ CHECK-NEXT: - X:\root\out.pdb
 CHECK-NEXT: - cmd
 CHECK-NEXT: - -debug -brepro -pathmap:X:\root=X:\root -entry:main
 CHECK-NOT: {{[A-Za-z]}}:\{{.*}}\pdb-pathmap.test.tmp
+
+A prefix maps only at a path boundary, in paths and in the command line alike
+(%t\a does not map %t\ab).
+RUN: mkdir -p %t/ab
+RUN: cd %t/a && lld-link -debug -brepro "-pathmap:%t\a=X:\root" "-libpath:%t\ab" -entry:main -nodefaultlib -out:out3.exe -pdb:out3.pdb pdb_lines_1.obj pdb_lines_2.obj
+RUN: llvm-pdbutil dump -symbols %t/a/out3.pdb | FileCheck --check-prefix=BOUNDARY %s
+BOUNDARY: - cmd
+BOUNDARY-NEXT: -libpath:{{.*}}pdb-pathmap.test.tmp\ab

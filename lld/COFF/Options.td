@@ -282,7 +282,8 @@ def pdb_source_path : P<"pdbsourcepath",
     "Base path used to make relative source file path absolute in PDB">;
 def pathmap : P<"pathmap",
     "<from>=<to>: replace the path prefix <from> in every path the PDB records "
-    "(modules, sources, linker environment; openrt)">;
+    "(modules, sources, linker environment) and in the PDB path written into "
+    "the image (openrt; link.exe accepts /pathmap but maps neither)">;
 def rsp_quoting : Joined<["--"], "rsp-quoting=">,
   HelpText<"Quoting style for response files, 'windows' (default) or 'posix'">;
 def start_lib : F<"start-lib">,

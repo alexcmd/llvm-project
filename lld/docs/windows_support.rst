@@ -106,3 +106,12 @@ LLD flags
   content hash for GUID. Otherwise, LLD uses output binary content hash for GUID.
   LLD also provides ``__buildid`` symbol pointing to the 16 bytes GUID hash if
   there is a reference to it.
+
+* ``/pathmap:<from>=<to>`` (openrt): replaces the path prefix ``<from>`` in every
+  path written into the PDB (module, object and library names, source files
+  made absolute, the linker module environment: cwd, exe, pdb, command line)
+  and in the PDB path recorded in the image (the RSDS debug directory entry).
+  With ``/brepro`` the same link in two build roots gives the same PDB and image.
+  This diverges from link.exe, which accepts ``/pathmap`` and maps none of
+  these; a debugger that opens the PDB by the recorded (mapped) path falls back
+  to its symbol search.

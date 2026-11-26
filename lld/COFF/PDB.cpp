@@ -246,18 +246,41 @@ void PDBLinker::pdbMapPath(SmallVectorImpl<char> &fileName) const {
   }
 }
 
-// The same for every occurrence in a text (the linker command line).
+// The same for every path in a text (the linker command line): an
+// occurrence counts where a path can start (the start, after a blank, a
+// quote, '=' or ':' of an option) and ends at a separator, a blank, a quote,
+// '=' or the end, as pdbMapPath requires a separator after the prefix.
 std::string PDBLinker::pdbMapText(StringRef text) const {
   std::string out = text.str();
+  auto isStart = [](char c) {
+    return c == ' ' || c == '"' || c == '=' || c == ':' || c == '\t';
+  };
+  auto isEnd = [](char c) {
+    return sys::path::is_separator(c) || c == ' ' || c == '"' || c == '=' ||
+           c == '\t';
+  };
   for (const auto &[from, to] : ctx.config.pdbPathMap) {
+    if (from.empty())
+      continue;
     std::string result;
     StringRef rest = out;
+    size_t scanned = 0;
     while (true) {
-      size_t pos = rest.find_insensitive(from);
+      size_t pos = rest.drop_front(scanned).find_insensitive(from);
       if (pos == StringRef::npos)
         break;
+      pos += scanned;
+      size_t end = pos + from.size();
+      bool atStart = pos == 0 || isStart(rest[pos - 1]);
+      bool atEnd = end == rest.size() || isEnd(rest[end]) ||
+                   sys::path::is_separator(from.back());
+      if (!atStart || !atEnd) {
+        scanned = pos + 1;
+        continue;
+      }
       result += rest.take_front(pos).str() + to;
-      rest = rest.drop_front(pos + from.size());
+      rest = rest.drop_front(end);
+      scanned = 0;
     }
     out = result + rest.str();
   }

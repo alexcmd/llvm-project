@@ -14,6 +14,14 @@ def err_drv_no_such_file_with_suggestion : Error<
 def warn_drv_ignoring_unknown_option : Warning<
   "D9002 : skipping unrecognized option '%0'">;
 // Codes follow the cl numbering; the wording is project-authored.
+// CL-OPT-OVERRIDE: cl 19.44, a later option of the same kind replaces an
+// earlier different one; warnings also under /WX (observed, exit 0).
+def warn_drv_cl_overriding_option : Warning<
+  "D9025 : overriding '%0' with '%1'">,
+  InGroup<DiagGroup<"cl-overriding-option">>, DefaultWarnNoWerror;
+def warn_drv_cl_option_requires : Warning<
+  "D9007 : '%0' requires '%1'; option ignored">,
+  InGroup<DiagGroup<"cl-option-requires">>, DefaultWarnNoWerror;
 def warn_drv_cl_pd_requires_zc : Warning<
   "D9007 : '/PD' has no effect without '/Zc:preprocessor'">;
 // Exit codes differ from cl (GAP).

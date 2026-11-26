@@ -14,12 +14,14 @@
 // TRAD: #define _MSVC_TRADITIONAL 1
 
 // CLANG-CL-GAP(Qspectre): accepted with a remark that /WX does not promote.
+// The second one overrides the first, D9025 as in cl (CL-OPT-OVERRIDE), a
+// warning also under /WX.
 // RUN: %clang_cl --target=x86_64-pc-windows-msvc /WX /Qspectre /Qspectre-load \
 // RUN:   /Zs -- %s 2>&1 | FileCheck %s --check-prefix=SPECTRE
-// SPECTRE-NOT: warning
 // SPECTRE-NOT: error
-// SPECTRE: remark: '/Qspectre' accepted without effect
-// SPECTRE: remark: '/Qspectre-load' accepted without effect
+// SPECTRE-DAG: warning: D9025 : overriding '/Qspectre' with '/Qspectre-load'
+// SPECTRE-DAG: remark: '/Qspectre' accepted without effect
+// SPECTRE-DAG: remark: '/Qspectre-load' accepted without effect
 
 // RSP-SEPARATE-ARG: in a response file the value of a separate-argument
 // option may sit on the next line (no assertion, no missing-argument error).

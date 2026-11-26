@@ -4458,6 +4458,150 @@ public:
 };
 } // anonymous namespace.
 
+// CL-OPT-OVERRIDE: cl 19.44 (observed) names a later option that replaces an
+// earlier different one of the same kind (D9025, once per change, in command
+// line order), and an option that has no effect without another (D9007).
+// Only the kinds below were observed; equal options are silent, /Ox counts as
+// /O2 and /w as /W0, /Wall is not a /W level, /GL after /GL- is silent, /EHa
+// and /EHs replace each other but not the other letter's '-' form. cl mode
+// only; the effect of the options is unchanged (the last one wins as before).
+namespace {
+struct CLOptToken {
+  StringRef Family;
+  std::string Text; // without the leading '/'
+  std::string Key;  // equality
+  unsigned ArgIndex;
+};
+} // namespace
+
+static void collectCLOptTokens(const Arg *A, unsigned Index,
+                               SmallVectorImpl<CLOptToken> &Out) {
+  const Arg *Orig = A->getAlias() ? A->getAlias() : A;
+  StringRef Sp = Orig->getSpelling();
+  if (Sp.size() < 2 || (Sp[0] != '/' && Sp[0] != '-'))
+    return;
+  std::string T = Sp.drop_front().str();
+  if (Orig->getOption().getKind() == Option::JoinedClass)
+    for (const char *V : Orig->getValues())
+      T += V;
+  StringRef S(T);
+  auto Add = [&](StringRef Family, std::string Text, std::string Key) {
+    Out.push_back({Family, std::move(Text), std::move(Key), Index});
+  };
+  auto AddSame = [&](StringRef Family) { Add(Family, T, T); };
+
+  if (S.starts_with("EH")) {
+    StringRef V = S.drop_front(2);
+    for (size_t I = 0; I < V.size(); ++I) {
+      char C = V[I];
+      bool Minus = I + 1 < V.size() && V[I + 1] == '-';
+      std::string Tok = std::string("EH") + C + (Minus ? "-" : "");
+      if (C == 'a' || C == 's')
+        Add("EHas", Tok, Tok);
+      else if (C == 'c')
+        Add("EHc", Tok, Tok);
+      else if (C == 'r')
+        Add("EHr", Tok, Tok);
+      if (Minus)
+        ++I;
+    }
+    return;
+  }
+  if (S.size() > 1 && S[0] == 'O' && !S.starts_with("Op")) {
+    StringRef V = S.drop_front(1);
+    for (size_t I = 0; I < V.size(); ++I) {
+      char C = V[I];
+      if (C == 'd' || C == '1' || C == '2' || C == 'x') {
+        Add("Olevel", std::string("O") + C, C == 'x' ? "O2" : std::string("O") + C);
+      } else if (C == 's' || C == 't') {
+        Add("Ost", std::string("O") + C, std::string("O") + C);
+      } else if (C == 'i' || C == 'y') {
+        bool Minus = I + 1 < V.size() && V[I + 1] == '-';
+        std::string Tok = std::string("O") + C + (Minus ? "-" : "");
+        Add(C == 'i' ? "Oi" : "Oy", Tok, Tok);
+        if (Minus)
+          ++I;
+      } else if (C == 'b' && I + 1 < V.size() && llvm::isDigit(V[I + 1])) {
+        std::string Tok = std::string("Ob") + V[I + 1];
+        Add("Ob", Tok, Tok);
+        ++I;
+      }
+    }
+    return;
+  }
+  static const char *const Toggles[] = {
+      "GR", "Gy", "GF", "Gw", "sdl", "guard:cf", "WX", "GL", "openmp", "Zo",
+      "Zc:inline", "Zc:__cplusplus", "Zc:wchar_t", "Zc:forScope",
+      "fp:except", "permissive"};
+  for (const char *B : Toggles)
+    if (S == B || (S.size() == strlen(B) + 1 && S.starts_with(B) &&
+                   S.back() == '-')) {
+      AddSame(B);
+      return;
+    }
+  if (S == "GX")
+    return AddSame("GX");
+  if (S == "MD" || S == "MDd" || S == "MT" || S == "MTd")
+    return AddSame("M");
+  if (S == "w" || ((S.size() == 2 && S[0] == 'W' && S[1] >= '0' && S[1] <= '4')))
+    return Add("W", T, S == "w" ? "W0" : T);
+  if (S == "Zi" || S == "Z7" || S == "ZI")
+    return AddSame("Z7");
+  if (S == "fp:fast" || S == "fp:precise" || S == "fp:strict")
+    return AddSame("fp");
+  for (const char *P : {"std:", "favor:", "Zp", "ZH:", "Qspectre"})
+    if (S.starts_with(P))
+      return AddSame(P);
+}
+
+static void diagnoseCLOverridingOptions(const Driver &D,
+                                        const DerivedArgList &Args) {
+  SmallVector<CLOptToken, 16> Tokens;
+  unsigned Index = 0;
+  for (const Arg *A : Args) {
+    if (!A->getOption().matches(options::OPT_INPUT))
+      collectCLOptTokens(A, Index, Tokens);
+    ++Index;
+  }
+  llvm::StringMap<const CLOptToken *> Last;
+  for (const CLOptToken &T : Tokens) {
+    const CLOptToken *&Prev = Last[T.Family];
+    if (Prev && Prev->ArgIndex != T.ArgIndex && Prev->Key != T.Key) {
+      bool Overrides = true;
+      if (T.Family == "GL" && Prev->Text == "GL-")
+        Overrides = false;
+      // /EHa and /EHs: the same letter with the other sign, or the other
+      // letter, both positive.
+      if (T.Family == "EHas" && Prev->Text[2] != T.Text[2] &&
+          (Prev->Text.size() > 3 || T.Text.size() > 3))
+        Overrides = false;
+      if (Overrides)
+        D.Diag(clang::diag::warn_drv_cl_overriding_option)
+            << ("/" + Prev->Text) << ("/" + T.Text);
+    }
+    Prev = &T;
+  }
+  // D9007.
+  auto LastText = [&](StringRef Family) -> StringRef {
+    auto It = Last.find(Family);
+    return It == Last.end() ? StringRef() : StringRef(It->second->Text);
+  };
+  if (Last.count("EHc")) {
+    bool EHa = false, EHs = false;
+    for (const CLOptToken &T : Tokens)
+      if (T.Family == "EHas")
+        (T.Text[2] == 'a' ? EHa : EHs) = T.Text.size() == 3;
+    if (!EHa && !EHs && !Last.count("GX"))
+      D.Diag(clang::diag::warn_drv_cl_option_requires)
+          << "/EHc" << "/EHa, /EHs or /GX";
+  }
+  if (Args.hasArgNoClaim(options::OPT__SLASH_Gm)) {
+    StringRef Dbg = LastText("Z7");
+    if (Dbg != "Zi" && Dbg != "ZI")
+      D.Diag(clang::diag::warn_drv_cl_option_requires) << "/Gm" << "/Zi or /ZI";
+  }
+}
+
 void Driver::handleArguments(Compilation &C, DerivedArgList &Args,
                              const InputList &Inputs,
                              ActionList &Actions) const {
@@ -4548,6 +4692,8 @@ void Driver::handleArguments(Compilation &C, DerivedArgList &Args,
     A->claim();
     Diag(clang::diag::warn_drv_cl_deprecated_option) << "Gm";
   }
+  if (IsCLMode())
+    diagnoseCLOverridingOptions(*this, Args);
   for (const Arg *A : Args.filtered(options::OPT__SLASH_Wv_)) {
     A->claim();
     if (A->getValue()[0] == '\0')

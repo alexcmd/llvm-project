@@ -4,6 +4,7 @@
 //    ellipsis too: g(A()) with char g(B), B(A&), long g(...) picks g(...).
 //  - 'return a;' of a local with only A(A&): no C4239 (the implicit move pass
 //    does not take the binding, the copy pass binds the lvalue).
+//  - (A&)mk() with an unrelated B::operator A&(): standard cast, silent.
 
 // RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fno-ms-clang-identity -fms-rvalue-ref-binding -std=c++17 -Wmicrosoft-reference-binding -Wmicrosoft-rvalue-cast-to-reference -fsyntax-only -verify %s
 // RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fno-ms-clang-identity -fms-rvalue-ref-binding -std=c++20 -Wmicrosoft-reference-binding -Wmicrosoft-rvalue-cast-to-reference -fsyntax-only -verify %s
@@ -44,3 +45,7 @@ static_assert(sizeof(g(A())) == sizeof(long), "the ellipsis wins");
 
 struct L { L(); L(L &); };
 L ret() { L l; return l; }
+
+struct C { operator A &(); };
+C mk();
+A &r = (A &)mk();

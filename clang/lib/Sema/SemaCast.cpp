@@ -2856,7 +2856,19 @@ void CastOperation::CheckCXXCStyleCast(bool FunctionalStyle,
       SrcExpr.get()->isPRValue() && SrcType->isRecordType()) {
     if (const auto *Ref = DestType->getAs<LValueReferenceType>()) {
       QualType Pointee = Ref->getPointeeType();
-      if (!Pointee.isConstQualified() || Pointee.isVolatileQualified()) {
+      // Not when a conversion function of an unrelated class can do the
+      // cast in standard C++ ((A&)mk() with B::operator A&(); cl silent).
+      bool Related =
+          Self.Context.hasSameUnqualifiedType(Pointee, SrcType) ||
+          (Pointee->isRecordType() &&
+           Self.IsDerivedFrom(OpRange.getBegin(), SrcType,
+                              Pointee.getUnqualifiedType()));
+      const auto *SrcRD = SrcType->getAsCXXRecordDecl();
+      bool HasConversions =
+          SrcRD && SrcRD->hasDefinition() &&
+          !SrcRD->getVisibleConversionFunctions().empty();
+      if ((Related || !HasConversions) &&
+          (!Pointee.isConstQualified() || Pointee.isVolatileQualified())) {
         Self.Diag(OpRange.getBegin(), diag::ext_ms_cast_rvalue_to_reference)
             << FunctionalStyle << SrcType << DestType << OpRange;
         SrcExpr = Self.CreateMaterializeTemporaryExpr(

@@ -584,6 +584,9 @@ public:
           IsAngled ? P1689ModuleInfo::ModuleType::AngleHeaderUnit
                    : P1689ModuleInfo::ModuleType::QuoteHeaderUnit;
       MDC.RequiredStdCXXModules.push_back(std::move(RequiredHeaderUnit));
+      // The header is a file dependency of the TU too (the full and make
+      // formats have no header-unit field; review S1).
+      MDC.addFileDep(File->getName());
       return;
     }
     MDC.handleImport(SuggestedModule);

@@ -10,7 +10,7 @@
 // RUN:   | sed 's:\\\\\?:/:g' | FileCheck %s --check-prefix=P1689 -DPREFIX=%/t
 // RUN: clang-scan-deps -format=experimental-full \
 // RUN:   -- %clang++ -std=c++20 -I%t/inc -c %t/a.cppm -o %t/a.o \
-// RUN:   | FileCheck %s --check-prefix=FULL
+// RUN:   | FileCheck %s --check-prefix=FULL --implicit-check-not=named-module-deps
 
 // P1689:      "provides": [
 // P1689:          "logical-name": "M"
@@ -29,9 +29,11 @@
 // P1689-NEXT:   }
 // P1689-NEXT: ]
 
-// FULL-NOT: "named-module-deps"
 // FULL: "named-module": "M"
-// FULL-NOT: "named-module-deps"
+// FULL: "file-deps": [
+// FULL-DAG: a.cppm"
+// FULL-DAG: h.h"
+// FULL-DAG: w.h"
 
 //--- a.cppm
 export module M;

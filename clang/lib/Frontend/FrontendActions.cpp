@@ -21,6 +21,8 @@
 #include "clang/Lex/DependencyDirectivesScanner.h"
 #include "clang/Lex/HeaderSearch.h"
 #include "clang/Lex/Preprocessor.h"
+#include "clang/Lex/TextEncoding.h"
+#include "llvm/Support/TextEncoding.h"
 #include "clang/Lex/PreprocessorOptions.h"
 #include "clang/Parse/ParseHLSLRootSignature.h"
 #include "clang/Sema/TemplateInstCallback.h"
@@ -1130,6 +1132,27 @@ void PrintPreprocessedAction::ExecuteAction() {
     (*OS) << "#pragma clang module contents\n";
   }
 
+  // CL-EXEC-CHARSET: cl writes /E and /P output in the execution character
+  // set (observed: from a BOM-less file the original bytes, from a file with
+  // a UTF-8 BOM "\u00A9\u20AC\u0416" as A9 80 3F). In cl mode with a Windows
+  // code page execution charset the UTF-8 output is converted at the end.
+  Preprocessor &PP = CI.getPreprocessor();
+  llvm::TextEncodingConverter *Conv =
+      CI.getLangOpts().MSCLRules
+          ? PP.getTextEncoding().getConverter(CA_ToLiteralEncoding)
+          : nullptr;
+  if (Conv) {
+    SmallString<0> Text;
+    llvm::raw_svector_ostream TextOS(Text);
+    DoPrintPreprocessedInput(PP, &TextOS, CI.getPreprocessorOutputOpts());
+    SmallString<0> Converted;
+    std::error_code EC = Conv->convert(Text, Converted);
+    if (!EC || EC == std::errc::result_out_of_range)
+      OS->write(Converted.data(), Converted.size());
+    else
+      OS->write(Text.data(), Text.size()); // not UTF-8: as it is
+    return;
+  }
   DoPrintPreprocessedInput(CI.getPreprocessor(), OS.get(),
                            CI.getPreprocessorOutputOpts());
 }

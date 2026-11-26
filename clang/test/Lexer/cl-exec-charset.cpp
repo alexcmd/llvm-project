@@ -35,6 +35,15 @@
 // RUN: %clang_cl --target=x86_64-pc-windows-msvc /nologo /EP -- %t/macro.cpp | FileCheck --check-prefix=M1252 %s
 // RUN: %clang_cl --target=x86_64-pc-windows-msvc /nologo /EP /utf-8 -- %t/macro.cpp | FileCheck --check-prefix=M65001 %s
 // M1252: cp=1252
+
+// /E and /P write the execution character set, as cl: the original bytes of a
+// BOM-less file, a file with a BOM converted (A9 80 3F); /utf-8 keeps UTF-8.
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc /nologo /E -- %t/nobom.cpp > %t/nobom.i
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc /nologo /E -- %t/bom.cpp > %t/bom.i
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc /nologo /E /utf-8 -- %t/bom.cpp > %t/bomu8.i
+// RUN: %python -c "import sys; d = open(sys.argv[1], 'rb').read(); assert bytes.fromhex('22c2a9e282acd09622') in d" %t/nobom.i
+// RUN: %python -c "import sys; d = open(sys.argv[1], 'rb').read(); assert bytes.fromhex('22a9803f22') in d" %t/bom.i
+// RUN: %python -c "import sys; d = open(sys.argv[1], 'rb').read(); assert bytes.fromhex('22c2a9e282acd09622') in d" %t/bomu8.i
 // M65001: cp=65001
 
 //--- nobom.cpp

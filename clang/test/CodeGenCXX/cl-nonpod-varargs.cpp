@@ -91,6 +91,9 @@ constexpr int kc2 = cf(kc ? L{} : L{}); // cl-warning {{non-portable use of clas
 template <class T> void a6(C c, T) { f(1, c); } // std-error {{cannot pass object of non-trivial type 'C'}}
 template <class T> void a7(C c, T) { f(1, c); } // cl-warning {{non-portable use of class 'C'}} std-error 3 {{cannot pass object of non-trivial type 'C'}}
 void usea7() { a7(C(), 1); a7(C(), 2L); } // cl-note {{in instantiation of function template specialization 'a7<int>' requested here}} std-note {{in instantiation of function template specialization 'a7<int>' requested here}} std-note {{in instantiation of function template specialization 'a7<long>' requested here}}
+// Once per place and class type (cl: C4840 for 'C' and for 'B' on one line).
+template <class T, class U> void a8(T t, U) { f(1, t); } // cl-warning {{non-portable use of class 'C'}} cl-warning {{non-portable use of class 'B'}} std-error 3 {{cannot pass object of non-trivial type}}
+void usea8() { a8(C(), 1); a8(B(), 1); a8(C(), 2L); } // cl-note {{in instantiation of function template specialization 'a8<C, int>' requested here}} cl-note {{in instantiation of function template specialization 'a8<B, int>' requested here}} std-note {{in instantiation of function template specialization 'a8<C, int>' requested here}} std-note {{in instantiation of function template specialization 'a8<B, int>' requested here}} std-note {{in instantiation of function template specialization 'a8<C, long>' requested here}}
 
 // Deleted copy: an error, as in cl (C4839, C2280).
 void q(M m) {

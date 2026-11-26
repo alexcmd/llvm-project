@@ -125,8 +125,9 @@ else:
 # Check if the mt.exe Microsoft utility exists (lld runs it to merge manifests
 # when it is built without libxml2), or if we can use libxml2. cvtres on PATH
 # does not imply mt.exe (a Visual Studio bin directory has cvtres, mt.exe comes
-# with the Windows SDK).
-if lit.util.which("mt", config.environment["PATH"]) or config.have_libxml2:
+# with the Windows SDK). "mt.exe", not "mt": on Linux /usr/bin/mt is the tape
+# utility.
+if lit.util.which("mt.exe", config.environment["PATH"]) or config.have_libxml2:
     config.available_features.add("manifest_tool")
 
 if config.enable_backtrace:

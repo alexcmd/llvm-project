@@ -6920,16 +6920,27 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   // /Zc:referenceBinding and /Zc:referenceBinding- turns it off (observed:
   // /permissive- /Zc:referenceBinding- and /Zc:referenceBinding /permissive
   // both have it on).
+  // CL-STD-PERMISSIVE: /std:c++20, /std:c++23preview and /std:c++latest
+  // count as /permissive- at their place in that order (observed: /std:c++20
+  // /permissive keeps the binding, /permissive /std:c++20 drops it and makes
+  // &T() C2102; /std:c++17 changes nothing).
   bool CLRefBinding = true;
   for (Arg *A : Args.filtered(options::OPT__SLASH_permissive,
                               options::OPT__SLASH_permissive_,
                               options::OPT__SLASH_Zc_referenceBinding,
-                              options::OPT__SLASH_Zc_referenceBinding_)) {
-    A->claim();
-    if (A->getOption().matches(options::OPT__SLASH_permissive_) ||
-        A->getOption().matches(options::OPT__SLASH_permissive))
-      CLPermissiveMinus =
-          A->getOption().matches(options::OPT__SLASH_permissive_);
+                              options::OPT__SLASH_Zc_referenceBinding_,
+                              options::OPT__SLASH_std)) {
+    bool Minus = A->getOption().matches(options::OPT__SLASH_permissive_);
+    if (A->getOption().matches(options::OPT__SLASH_std)) {
+      StringRef V = A->getValue();
+      if (V != "c++20" && V != "c++23preview" && V != "c++latest")
+        continue;
+      Minus = true;
+    } else {
+      A->claim();
+    }
+    if (Minus || A->getOption().matches(options::OPT__SLASH_permissive))
+      CLPermissiveMinus = Minus;
     CLRefBinding =
         A->getOption().matches(options::OPT__SLASH_permissive) ||
         A->getOption().matches(options::OPT__SLASH_Zc_referenceBinding_);

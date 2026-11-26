@@ -8168,6 +8168,21 @@ public:
   /// function, issuing a diagnostic if not.
   void checkVariadicArgument(const Expr *E, VariadicCallType CT);
 
+  /// CL-DX-NONPOD-VARARG: cl passes a class object of non-trivial type
+  /// through '...' as a bitwise copy (no copy constructor, no destructor;
+  /// C4840 when a copy or move constructor is non-trivial). True in cl mode
+  /// for such a type; then \p Diagnose emits C4840 where cl does.
+  bool checkCLBitwiseVarArg(const Expr *E, VariadicCallType CT, bool Diagnose);
+
+  /// CL-DX-NONPOD-VARARG: the argument as written, looking through the
+  /// bitwise copy built by DefaultVariadicArgumentPromotion in cl mode.
+  static const Expr *lookThroughCLBitwiseVarArg(const Expr *E);
+
+  /// CL-DX-NONPOD-VARARG: trivially copyable stand-in of a class type, same
+  /// size and alignment, the type the bitwise copy is passed as.
+  QualType getCLBitwiseVarArgType(QualType Ty);
+  llvm::DenseMap<std::pair<uint64_t, uint64_t>, QualType> CLBitwiseVarArgTypes;
+
   /// GatherArgumentsForCall - Collector argument expressions for various
   /// form of call prototypes.
   bool GatherArgumentsForCall(

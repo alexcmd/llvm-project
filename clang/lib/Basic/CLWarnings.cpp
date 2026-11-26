@@ -101,6 +101,8 @@ clang::diagGroupFromCLWarningID(unsigned CLWarningID) {
   case 4723: Name = "division-by-zero"; break;
   // UE-NARROWING-C4838: narrowing in a variable's aggregate initializer.
   case 4838: Name = "microsoft-init-list-narrowing"; break;
+  // CL-DX-NONPOD-VARARG: non-trivial class object passed through '...'.
+  case 4840: Name = "microsoft-non-pod-varargs"; break;
   case 5030: Name = "unknown-attributes"; break;
   case 5038: Name = "reorder-ctor"; break;
   // UE-C5046: a dead inline body uses a member declared here with its
@@ -288,6 +290,8 @@ static const CLWarningLevel CLLevels[] = {
     {"microsoft-rvalue-cast-to-reference", 4, nullptr, nullptr},
     // CL-DX-REF-BINDING: C4239, level 4.
     {"microsoft-reference-binding", 4, nullptr, nullptr},
+    // CL-DX-NONPOD-VARARG: C4840, level 4.
+    {"microsoft-non-pod-varargs", 4, nullptr, nullptr},
     {"bitfield-constant-conversion", 4, nullptr, nullptr},
     {"compare-distinct-pointer-types", 4, nullptr, nullptr},
     {"delete-abstract-non-virtual-dtor", 4, nullptr, nullptr},

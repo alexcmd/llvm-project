@@ -1020,7 +1020,76 @@ VarArgKind Sema::isValidVarArgType(const QualType &Ty) {
   return VarArgKind::Undefined;
 }
 
+// CL-DX-NONPOD-VARARG: cl 19.44 (observed) passes an object of class type
+// through '...' as a bitwise copy whatever its special members: the copy
+// constructor is checked (deleted is an error, C2280 / C4839) but not
+// called, the copy is never destroyed, and a prvalue argument is
+// materialized and destroyed at the end of the full-expression. C4840
+// (level 4) only when a copy or move constructor is non-trivial; a
+// non-trivial destructor alone is silent. cl mode only (-fms-compatibility
+// with the clang identity hidden); elsewhere -Wnon-pod-varargs stays.
+bool Sema::checkCLBitwiseVarArg(const Expr *E, VariadicCallType CT,
+                                bool Diagnose) {
+  if (!getLangOpts().MSVCCompat || !getLangOpts().CPlusPlus ||
+      PP.getPreprocessorOpts().MSClangIdentity)
+    return false;
+  QualType Ty = E->getType();
+  if (Ty->isDependentType() || isValidVarArgType(Ty) != VarArgKind::MSVCUndefined)
+    return false;
+  const CXXRecordDecl *RD = Ty->getAsCXXRecordDecl();
+  if (!RD)
+    return false;
+  if (Diagnose &&
+      (RD->hasNonTrivialCopyConstructor() || RD->hasNonTrivialMoveConstructor()))
+    DiagRuntimeBehavior(E->getBeginLoc(), nullptr,
+                        PDiag(diag::warn_cl_nonportable_class_vararg)
+                            << Ty << CT);
+  return true;
+}
+
+const Expr *Sema::lookThroughCLBitwiseVarArg(const Expr *E) {
+  // CK_LValueToRValueBitCast is never implicit otherwise.
+  if (const auto *ICE = dyn_cast_or_null<ImplicitCastExpr>(E))
+    if (ICE->getCastKind() == CK_LValueToRValueBitCast)
+      return ICE->getSubExpr();
+  return E;
+}
+
+QualType Sema::getCLBitwiseVarArgType(QualType Ty) {
+  CharUnits Size = Context.getTypeSizeInChars(Ty);
+  CharUnits Align = Context.getTypeAlignInChars(Ty);
+  QualType &Cached =
+      CLBitwiseVarArgTypes[{(uint64_t)Size.getQuantity(),
+                            (uint64_t)Align.getQuantity()}];
+  if (!Cached.isNull())
+    return Cached;
+  // struct __cl_vararg_copy { alignas(A) unsigned char bytes[N]; };
+  RecordDecl *RD = Context.buildImplicitRecord("__cl_vararg_copy");
+  RD->startDefinition();
+  QualType FieldTy = Context.getConstantArrayType(
+      Context.UnsignedCharTy, llvm::APInt(64, Size.getQuantity()), nullptr,
+      ArraySizeModifier::Normal, 0);
+  auto *FD = FieldDecl::Create(
+      Context, RD, SourceLocation(), SourceLocation(), nullptr, FieldTy,
+      Context.getTrivialTypeSourceInfo(FieldTy, SourceLocation()),
+      /*BW=*/nullptr, /*Mutable=*/false, ICIS_NoInit);
+  FD->setAccess(AS_public);
+  FD->addAttr(AlignedAttr::CreateImplicit(
+      Context, /*IsAlignmentExpr=*/true,
+      IntegerLiteral::Create(Context, llvm::APInt(32, Align.getQuantity()),
+                             Context.UnsignedIntTy, SourceLocation()),
+      {}, AlignedAttr::GNU_aligned));
+  RD->addDecl(FD);
+  RD->completeDefinition();
+  Cached = Context.getCanonicalTagType(RD);
+  return Cached;
+}
+
 void Sema::checkVariadicArgument(const Expr *E, VariadicCallType CT) {
+  E = lookThroughCLBitwiseVarArg(E);
+  if (checkCLBitwiseVarArg(E, CT, /*Diagnose=*/true))
+    return;
+
   // Don't allow one to pass an Objective-C interface to a vararg.
   const QualType &Ty = E->getType();
   VarArgKind VAK = isValidVarArgType(Ty);
@@ -1081,6 +1150,27 @@ ExprResult Sema::DefaultVariadicArgumentPromotion(Expr *E, VariadicCallType CT,
         return ExprError();
       E = ExprRes.get();
     }
+  }
+
+  // CL-DX-NONPOD-VARARG: pass a bitwise copy, as cl does (see
+  // checkCLBitwiseVarArg); C4840 is emitted with the other variadic checks.
+  if (getLangOpts().CPlusPlus && !isUnevaluatedContext() &&
+      !E->isTypeDependent() && E->getType()->isRecordType() &&
+      isCompleteType(E->getExprLoc(), E->getType()) &&
+      checkCLBitwiseVarArg(E, CT, /*Diagnose=*/false)) {
+    QualType Ty = E->getType();
+    if (E->isGLValue()) {
+      // Checked like the copy cl would make, but not called.
+      ExprResult Copy = PerformCopyInitialization(
+          InitializedEntity::InitializeTemporary(Ty), E->getExprLoc(), E);
+      if (Copy.isInvalid())
+        return ExprError();
+    } else {
+      E = TemporaryMaterializationConversion(E).get();
+    }
+    return ImplicitCastExpr::Create(Context, getCLBitwiseVarArgType(Ty),
+                                    CK_LValueToRValueBitCast, E, nullptr,
+                                    VK_PRValue, FPOptionsOverride());
   }
 
   ExprResult ExprRes = DefaultArgumentPromotion(E);

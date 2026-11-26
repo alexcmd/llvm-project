@@ -9940,6 +9940,12 @@ def warn_cannot_pass_non_pod_arg_to_vararg : Warning<
   "cannot pass object of %select{non-POD|non-trivial}0 type %1 through variadic"
   " %select{function|block|method|constructor}2; call will abort at runtime">,
   InGroup<NonPODVarargs>, DefaultError;
+// CL-DX-NONPOD-VARARG: cl, C4840 (level 4).
+def warn_cl_nonportable_class_vararg : Warning<
+  "non-portable use of class %0 as an argument to a variadic "
+  "%select{function|block|method|constructor}1; its constructor and "
+  "destructor are not called, a bitwise copy of the object is passed">,
+  InGroup<MicrosoftNonPODVarargs>;
 def warn_cxx98_compat_pass_non_pod_arg_to_vararg : Warning<
   "passing object of trivial but non-POD type %0 through variadic"
   " %select{function|block|method|constructor}1 is incompatible with C++98">,

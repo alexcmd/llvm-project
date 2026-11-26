@@ -9463,6 +9463,8 @@ bool CheckPrintfHandler::checkFormatExpr(
   if (!AT.isValid())
     return true;
 
+  // CL-DX-NONPOD-VARARG: the class object, not its bitwise copy.
+  E = Sema::lookThroughCLBitwiseVarArg(E);
   QualType ExprTy = E->getType();
   while (const TypeOfExprType *TET = dyn_cast<TypeOfExprType>(ExprTy)) {
     ExprTy = TET->getUnderlyingExpr()->getType();
@@ -9815,6 +9817,14 @@ bool CheckPrintfHandler::checkFormatExpr(
     case VarArgKind::MSVCUndefined:
       if (CallType == VariadicCallType::DoesNotApply) {
         EmitTypeMismatch = true;
+      } else if (S.checkCLBitwiseVarArg(E, CallType, /*Diagnose=*/true)) {
+        // CL-DX-NONPOD-VARARG: cl, C4840 where it applies and the format
+        // mismatch (C4477) as for any other class.
+        EmitFormatDiagnostic(
+            S.PDiag(diag::warn_format_conversion_argument_type_mismatch)
+                << AT.getRepresentativeTypeName(S.Context) << ExprTy << IsEnum
+                << CSR << E->getSourceRange(),
+            E->getBeginLoc(), /*IsStringLocation*/ false, CSR);
       } else if (isInvalidOSLogArgTypeForCodeGen(FSType, ExprTy)) {
         // Emit a hard error rather than the -Wnon-pod-varargs warning, which
         // does not stop compilation.

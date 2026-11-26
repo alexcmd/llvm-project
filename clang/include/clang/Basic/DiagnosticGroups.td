@@ -862,7 +862,9 @@ def NullArithmetic : DiagGroup<"null-arithmetic">;
 def NullCharacter : DiagGroup<"null-character">;
 def NullDereference : DiagGroup<"null-dereference">;
 def NonNull : DiagGroup<"nonnull">;
-def NonPODVarargs : DiagGroup<"non-pod-varargs">;
+// CL-DX-NONPOD-VARARG: C4840 in cl mode.
+def MicrosoftNonPODVarargs : DiagGroup<"microsoft-non-pod-varargs">;
+def NonPODVarargs : DiagGroup<"non-pod-varargs", [MicrosoftNonPODVarargs]>;
 def ClassVarargs : DiagGroup<"class-varargs", [NonPODVarargs]>;
 def : DiagGroup<"nonportable-cfstrings">;
 def NonPortableSYCL : DiagGroup<"nonportable-sycl">;

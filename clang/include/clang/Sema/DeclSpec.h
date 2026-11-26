@@ -403,6 +403,9 @@ private:
 
   // attributes.
   ParsedAttributes Attrs;
+  // CL-ATTR-AFTER-TYPE: [[...]] attributes after a type specifier that are
+  // not type attributes; in cl mode they apply to the declared entity.
+  ParsedAttributes CLDeclAttrs;
 
   // Scope specifier for the type spec, if applicable.
   CXXScopeSpec TypeScope;
@@ -480,7 +483,8 @@ public:
         FS_virtual_specified(false), FS_noreturn_specified(false),
         FriendSpecifiedFirst(false), ConstexprSpecifier(static_cast<unsigned>(
                                          ConstexprSpecKind::Unspecified)),
-        Attrs(attrFactory), writtenBS(), ObjCQualifiers(nullptr) {}
+        Attrs(attrFactory), CLDeclAttrs(attrFactory), writtenBS(),
+        ObjCQualifiers(nullptr) {}
 
   // storage-class-specifier
   SCS getStorageClassSpec() const { return (SCS)StorageClassSpec; }
@@ -879,6 +883,8 @@ public:
 
   ParsedAttributes &getAttributes() { return Attrs; }
   const ParsedAttributes &getAttributes() const { return Attrs; }
+  ParsedAttributes &getCLDeclAttributes() { return CLDeclAttrs; }
+  const ParsedAttributes &getCLDeclAttributes() const { return CLDeclAttrs; }
 
   void takeAttributesAppendingingFrom(ParsedAttributes &attrs) {
     Attrs.takeAllAppendingFrom(attrs);

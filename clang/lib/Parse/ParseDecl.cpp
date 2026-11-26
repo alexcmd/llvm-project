@@ -3456,7 +3456,8 @@ void Parser::ParseDeclarationSpecifiers(
         ProhibitAttributes(attrs);
       else {
         // Reject C++11 / C23 attributes that aren't type attributes.
-        for (const ParsedAttr &PA : attrs) {
+        SmallVector<ParsedAttr *, 2> CLDeclAttrs;
+        for (ParsedAttr &PA : attrs) {
           if (!PA.isCXX11Attribute() && !PA.isC23Attribute() &&
               !PA.isRegularKeywordAttribute())
             continue;
@@ -3478,6 +3479,16 @@ void Parser::ParseDeclarationSpecifiers(
               PA.getKind() != ParsedAttr::AT_AnyX86NoCfCheck)
             continue;
 
+          // CL-ATTR-AFTER-TYPE: cl 19.44 applies such an attribute to the
+          // declared entity (observed: typedef'd Fn [[deprecated("x")]] A;
+          // in a union, int [[deprecated]] v;, a parameter; C4996 on use).
+          if (getLangOpts().MSCLRules && PA.isCXX11Attribute() &&
+              !PA.isRegularKeywordAttribute() &&
+              PA.getKind() != ParsedAttr::AT_LifetimeBound &&
+              PA.getKind() != ParsedAttr::AT_AnyX86NoCfCheck) {
+            CLDeclAttrs.push_back(&PA);
+            continue;
+          }
           if (PA.getKind() == ParsedAttr::AT_LifetimeBound)
             Diag(PA.getLoc(), diag::err_attribute_wrong_decl_type)
                 << PA << PA.isRegularKeywordAttribute()
@@ -3487,6 +3498,8 @@ void Parser::ParseDeclarationSpecifiers(
                 << PA << PA.isRegularKeywordAttribute();
           PA.setInvalid();
         }
+        for (ParsedAttr *PA : CLDeclAttrs)
+          DS.getCLDeclAttributes().takeOneFrom(attrs, PA);
 
         DS.takeAttributesAppendingingFrom(attrs);
       }

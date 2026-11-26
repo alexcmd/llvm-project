@@ -8882,6 +8882,9 @@ void Sema::ProcessDeclAttributes(Scope *S, Decl *D, const Declarator &PD) {
                                ProcessDeclAttributeOptions()
                                    .WithIncludeCXX11Attributes(false)
                                    .WithIgnoreTypeAttributes(true));
+  // CL-ATTR-AFTER-TYPE: [[...]] after the type that is not a type attribute
+  // (kept apart by the parser in cl mode) applies to the declaration.
+  ProcessDeclAttributeList(S, D, PD.getDeclSpec().getCLDeclAttributes());
 
   // Walk the declarator structure, applying decl attributes that were in a type
   // position to the decl itself.  This handles cases like:

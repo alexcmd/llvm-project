@@ -376,6 +376,46 @@ static std::string flattenClangCommandLine(ArrayRef<std::string> Args,
   return FlatCmdLine;
 }
 
+// CL-PATHMAP-OBJNAME: map the debug prefix map over one path or argument.
+// A prefix counts where it starts the text or follows '=' and ends at a
+// separator, '=' or the end; at each place the last entry that matches wins
+// (as for the other debug paths), and the replacement is not looked at again
+// (no chaining). For a Windows target both separators count and case does
+// not matter (as in lld-link /pathmap), independent of the host.
+static std::string
+mapDebugPrefixes(StringRef Text,
+                 ArrayRef<std::pair<std::string, std::string>> Map,
+                 bool Windows) {
+  auto IsSep = [&](char C) {
+    return C == '/' || (Windows && C == '\\');
+  };
+  auto Matches = [&](StringRef At, StringRef From) {
+    return Windows ? At.starts_with_insensitive(From) : At.starts_with(From);
+  };
+  std::string Out;
+  size_t I = 0;
+  while (I < Text.size()) {
+    bool AtStart = I == 0 || Text[I - 1] == '=';
+    bool Done = false;
+    if (AtStart)
+      for (const auto &[From, To] : llvm::reverse(Map)) {
+        if (From.empty() || !Matches(Text.substr(I), From))
+          continue;
+        size_t End = I + From.size();
+        if (!(End == Text.size() || Text[End] == '=' || IsSep(Text[End]) ||
+              IsSep(From.back())))
+          continue;
+        Out += To;
+        I = End;
+        Done = true;
+        break;
+      }
+    if (!Done)
+      Out += Text[I++];
+  }
+  return Out;
+}
+
 static bool initTargetOptions(const CompilerInstance &CI,
                               DiagnosticsEngine &Diags,
                               llvm::TargetOptions &Options) {
@@ -491,13 +531,12 @@ static bool initTargetOptions(const CompilerInstance &CI,
   // cl 19.44 /experimental:deterministic /pathmap:<root>=X:\root gives
   // X:\root\sub\p.obj); here the debug prefix map does, the last matching
   // entry first as for the other debug paths.
-  {
-    SmallString<256> ObjName(CodeGenOpts.ObjectFilenameForDebug);
-    for (const auto &[From, To] : llvm::reverse(CodeGenOpts.DebugPrefixMap))
-      if (llvm::sys::path::replace_path_prefix(ObjName, From, To))
-        break;
-    Options.ObjectFilenameForDebug = std::string(ObjName);
-  }
+  bool WindowsPaths = llvm::Triple(TargetOpts.Triple).isOSWindows();
+  Options.ObjectFilenameForDebug =
+      CodeGenOpts.DebugPrefixMap.empty()
+          ? CodeGenOpts.ObjectFilenameForDebug
+          : mapDebugPrefixes(CodeGenOpts.ObjectFilenameForDebug,
+                             CodeGenOpts.DebugPrefixMap, WindowsPaths);
   Options.Hotpatch = CodeGenOpts.HotPatch;
   Options.JMCInstrument = CodeGenOpts.JMCInstrument;
   Options.XCOFFReadOnlyPointers = CodeGenOpts.XCOFFReadOnlyPointers;
@@ -565,33 +604,12 @@ static bool initTargetOptions(const CompilerInstance &CI,
   // CL-PATHMAP-OBJNAME: the debug prefix map (clang-cl /pathmap) also covers
   // the command line of the CodeView build information, so two build roots
   // give the same object. Each argument is mapped before it is quoted (the
-  // quoted form doubles backslashes); a prefix counts where it starts the
-  // argument or follows '=' and ends at a separator, '=' or the end.
+  // quoted form doubles backslashes), with the rule of mapDebugPrefixes.
   std::vector<std::string> MappedArgs = CodeGenOpts.CommandLineArgs;
   if (!CodeGenOpts.DebugPrefixMap.empty())
     for (std::string &Arg : MappedArgs)
-      for (const auto &[From, To] : llvm::reverse(CodeGenOpts.DebugPrefixMap)) {
-        if (From.empty())
-          continue;
-        std::string Out;
-        size_t Start = 0;
-        for (size_t Pos = Arg.find(From); Pos != std::string::npos;
-             Pos = Arg.find(From, Pos + 1)) {
-          bool AtStart = Pos == 0 || Arg[Pos - 1] == '=';
-          size_t End = Pos + From.size();
-          bool AtEnd = End == Arg.size() || Arg[End] == '=' ||
-                       llvm::sys::path::is_separator(Arg[End]) ||
-                       llvm::sys::path::is_separator(From.back());
-          if (!AtStart || !AtEnd || Pos < Start)
-            continue;
-          Out += Arg.substr(Start, Pos - Start) + To;
-          Start = End;
-        }
-        if (Start) {
-          Out += Arg.substr(Start);
-          Arg = std::move(Out);
-        }
-      }
+      Arg = mapDebugPrefixes(Arg, CodeGenOpts.DebugPrefixMap,
+                             llvm::Triple(TargetOpts.Triple).isOSWindows());
   Options.MCOptions.CommandlineArgs = flattenClangCommandLine(
       MappedArgs, CodeGenOpts.MainFileName, InputFiles);
   Options.MCOptions.AsSecureLogFile = CodeGenOpts.AsSecureLogFile;

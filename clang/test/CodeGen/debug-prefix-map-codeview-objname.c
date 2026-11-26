@@ -20,3 +20,12 @@ int f(void) { return 0; }
 // WIN-DAG: "-I" "C:\\src2\\inc"
 // WIN-NOT: C:\\src\\
 // WIN: ObjectName: X:\b\sub\a.obj
+
+// Windows paths match without regard to case (as lld-link /pathmap), on any
+// host, and a replacement is not mapped again by a later entry (no chaining).
+// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -gcodeview -gcodeview-command-line -debug-info-kind=limited \
+// RUN:   "-fdebug-prefix-map=C:\src=X:\b" "-fdebug-prefix-map=X:\b=Y:\z" \
+// RUN:   "-object-file-name=c:\SRC\sub\a.obj" -I "c:\Src\inc" -emit-obj -o %t3.obj %s
+// RUN: llvm-readobj --codeview %t3.obj | FileCheck --check-prefix=CASE %s
+// CASE-DAG: "-I" "X:\\b\\inc"
+// CASE: ObjectName: X:\b\sub\a.obj

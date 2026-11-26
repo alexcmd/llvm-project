@@ -547,7 +547,11 @@ CGDebugInfo::computeChecksum(FileID FID, SmallString<64> &Checksum) const {
     return std::nullopt;
 
   SourceManager &SM = CGM.getContext().getSourceManager();
-  std::optional<llvm::MemoryBufferRef> MemBuffer = SM.getBufferOrNone(FID);
+  // CL-EXEC-CHARSET: the checksum of the file as it is on disk (what the
+  // debugger compares), not of its conversion from the source character set.
+  std::optional<llvm::MemoryBufferRef> MemBuffer = SM.getRawBufferOrNone(FID);
+  if (!MemBuffer)
+    MemBuffer = SM.getBufferOrNone(FID);
   if (!MemBuffer)
     return std::nullopt;
 

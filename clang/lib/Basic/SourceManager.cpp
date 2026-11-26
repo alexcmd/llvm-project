@@ -202,9 +202,13 @@ ContentCache::getBufferOrNone(DiagnosticsEngine &Diag, FileManager &FM,
   if (SourceCharsetConverter && !BufStr.starts_with("\xEF\xBB\xBF") &&
       llvm::any_of(BufStr, [](char C) { return (unsigned char)C >= 0x80; })) {
     SmallString<0> Converted;
-    if (!SourceCharsetConverter->convert(BufStr, Converted))
-      Buffer = llvm::MemoryBuffer::getMemBufferCopy(
-          Converted, Buffer->getBufferIdentifier());
+    if (!SourceCharsetConverter->convert(BufStr, Converted)) {
+      std::unique_ptr<llvm::MemoryBuffer> NewBuffer =
+          llvm::MemoryBuffer::getMemBufferCopy(Converted,
+                                               Buffer->getBufferIdentifier());
+      RawBuffer = std::move(Buffer);
+      Buffer = std::move(NewBuffer);
+    }
   }
 
   // Buffer has been validated.
@@ -764,6 +768,26 @@ std::optional<llvm::MemoryBufferRef>
 SourceManager::getMemoryBufferForFileOrNone(FileEntryRef File) {
   SrcMgr::ContentCache &IR = getOrCreateContentCache(File);
   return IR.getBufferOrNone(Diag, getFileManager(), SourceLocation());
+}
+
+std::optional<llvm::MemoryBufferRef>
+SourceManager::getRawMemoryBufferForFileOrNone(FileEntryRef File) {
+  SrcMgr::ContentCache &IR = getOrCreateContentCache(File);
+  if (!IR.getBufferOrNone(Diag, getFileManager(), SourceLocation()))
+    return std::nullopt;
+  return IR.getRawBufferIfLoaded();
+}
+
+std::optional<llvm::MemoryBufferRef>
+SourceManager::getRawBufferOrNone(FileID FID) {
+  bool Invalid = false;
+  const SrcMgr::SLocEntry &Entry = getSLocEntry(FID, &Invalid);
+  if (Invalid || !Entry.isFile())
+    return std::nullopt;
+  const SrcMgr::ContentCache &C = Entry.getFile().getContentCache();
+  if (!C.getBufferOrNone(Diag, getFileManager(), SourceLocation()))
+    return std::nullopt;
+  return C.getRawBufferIfLoaded();
 }
 
 void SourceManager::overrideFileContents(

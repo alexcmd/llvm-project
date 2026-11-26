@@ -8,7 +8,11 @@
 
 #include "clang/DependencyScanning/DependencyScanningFilesystem.h"
 #include "clang/DependencyScanning/DependencyScanningService.h"
+#include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SmallString.h"
+#include "llvm/BinaryFormat/Magic.h"
 #include "llvm/Support/MemoryBuffer.h"
+#include "llvm/Support/TextEncoding.h"
 #include "llvm/Support/Threading.h"
 #include <optional>
 
@@ -61,10 +65,25 @@ bool DependencyScanningWorkerFilesystem::ensureDirectiveTokensArePopulated(
     return true;
 
   SmallVector<dependency_directives_scan::Directive, 64> Directives;
+  // CL-EXEC-CHARSET: the preprocessor lexes the SourceManager's buffer, which
+  // is converted from the source character set (a source without a UTF-8 BOM
+  // and with a non-ASCII byte); the directives are scanned from the same
+  // conversion, so that their offsets and spellings (a non-ASCII include
+  // name) match it. Files of a known binary format are left alone.
+  StringRef ScanText = Contents->Original->getBuffer();
+  SmallString<0> Converted;
+  if (SourceCharsetConverter && !ScanText.starts_with("\xEF\xBB\xBF") &&
+      llvm::identify_magic(ScanText) == llvm::file_magic::unknown &&
+      llvm::any_of(ScanText,
+                   [](char C) { return (unsigned char)C >= 0x80; }) &&
+      !SourceCharsetConverter->convert(ScanText, Converted)) {
+    // The lexer wants a NUL after the text, as in a MemoryBuffer.
+    Converted.push_back('\0');
+    ScanText = StringRef(Converted.data(), Converted.size() - 1);
+  }
   // Scan the file for preprocessor directives that might affect the
   // dependencies.
-  if (scanSourceForDependencyDirectives(Contents->Original->getBuffer(),
-                                        Contents->DepDirectiveTokens,
+  if (scanSourceForDependencyDirectives(ScanText, Contents->DepDirectiveTokens,
                                         Directives)) {
     Contents->DepDirectiveTokens.clear();
     // FIXME: Propagate the diagnostic if desired by the client.

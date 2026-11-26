@@ -1884,7 +1884,8 @@ void ASTWriter::WriteInputFiles(SourceManager &SourceMgr) {
                        !IsSLocFileEntryAffecting[IncludeFileID.ID];
     Entry.IsModuleMap = isModuleMap(File.getFileCharacteristic());
 
-    Entry.trySetContentHash(*PP, [&] { return Cache->getBufferIfLoaded(); });
+    // CL-EXEC-CHARSET: hashed as on disk (the reader hashes the file).
+    Entry.trySetContentHash(*PP, [&] { return Cache->getRawBufferIfLoaded(); });
 
     if (Entry.IsSystemFile)
       SystemFiles.push_back(Entry);

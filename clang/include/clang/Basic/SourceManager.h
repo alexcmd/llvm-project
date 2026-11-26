@@ -192,6 +192,9 @@ public:
   /// a UTF-8 byte order mark (cl's source character set); null for UTF-8.
   const llvm::TextEncodingConverter *SourceCharsetConverter = nullptr;
 
+  /// CL-EXEC-CHARSET: the on-disk contents when Buffer is their conversion.
+  mutable std::unique_ptr<llvm::MemoryBuffer> RawBuffer;
+
   ContentCache()
       : OrigEntry(std::nullopt), ContentsEntry(std::nullopt),
         BufferOverridden(false), IsFileVolatile(false), IsTransient(false),
@@ -252,6 +255,16 @@ public:
     if (Buffer)
       return Buffer->getMemBufferRef();
     return std::nullopt;
+  }
+
+  /// CL-EXEC-CHARSET: the contents as they are on disk, before the source
+  /// character set conversion (the same as getBufferIfLoaded when the file
+  /// was not converted): for #embed, the debug-info checksum and the AST
+  /// content hash.
+  std::optional<llvm::MemoryBufferRef> getRawBufferIfLoaded() const {
+    if (RawBuffer)
+      return RawBuffer->getMemBufferRef();
+    return getBufferIfLoaded();
   }
 
   /// Return a StringRef to the source buffer data, only if it has already
@@ -993,6 +1006,14 @@ public:
   /// Returns std::nullopt if the buffer is not valid.
   std::optional<llvm::MemoryBufferRef>
   getMemoryBufferForFileOrNone(FileEntryRef File);
+
+  /// CL-EXEC-CHARSET: the file as it is on disk (no source character set
+  /// conversion), for #embed.
+  std::optional<llvm::MemoryBufferRef>
+  getRawMemoryBufferForFileOrNone(FileEntryRef File);
+
+  /// CL-EXEC-CHARSET: the on-disk contents of a file FileID.
+  std::optional<llvm::MemoryBufferRef> getRawBufferOrNone(FileID FID);
 
   /// Retrieve the memory buffer associated with the given file.
   ///

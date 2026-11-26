@@ -4383,7 +4383,9 @@ void Preprocessor::HandleEmbedDirective(SourceLocation HashLoc,
   }
 
   std::optional<llvm::MemoryBufferRef> MaybeFile =
-      getSourceManager().getMemoryBufferForFileOrNone(*MaybeFileRef);
+      // CL-EXEC-CHARSET: the resource as it is on disk, never converted from
+      // the source character set (binary data).
+      getSourceManager().getRawMemoryBufferForFileOrNone(*MaybeFileRef);
   if (!MaybeFile) {
     // could not find file
     Diag(FilenameTok, diag::err_cannot_open_file)

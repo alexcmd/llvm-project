@@ -17,6 +17,10 @@
 #include "llvm/Support/ErrorOr.h"
 #include "llvm/Support/VirtualFileSystem.h"
 #include <condition_variable>
+
+namespace llvm {
+class TextEncodingConverter;
+} // namespace llvm
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -325,6 +329,14 @@ public:
       DependencyScanningService &Service,
       IntrusiveRefCntPtr<llvm::vfs::FileSystem> FS);
 
+  /// CL-EXEC-CHARSET: read source files without a UTF-8 BOM in this encoding
+  /// (cl's source character set, -fms-source-charset), as the compile does,
+  /// so that directive offsets and include names match it. Null: as is.
+  void setSourceCharsetConverter(
+      std::shared_ptr<llvm::TextEncodingConverter> Converter) {
+    SourceCharsetConverter = std::move(Converter);
+  }
+
   llvm::ErrorOr<llvm::vfs::Status> status(const Twine &Path) override;
   llvm::ErrorOr<std::unique_ptr<llvm::vfs::File>>
   openFileForRead(const Twine &Path) override;
@@ -361,6 +373,9 @@ public:
   bool exists(const Twine &Path) override;
 
 private:
+  /// CL-EXEC-CHARSET: see setSourceCharsetConverter.
+  std::shared_ptr<llvm::TextEncodingConverter> SourceCharsetConverter;
+
   /// Resolves the cache entry for \p FilenameForLookup through the shared
   /// cache: returns an entry already produced by another worker (a cache hit
   /// or the result of an in-flight wait), or claims the producer slot and

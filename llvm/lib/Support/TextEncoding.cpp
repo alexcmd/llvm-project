@@ -238,6 +238,25 @@ private:
         ::MultiByteToWideChar(CodePage, 0, Result.data(), N, Back.data(), BN);
       UsedDefault = BN != WN || !std::equal(W.begin(), W.end(), Back.begin());
     }
+    // ISO-2022-JP (50220-50222): the Windows API writes a character of JIS X
+    // 0212 (ESC $ ( D ... ESC ( B), which cl does not use: C4566 and the
+    // character is left out (observed: "\u00E9" gives an empty literal).
+    if (CodePage >= 50220 && CodePage <= 50222) {
+      static const char JIS0212[] = "\x1b$(D", ASCIIBack[] = "\x1b(B";
+      std::string Kept;
+      StringRef R(Result.data(), Result.size());
+      while (!R.empty()) {
+        size_t I = R.find(JIS0212);
+        Kept += R.substr(0, I).str();
+        if (I == StringRef::npos)
+          break;
+        UsedDefault = TRUE;
+        R = R.drop_front(I + 4);
+        size_t J = R.find(ASCIIBack);
+        R = J == StringRef::npos ? StringRef() : R.drop_front(J + 3);
+      }
+      Result.assign(Kept.begin(), Kept.end());
+    }
     return UsedDefault ? std::make_error_code(std::errc::result_out_of_range)
                        : std::error_code();
   }

@@ -80,6 +80,36 @@
 // RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-cl-rules -fexec-charset .1251 -emit-llvm -o - %t/cyr.cpp | FileCheck --check-prefix=CP1251 %s
 // CP1251: @s = {{.*}}c"\C6\E8\00"
 
+// #embed takes the bytes on disk, never converted (review N1).
+// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-cl-rules -fexec-charset windows-1252 -fms-source-charset=windows-1252 -std=c23 -x c -emit-llvm -o - %t/emb.c | FileCheck --check-prefix=EMBED %s
+// EMBED: @d = {{.*}}c"A\80\E9\FFB
+// The CodeView file checksum is that of the file on disk (review N2).
+// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-cl-rules -fms-source-charset=windows-1252 -gcodeview -debug-info-kind=limited -emit-llvm -o %t/ck.ll %t/ck.cpp
+// RUN: %python %t/md5check.py %t/ck.cpp %t/ck.ll
+// -frewrite-includes output starts with a UTF-8 BOM, so a compile of it gives
+// the same literals as the compile of the sources (review N3).
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc /nologo /E /clang:-frewrite-includes -- %t/rw.cpp > %t/rw.i
+// RUN: %python -c "import sys; assert open(sys.argv[1], 'rb').read(3) == bytes.fromhex('efbbbf')" %t/rw.i
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc /nologo /c /TP /clang:-emit-llvm /clang:-S /Fo%t/rw1.ll -- %t/rw.i
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc /nologo /c /clang:-emit-llvm /clang:-S /Fo%t/rw2.ll -- %t/rw.cpp
+// RUN: FileCheck --check-prefix=RW %s < %t/rw1.ll
+// RUN: FileCheck --check-prefix=RW %s < %t/rw2.ll
+// RW: @rws = {{.*}}c"\E9t\E9\00"
+// The scanner decodes the sources as the compile does: a non-ASCII include
+// name in a 1252 source (review N4), also through clang-scan-deps.
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc /nologo /c /Fo%t/sc.obj -- %t/sc.cpp
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc /nologo /std:c++latest /scanDependencies %t/sc.p1689 /Fo%t/sc2.obj -- %t/sc.cpp
+// RUN: clang-scan-deps -format=p1689 -- %clang_cl --target=x86_64-pc-windows-msvc /std:c++latest /c /Fo%t/sc3.obj -- %t/sc.cpp > %t/sc3.json
+// A PCH is refused with another /execution-charset (cl C2855; review N5).
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc /nologo /c /Ycph.h /Fp%t/ph.pch /Fo%t/ph.obj -- %t/ph.cpp
+// RUN: not %clang_cl --target=x86_64-pc-windows-msvc /nologo /c /Yuph.h /Fp%t/ph.pch /execution-charset:utf-8 /Fo%t/pu.obj -- %t/ph.cpp 2>&1 | FileCheck --check-prefix=PCHX %s
+// PCHX: C2855: command-line option '/execution-charset' differs in precompiled file
+// The AST content hash is that of the file on disk (review N6): a header
+// with a new time but the same contents keeps the PCH usable.
+// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-cl-rules -fms-source-charset=windows-1252 -fvalidate-ast-input-files-content -x c++-header -emit-pch -o %t/ch.pch %t/ch.h
+// RUN: touch -m -d '2001-01-01 00:00:00' %t/ch.h
+// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-cl-rules -fms-source-charset=windows-1252 -fvalidate-ast-input-files-content -include-pch %t/ch.pch -fsyntax-only %t/chu.cpp
+
 //--- nobom.cpp
 extern "C" const char n[] = "Â©â‚¬Ð–";
 extern "C" const wchar_t w[] = L"Â©â‚¬Ð–";
@@ -108,3 +138,36 @@ extern "C" const char c1 = 'â‚¬';
 extern "C" const char c2 = 'Ð–';
 //--- cyr.cpp
 extern "C" const char s[] = "Ð–Ð¸";
+//--- bin.dat
+A€éÿB
+//--- emb.c
+const unsigned char d[] = {
+#embed "bin.dat"
+};
+//--- ck.cpp
+// café
+int fck() { return 0; }
+//--- md5check.py
+import hashlib, sys
+h = hashlib.md5(open(sys.argv[1], 'rb').read()).hexdigest()
+ir = open(sys.argv[2]).read()
+assert 'checksum: "%s"' % h in ir, h
+//--- rh.h
+extern "C" const char rws[] = "été";
+//--- rw.cpp
+#include "rh.h"
+// café
+//--- hÃ©.h
+#define HE 1
+//--- sc.cpp
+#include "hé.h"
+int sc = HE;
+//--- ph.h
+extern "C" const char phs[] = "é";
+//--- ph.cpp
+#include "ph.h"
+//--- ch.h
+// ééé
+int ch_value = 1;
+//--- chu.cpp
+int use_ch() { return ch_value; }

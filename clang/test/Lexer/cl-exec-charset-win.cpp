@@ -17,3 +17,12 @@
 // GB: @s = {{.*}}c"a\A8\A6\00"
 
 extern "C" const char s[] = "aé";
+
+// ISO-2022-JP (50220): a character of JIS X 0212 is left out with C4566, as cl
+// (the literal of "é" is empty).
+// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-cl-rules -fexec-charset .50220 -DJIS -emit-llvm -o - %s 2>&1 | FileCheck --check-prefix=JIS %s
+// JIS: warning: a character in this literal cannot be represented
+// JIS: @j = {{.*}}zeroinitializer
+#ifdef JIS
+extern "C" const char j[] = "é";
+#endif

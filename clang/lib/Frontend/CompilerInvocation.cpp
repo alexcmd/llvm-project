@@ -572,6 +572,13 @@ static bool FixupInvocation(CompilerInvocation &Invocation,
     if (std::optional<unsigned> CP =
             llvm::getWindowsCodePage(FrontendOpts.MSSourceCharset))
       LangOpts.MSSourceCodePage = *CP;
+  // The execution character set too (cl: /Yu with another
+  // /execution-charset is C2855; review N5).
+  LangOpts.MSExecCodePage = 0;
+  if (!LangOpts.LiteralEncoding.empty())
+    if (std::optional<unsigned> CP =
+            llvm::getWindowsCodePage(LangOpts.LiteralEncoding))
+      LangOpts.MSExecCodePage = *CP;
 
   llvm::Triple T(TargetOpts.Triple);
   llvm::Triple::ArchType Arch = T.getArch();

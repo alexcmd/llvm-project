@@ -62,6 +62,8 @@ static SrcMgr::ContentCache *cloneContentCache(llvm::BumpPtrAllocator &Alloc,
   Clone->IsTransient = Other.IsTransient;
   Clone->IsBufferInvalid = Other.IsBufferInvalid;
   Clone->setUnownedBuffer(Other.getBufferIfLoaded());
+  // CL-EXEC-CHARSET: the clone's buffer is the same conversion.
+  Clone->WasConverted = Other.WasConverted;
   return Clone;
 }
 
@@ -77,7 +79,8 @@ STATISTIC(MaxUsedSLocBytes, "Maximum number of bytes used by source locations "
 /// getSizeBytesMapped - Returns the number of bytes actually mapped for this
 /// ContentCache. This can be 0 if the MemBuffer was not actually expanded.
 unsigned ContentCache::getSizeBytesMapped() const {
-  return Buffer ? Buffer->getBufferSize() : 0;
+  return (Buffer ? Buffer->getBufferSize() : 0) +
+         (RawBuffer ? RawBuffer->getBufferSize() : 0);
 }
 
 /// Returns the kind of memory used to back the memory buffer for
@@ -199,15 +202,14 @@ ContentCache::getBufferOrNone(DiagnosticsEngine &Diag, FileManager &FM,
   // L"\xC2\xA9" from such a file is L"\u00C2\u00A9"); it is converted to
   // UTF-8 here, so the lexer and the execution character set see what cl
   // sees.
-  if (SourceCharsetConverter && !BufStr.starts_with("\xEF\xBB\xBF") &&
+  if (SourceCharsetConverter && !SkipSourceCharsetConversion &&
+      !BufStr.starts_with("\xEF\xBB\xBF") &&
       llvm::any_of(BufStr, [](char C) { return (unsigned char)C >= 0x80; })) {
     SmallString<0> Converted;
     if (!SourceCharsetConverter->convert(BufStr, Converted)) {
-      std::unique_ptr<llvm::MemoryBuffer> NewBuffer =
-          llvm::MemoryBuffer::getMemBufferCopy(Converted,
-                                               Buffer->getBufferIdentifier());
-      RawBuffer = std::move(Buffer);
-      Buffer = std::move(NewBuffer);
+      Buffer = llvm::MemoryBuffer::getMemBufferCopy(
+          Converted, Buffer->getBufferIdentifier());
+      WasConverted = true;
     }
   }
 
@@ -773,9 +775,12 @@ SourceManager::getMemoryBufferForFileOrNone(FileEntryRef File) {
 std::optional<llvm::MemoryBufferRef>
 SourceManager::getRawMemoryBufferForFileOrNone(FileEntryRef File) {
   SrcMgr::ContentCache &IR = getOrCreateContentCache(File);
+  // A resource not loaded yet is loaded as it is (no converted copy).
+  if (!IR.getBufferIfLoaded())
+    IR.SkipSourceCharsetConversion = true;
   if (!IR.getBufferOrNone(Diag, getFileManager(), SourceLocation()))
     return std::nullopt;
-  return IR.getRawBufferIfLoaded();
+  return getRawBuffer(IR);
 }
 
 std::optional<llvm::MemoryBufferRef>
@@ -787,7 +792,22 @@ SourceManager::getRawBufferOrNone(FileID FID) {
   const SrcMgr::ContentCache &C = Entry.getFile().getContentCache();
   if (!C.getBufferOrNone(Diag, getFileManager(), SourceLocation()))
     return std::nullopt;
-  return C.getRawBufferIfLoaded();
+  return getRawBuffer(C);
+}
+
+std::optional<llvm::MemoryBufferRef>
+SourceManager::getRawBuffer(const SrcMgr::ContentCache &C) {
+  if (!C.WasConverted)
+    return C.getBufferIfLoaded();
+  if (!C.RawBuffer && C.ContentsEntry) {
+    auto B = getFileManager().getBufferForFile(*C.ContentsEntry,
+                                               C.IsFileVolatile);
+    if (B)
+      C.RawBuffer = std::move(*B);
+  }
+  if (C.RawBuffer)
+    return C.RawBuffer->getMemBufferRef();
+  return C.getBufferIfLoaded();
 }
 
 void SourceManager::overrideFileContents(

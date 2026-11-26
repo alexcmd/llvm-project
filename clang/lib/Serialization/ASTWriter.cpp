@@ -1885,7 +1885,11 @@ void ASTWriter::WriteInputFiles(SourceManager &SourceMgr) {
     Entry.IsModuleMap = isModuleMap(File.getFileCharacteristic());
 
     // CL-EXEC-CHARSET: hashed as on disk (the reader hashes the file).
-    Entry.trySetContentHash(*PP, [&] { return Cache->getRawBufferIfLoaded(); });
+    Entry.trySetContentHash(*PP, [&]() -> std::optional<llvm::MemoryBufferRef> {
+      if (!Cache->getBufferIfLoaded())
+        return std::nullopt;
+      return SourceMgr.getRawBuffer(*Cache);
+    });
 
     if (Entry.IsSystemFile)
       SystemFiles.push_back(Entry);

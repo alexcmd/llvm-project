@@ -26,3 +26,9 @@ extern "C" const char s[] = "aé";
 #ifdef JIS
 extern "C" const char j[] = "é";
 #endif
+// Every non-ASCII character is left out, and the string ends in ASCII state.
+// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-cl-rules -fexec-charset .50220 -DJIS2 -emit-llvm -o - %s 2>&1 | FileCheck --check-prefix=JIS2 %s
+// JIS2: @j2 = {{.*}}c"ab\00"
+#ifdef JIS2
+extern "C" const char j2[] = "aあéb";
+#endif

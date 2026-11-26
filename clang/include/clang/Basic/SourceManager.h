@@ -192,8 +192,14 @@ public:
   /// a UTF-8 byte order mark (cl's source character set); null for UTF-8.
   const llvm::TextEncodingConverter *SourceCharsetConverter = nullptr;
 
-  /// CL-EXEC-CHARSET: the on-disk contents when Buffer is their conversion.
+  /// CL-EXEC-CHARSET: Buffer is the conversion of the file from the source
+  /// character set; the on-disk contents are read again only when asked for
+  /// (SourceManager::getRawBuffer: the debug checksum, the AST hash) and kept
+  /// in RawBuffer, so a compile without such a consumer holds one copy.
+  mutable bool WasConverted = false;
   mutable std::unique_ptr<llvm::MemoryBuffer> RawBuffer;
+  /// CL-EXEC-CHARSET: load the file as it is (#embed: binary data).
+  mutable bool SkipSourceCharsetConversion = false;
 
   ContentCache()
       : OrigEntry(std::nullopt), ContentsEntry(std::nullopt),
@@ -257,15 +263,7 @@ public:
     return std::nullopt;
   }
 
-  /// CL-EXEC-CHARSET: the contents as they are on disk, before the source
-  /// character set conversion (the same as getBufferIfLoaded when the file
-  /// was not converted): for #embed, the debug-info checksum and the AST
-  /// content hash.
-  std::optional<llvm::MemoryBufferRef> getRawBufferIfLoaded() const {
-    if (RawBuffer)
-      return RawBuffer->getMemBufferRef();
-    return getBufferIfLoaded();
-  }
+
 
   /// Return a StringRef to the source buffer data, only if it has already
   /// been loaded.
@@ -279,6 +277,9 @@ public:
   void setBuffer(std::unique_ptr<llvm::MemoryBuffer> B) {
     IsBufferInvalid = false;
     Buffer = std::move(B);
+    // CL-EXEC-CHARSET: new contents, not a conversion of the file.
+    WasConverted = false;
+    RawBuffer.reset();
   }
 
   /// Set the buffer to one that's not owned (or to nullptr).
@@ -1014,6 +1015,11 @@ public:
 
   /// CL-EXEC-CHARSET: the on-disk contents of a file FileID.
   std::optional<llvm::MemoryBufferRef> getRawBufferOrNone(FileID FID);
+
+  /// CL-EXEC-CHARSET: the on-disk contents of a loaded content cache (read
+  /// again from the file when the buffer is a conversion).
+  std::optional<llvm::MemoryBufferRef>
+  getRawBuffer(const SrcMgr::ContentCache &C);
 
   /// Retrieve the memory buffer associated with the given file.
   ///

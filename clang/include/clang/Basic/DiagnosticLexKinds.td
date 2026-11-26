@@ -294,7 +294,7 @@ def err_exec_charset_conversion_failed
 // CL-EXEC-CHARSET: cl, C4566 (level 1).
 def warn_exec_charset_unrepresentable : Warning<
   "a character in this literal cannot be represented in the execution "
-  "character set; it is written as '?'">,
+  "character set">,
   InGroup<DiagGroup<"microsoft-unrepresentable-char">>;
 def warn_c99_compat_unicode_literal : Warning<
   "unicode literals are incompatible with C99">,

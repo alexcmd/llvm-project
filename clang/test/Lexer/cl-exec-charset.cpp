@@ -12,7 +12,7 @@
 // NOBOM: @n = {{.*}}c"\C2\A9\E2\82\AC\D0\96\00"
 // NOBOM: @w = {{.*}}[i16 194, i16 169, i16 226, i16 8218, i16 172, i16 208, i16 8211, i16 0]
 // RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-cl-rules -fexec-charset windows-1252 -fms-source-charset=windows-1252 -emit-llvm -o - %t/bom.cpp 2>&1 | FileCheck --check-prefix=BOM %s
-// BOM: bom.cpp:1:{{[0-9]+}}: warning: a character in this literal cannot be represented in the execution character set; it is written as '?' [-Wmicrosoft-unrepresentable-char]
+// BOM: bom.cpp:1:{{[0-9]+}}: warning: a character in this literal cannot be represented in the execution character set [-Wmicrosoft-unrepresentable-char]
 // BOM: @n = {{.*}}c"\A9\80?\00"
 // BOM: @w = {{.*}}[i16 169, i16 8364, i16 1046, i16 0]
 // RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -emit-llvm -o - %t/nobom.cpp 2>&1 | FileCheck --check-prefix=UTF8 %s
@@ -95,6 +95,13 @@
 // RUN: FileCheck --check-prefix=RW %s < %t/rw1.ll
 // RUN: FileCheck --check-prefix=RW %s < %t/rw2.ll
 // RW: @rws = {{.*}}c"\E9t\E9\00"
+// A main file that starts with a byte order mark (the rewriter does not copy
+// it): the output still starts with one (review S1).
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc /nologo /E /clang:-frewrite-includes -- %t/rwb.cpp > %t/rwb.i
+// RUN: %python -c "import sys; assert open(sys.argv[1], 'rb').read(3) == bytes.fromhex('efbbbf')" %t/rwb.i
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc /nologo /c /TP /clang:-emit-llvm /clang:-S /Fo%t/rwb1.ll -- %t/rwb.i
+// RUN: FileCheck --check-prefix=RWB %s < %t/rwb1.ll
+// RWB: @bs = {{.*}}c"\E9\00"
 // The scanner decodes the sources as the compile does: a non-ASCII include
 // name in a 1252 source (review N4), also through clang-scan-deps.
 // RUN: %clang_cl --target=x86_64-pc-windows-msvc /nologo /c /Fo%t/sc.obj -- %t/sc.cpp
@@ -171,3 +178,5 @@ extern "C" const char phs[] = "�";
 int ch_value = 1;
 //--- chu.cpp
 int use_ch() { return ch_value; }
+//--- rwb.cpp
+﻿extern "C" const char bs[] = "é";

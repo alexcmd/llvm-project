@@ -210,6 +210,25 @@ private:
   std::error_code toWindows(StringRef Source, SmallVectorImpl<char> &Result) {
     if (Source.empty())
       return std::error_code();
+    // ISO-2022-JP (50220-50222): cl writes no character outside ASCII (C4566
+    // and the character is left out, observed for \u00E9, \u3042, \uFF71),
+    // so the output never leaves the ASCII state.
+    if (CodePage >= 50220 && CodePage <= 50222) {
+      bool Dropped = false;
+      const UTF8 *P = reinterpret_cast<const UTF8 *>(Source.begin());
+      const UTF8 *E = reinterpret_cast<const UTF8 *>(Source.end());
+      while (P < E) {
+        UTF32 C = 0;
+        if (convertUTF8Sequence(&P, E, &C, strictConversion) != conversionOK)
+          return std::make_error_code(std::errc::illegal_byte_sequence);
+        if (C < 0x80)
+          Result.push_back((char)C);
+        else
+          Dropped = true;
+      }
+      return Dropped ? std::make_error_code(std::errc::result_out_of_range)
+                     : std::error_code();
+    }
     int WN = ::MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, Source.data(),
                                    (int)Source.size(), nullptr, 0);
     if (WN <= 0)
@@ -238,25 +257,7 @@ private:
         ::MultiByteToWideChar(CodePage, 0, Result.data(), N, Back.data(), BN);
       UsedDefault = BN != WN || !std::equal(W.begin(), W.end(), Back.begin());
     }
-    // ISO-2022-JP (50220-50222): the Windows API writes a character of JIS X
-    // 0212 (ESC $ ( D ... ESC ( B), which cl does not use: C4566 and the
-    // character is left out (observed: "\u00E9" gives an empty literal).
-    if (CodePage >= 50220 && CodePage <= 50222) {
-      static const char JIS0212[] = "\x1b$(D", ASCIIBack[] = "\x1b(B";
-      std::string Kept;
-      StringRef R(Result.data(), Result.size());
-      while (!R.empty()) {
-        size_t I = R.find(JIS0212);
-        Kept += R.substr(0, I).str();
-        if (I == StringRef::npos)
-          break;
-        UsedDefault = TRUE;
-        R = R.drop_front(I + 4);
-        size_t J = R.find(ASCIIBack);
-        R = J == StringRef::npos ? StringRef() : R.drop_front(J + 3);
-      }
-      Result.assign(Kept.begin(), Kept.end());
-    }
+
     return UsedDefault ? std::make_error_code(std::errc::result_out_of_range)
                        : std::error_code();
   }

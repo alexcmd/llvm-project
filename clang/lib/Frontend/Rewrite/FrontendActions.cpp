@@ -279,15 +279,10 @@ bool RewriteIncludesAction::BeginSourceFileAction(CompilerInstance &CI) {
 
   // CL-EXEC-CHARSET: sources read in a code page (-fms-source-charset) are
   // UTF-8 in the output; a UTF-8 BOM makes a compile of the output read them
-  // as UTF-8 again, so it gives the same literals (review N3). A main file
-  // that starts with a BOM brings its own.
-  if (!CI.getFrontendOpts().MSSourceCharset.empty()) {
-    SourceManager &SM = CI.getSourceManager();
-    std::optional<llvm::MemoryBufferRef> Main =
-        SM.getRawBufferOrNone(SM.getMainFileID());
-    if (!Main || !Main->getBuffer().starts_with("\xEF\xBB\xBF"))
-      OS << "\xEF\xBB\xBF";
-  }
+  // as UTF-8 again, so it gives the same literals (review N3). The rewriter
+  // never copies a BOM of the main file, so it is always written.
+  if (!CI.getFrontendOpts().MSSourceCharset.empty())
+    OS << "\xEF\xBB\xBF";
 
   // If we're preprocessing a module map, start by dumping the contents of the
   // module itself before switching to the input buffer.

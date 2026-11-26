@@ -122,10 +122,11 @@ else:
     # unsupported in this mode.
     config.available_features.add("main-run-twice")
 
-# Indirectly check if the mt.exe Microsoft utility exists by searching for
-# cvtres, which always accompanies it.  Alternatively, check if we can use
-# libxml2 to merge manifests.
-if lit.util.which("cvtres", config.environment["PATH"]) or config.have_libxml2:
+# Check if the mt.exe Microsoft utility exists (lld runs it to merge manifests
+# when it is built without libxml2), or if we can use libxml2. cvtres on PATH
+# does not imply mt.exe (a Visual Studio bin directory has cvtres, mt.exe comes
+# with the Windows SDK).
+if lit.util.which("mt", config.environment["PATH"]) or config.have_libxml2:
     config.available_features.add("manifest_tool")
 
 if config.enable_backtrace:

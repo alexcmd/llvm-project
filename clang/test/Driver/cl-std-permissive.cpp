@@ -28,3 +28,4 @@
 // cl prints nothing about delayed template parsing for /std:c++20 /permissive.
 // RUN: %clang_cl --target=x86_64-pc-windows-msvc /nologo /c /std:c++20 /permissive -### -- %s 2>&1 | FileCheck --check-prefix=NONOTE %s
 // NONOTE-NOT: delayed-template-parsing is deprecated
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc /nologo /c /std:c++20 /Zc:twoPhase- -### -- %s 2>&1 | FileCheck --check-prefix=NONOTE %s

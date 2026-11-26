@@ -8312,8 +8312,9 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
                                        options::OPT_fno_delayed_template_parsing)) {
       const Arg &Base = A->getBaseArg();
       const Arg *Orig = Base.getAlias() ? Base.getAlias() : &Base;
-      WrittenAsClangOption =
-          Orig->getOption().matches(options::OPT_fdelayed_template_parsing);
+      // The ID itself: matches() looks through aliases (/Zc:twoPhase-).
+      WrittenAsClangOption = Orig->getOption().getID() ==
+                             options::OPT_fdelayed_template_parsing;
     }
     if (HaveCxx20 && (!D.IsCLMode() || WrittenAsClangOption))
       D.Diag(clang::diag::warn_drv_delayed_template_parsing_after_cxx20);

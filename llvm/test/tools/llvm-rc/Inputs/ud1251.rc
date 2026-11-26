@@ -1,0 +1,2 @@
+#pragma code_page(1251)
+1 RCDATA { "Æè" }

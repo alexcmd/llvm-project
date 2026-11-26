@@ -74,3 +74,17 @@
 ; RUN: llvm-rc -no-preprocess /C 1252 /FO %t.p1251c.res -- %p/Inputs/pragma-1251-nonascii.rc
 ; RUN: llvm-readobj %t.p1251c.res | FileCheck %s --check-prefix=P1251N
 ; P1251N: 0000: 00000100 39040000 00000000 00000000
+
+; Under another pragma code page a narrow user-resource string is read in that
+; page and written in 1252 (rc.exe: "\xC6\xE8" under 1251 in RCDATA is 3F 3F),
+; and an escaped byte is taken as in 1252 (STRINGTABLE "\xC6a" is U+00C6, RCDATA
+; "\xC6" is C6), the same .res data as rc.exe.
+; RUN: llvm-rc -no-preprocess /FO %t.ud.res -- %p/Inputs/ud1251.rc
+; RUN: llvm-readobj %t.ud.res | FileCheck %s --check-prefix=UD1251
+; UD1251: Data:: (3F 3F)
+; RUN: llvm-rc -no-preprocess /FO %t.esc.res -- %p/Inputs/esc1251.rc
+; RUN: llvm-readobj %t.esc.res | FileCheck %s --check-prefix=ESC1251
+; ESC1251: 0000: 00000200 C6006100 00000000 00000000
+; RUN: llvm-rc -no-preprocess /FO %t.escud.res -- %p/Inputs/escud1251.rc
+; RUN: llvm-readobj %t.escud.res | FileCheck %s --check-prefix=ESCUD1251
+; ESCUD1251: Data:: (C6)

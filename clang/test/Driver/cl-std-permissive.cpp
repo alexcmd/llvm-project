@@ -18,3 +18,10 @@
 // RUN: %clang_cl --target=x86_64-pc-windows-msvc /nologo /c /permissive /std:c++20 -### -- %s 2>&1 | FileCheck --check-prefix=OFF %s
 // OFF-NOT: "-fms-rvalue-ref-binding"
 // OFF-NOT: "-Wno-error=address-of-temporary"
+
+// What /permissive turns on (no two-phase lookup) follows the same order:
+// /permissive /std:c++20 has two-phase lookup, /std:c++20 /permissive not.
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc /nologo /c /permissive /std:c++20 -### -- %s 2>&1 | FileCheck --check-prefix=TWOPHASE %s
+// TWOPHASE-NOT: "-fdelayed-template-parsing"
+// RUN: %clang_cl --target=x86_64-pc-windows-msvc /nologo /c /std:c++20 /permissive -### -- %s 2>&1 | FileCheck --check-prefix=DELAYED %s
+// DELAYED: "-fdelayed-template-parsing"

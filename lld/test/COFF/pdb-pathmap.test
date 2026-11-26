@@ -1,0 +1,32 @@
+REQUIRES: system-windows
+openrt PDB-PATHMAP: /pathmap:<from>=<to> replaces the prefix <from> in every
+path lld-link writes into the PDB (module and object names, source files made
+absolute, the linker module's cwd, pdb and command line), so the same link in
+two build roots gives the same PDB with /brepro. link.exe 14.44 accepts
+/pathmap and leaves the PDB paths as they are (observed).
+
+RUN: rm -rf %t && mkdir -p %t/a %t/b
+RUN: yaml2obj %S/Inputs/pdb_lines_1_relative.yaml -o %t/a/pdb_lines_1.obj
+RUN: yaml2obj %S/Inputs/pdb_lines_2_relative.yaml -o %t/a/pdb_lines_2.obj
+RUN: cp %t/a/pdb_lines_1.obj %t/a/pdb_lines_2.obj %t/b/
+
+RUN: cd %t/a && lld-link -debug -brepro "-pathmap:%t\a=X:\root" -entry:main -nodefaultlib -out:out.exe -pdb:out.pdb pdb_lines_1.obj pdb_lines_2.obj
+RUN: cd %t/b && lld-link -debug -brepro "-pathmap:%t\b=X:\root" -entry:main -nodefaultlib -out:out.exe -pdb:out.pdb pdb_lines_1.obj pdb_lines_2.obj
+RUN: cmp %t/a/out.pdb %t/b/out.pdb
+RUN: llvm-pdbutil dump -modules -symbols %t/a/out.pdb | FileCheck %s
+
+Without the map the roots show.
+RUN: cd %t/a && lld-link -debug -brepro -entry:main -nodefaultlib -out:out2.exe -pdb:out2.pdb pdb_lines_1.obj pdb_lines_2.obj
+RUN: cd %t/b && lld-link -debug -brepro -entry:main -nodefaultlib -out:out2.exe -pdb:out2.pdb pdb_lines_1.obj pdb_lines_2.obj
+RUN: not cmp %t/a/out2.pdb %t/b/out2.pdb
+
+CHECK: Mod 0000 | `X:\root\pdb_lines_1.obj`:
+CHECK: Mod 0001 | `X:\root\pdb_lines_2.obj`:
+CHECK: S_ENVBLOCK
+CHECK-NEXT: - cwd
+CHECK-NEXT: - X:\root
+CHECK: - pdb
+CHECK-NEXT: - X:\root\out.pdb
+CHECK-NEXT: - cmd
+CHECK-NEXT: - -debug -brepro -pathmap:X:\root=X:\root -entry:main
+CHECK-NOT: {{[A-Za-z]}}:\{{.*}}\pdb-pathmap.test.tmp

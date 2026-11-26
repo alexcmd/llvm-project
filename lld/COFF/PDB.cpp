@@ -137,6 +137,9 @@ public:
 
 private:
   void pdbMakeAbsolute(SmallVectorImpl<char> &fileName);
+  void pdbMakeAbsoluteUnmapped(SmallVectorImpl<char> &fileName);
+  void pdbMapPath(SmallVectorImpl<char> &fileName) const;
+  std::string pdbMapText(StringRef text) const;
   void translateIdSymbols(MutableArrayRef<uint8_t> &recordData,
                           TpiSource *source);
   void addCommonLinkerModuleSymbols(StringRef path,
@@ -225,7 +228,48 @@ public:
 // Visual Studio's debugger requires absolute paths in various places in the
 // PDB to work without additional configuration:
 // https://docs.microsoft.com/en-us/visualstudio/debugger/debug-source-files-common-properties-solution-property-pages-dialog-box
+// openrt PDB-PATHMAP: /pathmap:<from>=<to> replaces the prefix <from> of a
+// path (without regard to case, at a separator), the first entry that
+// matches wins.
+void PDBLinker::pdbMapPath(SmallVectorImpl<char> &fileName) const {
+  for (const auto &[from, to] : ctx.config.pdbPathMap) {
+    StringRef p(fileName.data(), fileName.size());
+    if (p.size() < from.size() ||
+        !p.take_front(from.size()).equals_insensitive(from))
+      continue;
+    if (p.size() > from.size() && !sys::path::is_separator(p[from.size()]) &&
+        !sys::path::is_separator(from.back()))
+      continue;
+    std::string mapped = to + p.drop_front(from.size()).str();
+    fileName.assign(mapped.begin(), mapped.end());
+    return;
+  }
+}
+
+// The same for every occurrence in a text (the linker command line).
+std::string PDBLinker::pdbMapText(StringRef text) const {
+  std::string out = text.str();
+  for (const auto &[from, to] : ctx.config.pdbPathMap) {
+    std::string result;
+    StringRef rest = out;
+    while (true) {
+      size_t pos = rest.find_insensitive(from);
+      if (pos == StringRef::npos)
+        break;
+      result += rest.take_front(pos).str() + to;
+      rest = rest.drop_front(pos + from.size());
+    }
+    out = result + rest.str();
+  }
+  return out;
+}
+
 void PDBLinker::pdbMakeAbsolute(SmallVectorImpl<char> &fileName) {
+  pdbMakeAbsoluteUnmapped(fileName);
+  pdbMapPath(fileName);
+}
+
+void PDBLinker::pdbMakeAbsoluteUnmapped(SmallVectorImpl<char> &fileName) {
   // The default behavior is to produce paths that are valid within the context
   // of the machine that you perform the link on.  If the linker is running on
   // a POSIX system, we will output absolute POSIX paths.  If the linker is
@@ -1427,13 +1471,14 @@ void PDBLinker::addCommonLinkerModuleSymbols(
   ons.Signature = 0;
 
   ArrayRef<StringRef> args = ArrayRef(ctx.config.argv).drop_front();
-  std::string argStr = quote(args);
+  std::string argStr = pdbMapText(quote(args));
   ebs.Fields.push_back("cwd");
   SmallString<64> cwd;
   if (ctx.config.pdbSourcePath.empty())
     sys::fs::current_path(cwd);
   else
     cwd = ctx.config.pdbSourcePath;
+  pdbMapPath(cwd);
   ebs.Fields.push_back(cwd);
   ebs.Fields.push_back("exe");
   SmallString<64> exe = ctx.config.argv[0];

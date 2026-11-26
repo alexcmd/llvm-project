@@ -2139,6 +2139,18 @@ void LinkerDriver::linkerMain(ArrayRef<const char *> argsArr) {
 
     if (auto *arg = args.getLastArg(OPT_pdb_source_path))
       config->pdbSourcePath = arg->getValue();
+    // openrt PDB-PATHMAP: link.exe accepts /pathmap and leaves the PDB paths
+    // as they are (observed, 14.44, also with /experimental:deterministic);
+    // here it maps them, so two build roots give the same PDB.
+    for (auto *arg : args.filtered(OPT_pathmap)) {
+      StringRef from, to;
+      std::tie(from, to) = StringRef(arg->getValue()).split('=');
+      if (from.empty() || !StringRef(arg->getValue()).contains('='))
+        Warn(ctx) << "/pathmap: expected <from>=<to>, got '"
+                  << arg->getValue() << "'";
+      else
+        config->pdbPathMap.emplace_back(from.str(), to.str());
+    }
   }
 
   // Handle /pdbstripped
@@ -2880,6 +2892,17 @@ void LinkerDriver::linkerMain(ArrayRef<const char *> argsArr) {
       // tools won't work correctly if these assumptions are not held.
       sys::fs::make_absolute(config->pdbAltPath);
       sys::path::remove_dots(config->pdbAltPath);
+      // openrt PDB-PATHMAP: the PDB path in the image follows /pathmap too.
+      for (const auto &[from, to] : config->pdbPathMap) {
+        StringRef p = config->pdbAltPath;
+        if (p.size() >= from.size() &&
+            p.take_front(from.size()).equals_insensitive(from) &&
+            (p.size() == from.size() || sys::path::is_separator(p[from.size()]) ||
+             sys::path::is_separator(from.back()))) {
+          config->pdbAltPath = (to + p.drop_front(from.size())).str();
+          break;
+        }
+      }
     } else {
       // Don't do this earlier, so that ctx.OutputFile is ready.
       parsePDBAltPath();

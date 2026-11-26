@@ -151,6 +151,8 @@ struct Configuration {
   int pdbPageSize = 4096;
   llvm::SmallString<128> pdbPath;
   llvm::SmallString<128> pdbSourcePath;
+  // openrt: /pathmap:<from>=<to>, path prefixes replaced in the PDB.
+  std::vector<std::pair<std::string, std::string>> pdbPathMap;
   std::vector<llvm::StringRef> argv;
 
   // Symbols in this set are considered as live by the garbage collector.

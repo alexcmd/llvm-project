@@ -280,6 +280,9 @@ def osversion : P_priv<"osversion">;
 def output_def : Joined<["/", "-", "/?", "-?"], "output-def:">;
 def pdb_source_path : P<"pdbsourcepath",
     "Base path used to make relative source file path absolute in PDB">;
+def pathmap : P<"pathmap",
+    "<from>=<to>: replace the path prefix <from> in every path the PDB records "
+    "(modules, sources, linker environment; openrt)">;
 def rsp_quoting : Joined<["--"], "rsp-quoting=">,
   HelpText<"Quoting style for response files, 'windows' (default) or 'posix'">;
 def start_lib : F<"start-lib">,
@@ -458,7 +461,6 @@ def clip_arg_mt : P_priv<"MT">;  // LLD-GAP(misc)
 def clip_arg_pdbpath : P_priv<"PDBPATH">;  // LLD-GAP(misc)
 def clip_arg_trimfile : P_priv<"trimfile">;  // LLD-GAP(misc)
 def clip_arg_pgd : P_priv<"PGD">;  // LLD-GAP(pgo)
-def clip_arg_pathmap : P_priv<"PATHMAP">;  // LLD-GAP(experimental)
 def clip_arg_weakorder : P_priv<"WEAKORDER">;  // LLD-GAP(misc)
 def clip_arg_sourcemap : P_priv<"SOURCEMAP">;  // LLD-GAP(clr)
 def clip_arg_importcalloptimization : P_priv<"IMPORTCALLOPTIMIZATION">;  // LLD-GAP(misc)

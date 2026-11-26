@@ -257,7 +257,6 @@ private:
         ::MultiByteToWideChar(CodePage, 0, Result.data(), N, Back.data(), BN);
       UsedDefault = BN != WN || !std::equal(W.begin(), W.end(), Back.begin());
     }
-
     return UsedDefault ? std::make_error_code(std::errc::result_out_of_range)
                        : std::error_code();
   }

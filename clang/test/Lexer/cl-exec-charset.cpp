@@ -83,6 +83,14 @@
 // #embed takes the bytes on disk, never converted (review N1).
 // RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-cl-rules -fexec-charset windows-1252 -fms-source-charset=windows-1252 -std=c23 -x c -emit-llvm -o - %t/emb.c | FileCheck --check-prefix=EMBED %s
 // EMBED: @d = {{.*}}c"A\80\E9\FFB
+// A file both embedded and included: the include is converted whichever
+// comes first, the embed data is the bytes on disk (review M7).
+// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-cl-rules -fms-source-charset=windows-1252 -std=c23 -x c -emit-llvm -o - %t/emb2.c 2>&1 | FileCheck --check-prefix=EMB2 %s
+// EMB2-NOT: warning
+// EMB2-DAG: @e1 = {{.*}}\E9
+// EMB2-DAG: @hs1 = {{.*}}c"\C3\A9\00"
+// EMB2-DAG: @e2 = {{.*}}\E9
+// EMB2-DAG: @hs2 = {{.*}}c"\C3\A9\00"
 // The CodeView file checksum is that of the file on disk (review N2).
 // RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fms-cl-rules -fms-source-charset=windows-1252 -gcodeview -debug-info-kind=limited -emit-llvm -o %t/ck.ll %t/ck.cpp
 // RUN: %python %t/md5check.py %t/ck.cpp %t/ck.ll
@@ -150,6 +158,19 @@ A€éÿB
 //--- emb.c
 const unsigned char d[] = {
 #embed "bin.dat"
+};
+//--- t1.inc
+const char hs1[] = "é";
+//--- t2.inc
+const char hs2[] = "é";
+//--- emb2.c
+const unsigned char e1[] = {
+#embed "t1.inc"
+};
+#include "t1.inc"
+#include "t2.inc"
+const unsigned char e2[] = {
+#embed "t2.inc"
 };
 //--- ck.cpp
 // café

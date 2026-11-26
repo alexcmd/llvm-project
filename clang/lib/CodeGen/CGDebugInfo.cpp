@@ -547,11 +547,25 @@ CGDebugInfo::computeChecksum(FileID FID, SmallString<64> &Checksum) const {
     return std::nullopt;
 
   SourceManager &SM = CGM.getContext().getSourceManager();
-  // CL-EXEC-CHARSET: the checksum of the file as it is on disk (what the
-  // debugger compares), not of its conversion from the source character set.
-  std::optional<llvm::MemoryBufferRef> MemBuffer = SM.getRawBufferOrNone(FID);
-  if (!MemBuffer)
-    MemBuffer = SM.getBufferOrNone(FID);
+  // CL-EXEC-CHARSET: the checksum of the file as it was read from disk (what
+  // the debugger compares), not of its conversion from the source character
+  // set; taken when the file was read.
+  if (const auto *D = SM.getRawDigests(FID)) {
+    switch (CGM.getCodeGenOpts().getDebugSrcHash()) {
+    case clang::CodeGenOptions::DSH_MD5:
+      llvm::toHex(D->MD5, /*LowerCase=*/true, Checksum);
+      return llvm::DIFile::CSK_MD5;
+    case clang::CodeGenOptions::DSH_SHA1:
+      llvm::toHex(D->SHA1, /*LowerCase=*/true, Checksum);
+      return llvm::DIFile::CSK_SHA1;
+    case clang::CodeGenOptions::DSH_SHA256:
+      llvm::toHex(D->SHA256, /*LowerCase=*/true, Checksum);
+      return llvm::DIFile::CSK_SHA256;
+    case clang::CodeGenOptions::DSH_NONE:
+      return std::nullopt;
+    }
+  }
+  std::optional<llvm::MemoryBufferRef> MemBuffer = SM.getBufferOrNone(FID);
   if (!MemBuffer)
     return std::nullopt;
 

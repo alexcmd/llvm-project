@@ -1790,7 +1790,8 @@ struct InputFileEntry {
 
   void trySetContentHash(
       Preprocessor &PP,
-      llvm::function_ref<std::optional<llvm::MemoryBufferRef>()> GetMemBuff) {
+      llvm::function_ref<std::optional<llvm::MemoryBufferRef>()> GetMemBuff,
+      std::optional<uint64_t> KnownHash = std::nullopt) {
     ContentHash[0] = 0;
     ContentHash[1] = 0;
 
@@ -1798,6 +1799,12 @@ struct InputFileEntry {
              .getHeaderSearchOpts()
              .ValidateASTInputFilesContent)
       return;
+
+    if (KnownHash) {
+      ContentHash[0] = uint32_t(*KnownHash);
+      ContentHash[1] = uint32_t(*KnownHash >> 32);
+      return;
+    }
 
     auto MemBuff = GetMemBuff();
     if (!MemBuff) {
@@ -1884,12 +1891,13 @@ void ASTWriter::WriteInputFiles(SourceManager &SourceMgr) {
                        !IsSLocFileEntryAffecting[IncludeFileID.ID];
     Entry.IsModuleMap = isModuleMap(File.getFileCharacteristic());
 
-    // CL-EXEC-CHARSET: hashed as on disk (the reader hashes the file).
-    Entry.trySetContentHash(*PP, [&]() -> std::optional<llvm::MemoryBufferRef> {
-      if (!Cache->getBufferIfLoaded())
-        return std::nullopt;
-      return SourceMgr.getRawBuffer(*Cache);
-    });
+    // CL-EXEC-CHARSET: a converted buffer is hashed as the bytes it was read
+    // from (the reader hashes the file), with the hash taken at that read.
+    std::optional<uint64_t> KnownHash;
+    if (const auto *D = SourceMgr.getRawDigests(*Cache))
+      KnownHash = D->ContentHash;
+    Entry.trySetContentHash(
+        *PP, [&] { return Cache->getBufferIfLoaded(); }, KnownHash);
 
     if (Entry.IsSystemFile)
       SystemFiles.push_back(Entry);

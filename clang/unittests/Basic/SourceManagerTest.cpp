@@ -20,9 +20,16 @@
 #include "clang/Lex/PreprocessorOptions.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/Config/llvm-config.h"
+#include "llvm/Support/FileSystem.h"
+#include "llvm/Support/MD5.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Process.h"
+#include "llvm/Support/SHA1.h"
+#include "llvm/Support/SHA256.h"
+#include "llvm/Support/TextEncoding.h"
 #include "llvm/Support/VirtualFileSystem.h"
+#include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/xxhash.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include <cstddef>
@@ -884,5 +891,90 @@ TEST_F(SourceManagerTest, isMainFile) {
 }
 
 #endif
+
+
+// CL-EXEC-CHARSET: a file read in the source character set keeps the digests
+// of the bytes it was read from, even when the file changes later in the
+// build (the debug checksum, the AST content hash).
+static std::string writeTemp(StringRef Prefix, StringRef Data,
+                             SmallVectorImpl<char> &Path) {
+  int FD;
+  if (llvm::sys::fs::createTemporaryFile(Prefix, "h", FD, Path))
+    return "cannot create";
+  llvm::raw_fd_ostream OS(FD, /*shouldClose=*/true);
+  OS << Data;
+  return "";
+}
+
+static void overwrite(StringRef Path, StringRef Data) {
+  std::error_code EC;
+  llvm::raw_fd_ostream OS(Path, EC);
+  ASSERT_FALSE(EC);
+  OS << Data;
+}
+
+TEST(SourceManagerCharsetTest, DigestsOfBytesRead) {
+  StringRef Old = "const char *s = \"caf\xE9\";\n";
+  StringRef New = "const char *s = \"caf\xE8\";\n";
+  SmallString<128> Path;
+  ASSERT_EQ(writeTemp("cl-charset", Old, Path), "");
+  FileSystemOptions FSOpts;
+  FileManager FM(FSOpts, llvm::vfs::getRealFileSystem());
+  DiagnosticOptions DiagOpts;
+  DiagnosticsEngine Diags(DiagnosticIDs::create(), DiagOpts,
+                          new IgnoringDiagConsumer());
+  SourceManager SM(Diags, FM);
+  auto Conv = llvm::TextEncodingConverter::create("windows-1252", "UTF-8");
+  ASSERT_TRUE(bool(Conv));
+  SM.setSourceCharsetConverter(
+      std::make_unique<llvm::TextEncodingConverter>(std::move(*Conv)));
+  auto FE = FM.getOptionalFileRef(Path);
+  ASSERT_TRUE(FE);
+  FileID FID = SM.createFileID(*FE, SourceLocation(), SrcMgr::C_User);
+  EXPECT_TRUE(SM.getBufferData(FID).contains("caf\xC3\xA9"));
+
+  overwrite(Path, New); // same size, other bytes
+
+  const auto *D = SM.getRawDigests(FID);
+  ASSERT_TRUE(D);
+  auto Data = llvm::arrayRefFromStringRef(Old);
+  auto MD5 = llvm::MD5::hash(Data);
+  EXPECT_TRUE(std::equal(MD5.begin(), MD5.end(), D->MD5));
+  auto SHA1 = llvm::SHA1::hash(Data);
+  EXPECT_TRUE(std::equal(SHA1.begin(), SHA1.end(), D->SHA1));
+  auto SHA256 = llvm::SHA256::hash(Data);
+  EXPECT_TRUE(std::equal(SHA256.begin(), SHA256.end(), D->SHA256));
+  EXPECT_EQ(D->ContentHash, llvm::xxh3_64bits(Old));
+  llvm::sys::fs::remove(Path);
+}
+
+// CL-EXEC-CHARSET: #embed takes the bytes on disk and an #include of the same
+// file is converted, in either order (review M7).
+TEST(SourceManagerCharsetTest, EmbedThenInclude) {
+  StringRef Text = "const char *s = \"\xE9\";\n";
+  SmallString<128> Path;
+  ASSERT_EQ(writeTemp("cl-embed", Text, Path), "");
+  FileSystemOptions FSOpts;
+  FileManager FM(FSOpts, llvm::vfs::getRealFileSystem());
+  DiagnosticOptions DiagOpts;
+  DiagnosticsEngine Diags(DiagnosticIDs::create(), DiagOpts,
+                          new IgnoringDiagConsumer());
+  SourceManager SM(Diags, FM);
+  auto Conv = llvm::TextEncodingConverter::create("windows-1252", "UTF-8");
+  ASSERT_TRUE(bool(Conv));
+  SM.setSourceCharsetConverter(
+      std::make_unique<llvm::TextEncodingConverter>(std::move(*Conv)));
+  auto FE = FM.getOptionalFileRef(Path);
+  ASSERT_TRUE(FE);
+  auto Raw = SM.getRawMemoryBufferForFileOrNone(*FE);
+  ASSERT_TRUE(Raw);
+  EXPECT_EQ(Raw->getBuffer(), Text);
+  FileID FID = SM.createFileID(*FE, SourceLocation(), SrcMgr::C_User);
+  EXPECT_TRUE(SM.getBufferData(FID).contains("\"\xC3\xA9\""));
+  auto Raw2 = SM.getRawMemoryBufferForFileOrNone(*FE);
+  ASSERT_TRUE(Raw2);
+  EXPECT_EQ(Raw2->getBuffer(), Text);
+  llvm::sys::fs::remove(Path);
+}
 
 } // anonymous namespace

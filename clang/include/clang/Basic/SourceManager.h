@@ -192,14 +192,20 @@ public:
   /// a UTF-8 byte order mark (cl's source character set); null for UTF-8.
   const llvm::TextEncodingConverter *SourceCharsetConverter = nullptr;
 
+  /// CL-EXEC-CHARSET: digests of the bytes read from disk, taken before the
+  /// conversion from the source character set (the debug checksum, the AST
+  /// content hash); the raw bytes themselves are not kept.
+  struct RawDigests {
+    uint8_t MD5[16];
+    uint8_t SHA1[20];
+    uint8_t SHA256[32];
+    uint64_t ContentHash; // xxh3_64bits, as the AST writer hashes a buffer.
+  };
+
   /// CL-EXEC-CHARSET: Buffer is the conversion of the file from the source
-  /// character set; the on-disk contents are read again only when asked for
-  /// (SourceManager::getRawBuffer: the debug checksum, the AST hash) and kept
-  /// in RawBuffer, so a compile without such a consumer holds one copy.
+  /// character set; Digests describe the bytes it was converted from.
   mutable bool WasConverted = false;
-  mutable std::unique_ptr<llvm::MemoryBuffer> RawBuffer;
-  /// CL-EXEC-CHARSET: load the file as it is (#embed: binary data).
-  mutable bool SkipSourceCharsetConversion = false;
+  mutable std::unique_ptr<RawDigests> Digests;
 
   ContentCache()
       : OrigEntry(std::nullopt), ContentsEntry(std::nullopt),
@@ -263,8 +269,6 @@ public:
     return std::nullopt;
   }
 
-
-
   /// Return a StringRef to the source buffer data, only if it has already
   /// been loaded.
   std::optional<StringRef> getBufferDataIfLoaded() const {
@@ -279,7 +283,7 @@ public:
     Buffer = std::move(B);
     // CL-EXEC-CHARSET: new contents, not a conversion of the file.
     WasConverted = false;
-    RawBuffer.reset();
+    Digests.reset();
   }
 
   /// Set the buffer to one that's not owned (or to nullptr).
@@ -714,6 +718,11 @@ class SourceManager : public RefCountedBase<SourceManager> {
   /// CL-EXEC-CHARSET: see ContentCache::SourceCharsetConverter.
   std::unique_ptr<llvm::TextEncodingConverter> SourceCharsetConverter;
 
+  /// CL-EXEC-CHARSET: #embed data of files whose source entry is converted
+  /// (getRawMemoryBufferForFileOrNone).
+  llvm::DenseMap<const FileEntry *, std::unique_ptr<llvm::MemoryBuffer>>
+      RawEmbedBuffers;
+
   struct OverriddenFilesInfoTy {
     /// Files that have been overridden with the contents from another
     /// file.
@@ -1009,17 +1018,22 @@ public:
   getMemoryBufferForFileOrNone(FileEntryRef File);
 
   /// CL-EXEC-CHARSET: the file as it is on disk (no source character set
-  /// conversion), for #embed.
+  /// conversion), for #embed. A file the source character set converts is
+  /// read apart from its source entry, so a later #include of it is still
+  /// converted (and an #include before it does not change the data).
   std::optional<llvm::MemoryBufferRef>
   getRawMemoryBufferForFileOrNone(FileEntryRef File);
 
-  /// CL-EXEC-CHARSET: the on-disk contents of a file FileID.
-  std::optional<llvm::MemoryBufferRef> getRawBufferOrNone(FileID FID);
+  /// CL-EXEC-CHARSET: digests of the on-disk bytes of a loaded content cache
+  /// whose buffer is a conversion of them; null when the buffer is the bytes
+  /// as read (hash the buffer then).
+  const SrcMgr::ContentCache::RawDigests *
+  getRawDigests(const SrcMgr::ContentCache &C) const {
+    return C.WasConverted ? C.Digests.get() : nullptr;
+  }
 
-  /// CL-EXEC-CHARSET: the on-disk contents of a loaded content cache (read
-  /// again from the file when the buffer is a conversion).
-  std::optional<llvm::MemoryBufferRef>
-  getRawBuffer(const SrcMgr::ContentCache &C);
+  /// CL-EXEC-CHARSET: as above, for a file FileID (loads its buffer).
+  const SrcMgr::ContentCache::RawDigests *getRawDigests(FileID FID);
 
   /// Retrieve the memory buffer associated with the given file.
   ///

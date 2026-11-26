@@ -1039,11 +1039,11 @@ bool Sema::checkCLBitwiseVarArg(const Expr *E, VariadicCallType CT,
   const CXXRecordDecl *RD = Ty->getAsCXXRecordDecl();
   if (!RD)
     return false;
-  if (Diagnose &&
+  // C4840 also in a constant-evaluated context (cl: constexpr int k =
+  // cf(L{}); warns), not in an unevaluated one.
+  if (Diagnose && !isUnevaluatedContext() &&
       (RD->hasNonTrivialCopyConstructor() || RD->hasNonTrivialMoveConstructor()))
-    DiagRuntimeBehavior(E->getBeginLoc(), nullptr,
-                        PDiag(diag::warn_cl_nonportable_class_vararg)
-                            << Ty << CT);
+    Diag(E->getBeginLoc(), diag::warn_cl_nonportable_class_vararg) << Ty << CT;
   return true;
 }
 

@@ -80,6 +80,12 @@ void p(C c) {
   printf("%d", c); // cl-warning {{non-portable use of class 'C'}} cl-warning {{format specifies type 'int' but the argument has type 'C'}} std-error {{cannot pass non-trivial object of type 'C' to variadic function; expected type from format string was 'int'}}
 }
 
+// C4840 also in a constant-evaluated context (cl warns at both).
+constexpr int cf(...) { return 1; }
+struct L { int v; constexpr L() : v(1) {} constexpr L(const L &o) : v(o.v) {} };
+constexpr int kc = cf(L{}); // cl-warning {{non-portable use of class 'L'}}
+constexpr int kc2 = cf(kc ? L{} : L{}); // cl-warning {{non-portable use of class 'L'}}
+
 // Deleted copy: an error, as in cl (C4839, C2280).
 void q(M m) {
   f(1, m); // cl-error {{call to implicitly-deleted copy constructor of 'M'}} std-error {{call to implicitly-deleted copy constructor of 'M'}}

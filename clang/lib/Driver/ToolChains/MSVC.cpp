@@ -1315,10 +1315,8 @@ MSVCToolChain::TranslateArgs(const llvm::opt::DerivedArgList &Args,
       // CL-STD-PERMISSIVE: these imply /permissive- at their place, so a
       // /permissive before them loses what it turned on (two-phase lookup,
       // strict strings), and one after them wins (last one wins, as cl).
-      DAL->append(A);
-      DAL->AddFlagArg(A, Opts.getOption(options::OPT__SLASH_Zc_twoPhase));
-      DAL->AddFlagArg(A, Opts.getOption(options::OPT_foperator_names));
-      DAL->AddFlagArg(A, Opts.getOption(options::OPT__SLASH_Zc_strictStrings));
+      // The same expansion as /permissive- (the helper keeps the /std arg).
+      TranslatePermissiveMinus(A, *DAL, Opts);
     } else if (A->getOption().matches(options::OPT__SLASH_permissive)) {
       // Expand /permissive
       TranslatePermissive(A, *DAL, Opts);

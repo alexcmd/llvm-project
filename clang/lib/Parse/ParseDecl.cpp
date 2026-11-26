@@ -3512,6 +3512,12 @@ void Parser::ParseDeclarationSpecifiers(
             }
             if (PA.getKind() == ParsedAttr::AT_WarnUnusedResult ||
                 PA.getKind() == ParsedAttr::AT_Unused) {
+              // cl: [[maybe_unused]] before C++17 is C5051 (nodiscard is
+              // silent at every standard).
+              if (PA.getKind() == ParsedAttr::AT_Unused &&
+                  !getLangOpts().CPlusPlus17)
+                Diag(PA.getLoc(), diag::warn_cl_attribute_requires_cxx17)
+                    << PA.getAttrName()->getName();
               PA.setInvalid();
               continue;
             }

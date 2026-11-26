@@ -1814,6 +1814,10 @@ def warn_ext_int_deprecated : Warning<
 def ext_bit_int : Extension<
   "'_BitInt' in %select{C17 and earlier|C++}0 is a Clang extension">,
   InGroup<BitIntExtension>;
+// CL-ATTR-AFTER-TYPE: cl C5051 (level 1).
+def warn_cl_attribute_requires_cxx17 : Warning<
+  "attribute [[%0]] requires at least '/std:c++17'; ignored">,
+  InGroup<DiagGroup<"microsoft-attribute-requires-std">>;
 } // end of Parse Issue category.
 
 let CategoryName = "Modules Issue" in {

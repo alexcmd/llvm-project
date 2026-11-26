@@ -105,6 +105,8 @@ clang::diagGroupFromCLWarningID(unsigned CLWarningID) {
   case 4840: Name = "microsoft-non-pod-varargs"; break;
   // CL-EXEC-CHARSET: a character the execution character set lacks.
   case 4566: Name = "microsoft-unrepresentable-char"; break;
+  // CL-ATTR-AFTER-TYPE: attribute needs a later /std.
+  case 5051: Name = "microsoft-attribute-requires-std"; break;
   case 5030: Name = "unknown-attributes"; break;
   case 5038: Name = "reorder-ctor"; break;
   // UE-C5046: a dead inline body uses a member declared here with its
